@@ -531,6 +531,119 @@ Một task chỉ được xem là hoàn thành khi:
 - Có hướng dẫn kiểm thử trong Pull Request.
 - Chạy được sau khi merge vào `develop`.
 
+# Quy trình GitHub của nhóm
+
+## 1. Các nhánh sử dụng
+
+```text
+main        # Bản ổn định để demo
+develop     # Nơi tập hợp code của nhóm
+buu         # Nhánh của Bửu
+tai         # Nhánh của Tài
+khoi        # Nhánh của Khôi
+```
+
+Mỗi người chỉ code và push lên nhánh của mình.
+
+## 2. Lần đầu lấy project
+
+```powershell
+git clone https://github.com/BrianLe1601/ticketbox-QR.git
+cd ticketbox-QR
+git switch ten-cua-ban
+```
+
+Ví dụ:
+
+```powershell
+git switch tai
+```
+
+Nếu nhánh chưa tồn tại:
+
+```powershell
+git switch -c tai
+git push -u origin tai
+```
+
+## 3. Trước khi bắt đầu code
+
+Lấy code mới nhất từ `develop`:
+
+```powershell
+git switch develop
+git pull origin develop
+git switch ten-cua-ban
+git merge develop
+```
+
+Ví dụ với Tài:
+
+```powershell
+git switch develop
+git pull origin develop
+git switch tai
+git merge develop
+```
+
+## 4. Sau khi code
+
+```powershell
+git status
+git add .
+git commit -m "Mô tả phần đã làm"
+git push
+```
+
+Ví dụ:
+
+```powershell
+git add .
+git commit -m "Hoàn thành giao diện đặt vé"
+git push
+```
+
+Code sẽ được push lên nhánh cá nhân, không phải `main`.
+
+## 5. Khi hoàn thành chức năng
+
+Trên GitHub, tạo Pull Request:
+
+```text
+buu/tai/khoi → develop
+```
+
+Leader kiểm tra và merge vào `develop`.
+
+Khi toàn bộ project chạy ổn định, Leader tạo Pull Request:
+
+```text
+develop → main
+```
+
+## 6. Luồng cần nhớ
+
+```text
+Code trên nhánh cá nhân
+        ↓
+Push lên nhánh cá nhân
+        ↓
+Pull Request vào develop
+        ↓
+Leader kiểm tra và merge
+        ↓
+Project hoàn chỉnh mới merge vào main
+```
+
+## 7. Lưu ý
+
+- Không code hoặc push trực tiếp lên `main`.
+- Luôn pull `develop` trước khi bắt đầu.
+- Không commit `.env`, `node_modules` hoặc mật khẩu.
+- Trước khi merge phải chạy thử project.
+- Nếu gặp conflict, báo nhóm cùng xử lý, không tự xóa code.
+
+
 ## License
 
 Dự án được thực hiện phục vụ mục đích học tập.
