@@ -5,20 +5,6 @@ import {
   pool,
 } from "./database/pool.js";
 
-app.get("/api/health", async (_req, res) => {
-  const database = await checkDatabaseConnection();
-
-  res.status(200).json({
-    success: true,
-    message: "TicketBoxQR API is running",
-    data: {
-      database: "connected",
-      databaseName: database.databaseName,
-      databaseVersion: database.databaseVersion,
-    },
-  });
-});
-
 async function startServer(): Promise<void> {
   const database = await checkDatabaseConnection();
 
