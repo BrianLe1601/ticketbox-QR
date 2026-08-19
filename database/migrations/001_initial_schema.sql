@@ -3,7 +3,7 @@
 
 CREATE DATABASE IF NOT EXISTS ticketboxqr
   CHARACTER SET utf8mb4
-  COLLATE utf8mb4_0900_ai_ci;
+  COLLATE utf8mb4_unicode_ci;
 
 USE ticketboxqr;
 
@@ -38,7 +38,7 @@ CREATE TABLE events (
     name                VARCHAR(200) NOT NULL,
     slug                VARCHAR(220) NOT NULL,
     description         TEXT NULL,
-    location            VARCHAR(255) NOT NULL,
+    location           VARCHAR(255) NOT NULL,
     cover_image_url     VARCHAR(500) NULL,
     start_time          DATETIME(3) NOT NULL,
     end_time            DATETIME(3) NOT NULL,
@@ -611,3 +611,39 @@ GROUP BY
     tt.reserved_quantity, tt.sold_quantity;
 
 -- End of schema.
+
+USE ticketboxqr;
+
+ALTER TABLE events
+    ADD COLUMN category ENUM(
+        'music', 'conference', 'food', 'sports', 'art'
+    ) NOT NULL DEFAULT 'music'
+    AFTER location;
+
+CREATE INDEX idx_events_category_status
+    ON events(category, status);
+
+
+    ALTER TABLE events
+    ADD COLUMN venue    VARCHAR(150) NOT NULL DEFAULT '' AFTER location,
+    ADD COLUMN address  VARCHAR(255) NOT NULL DEFAULT '' AFTER venue,
+    ADD COLUMN city     VARCHAR(100) NOT NULL DEFAULT '' AFTER address;
+
+-- Giữ location tạm thời để migrate data cũ, sau khi backfill xong thì DROP
+-- UPDATE events SET venue = ..., address = ..., city = ... WHERE ...;
+-- ALTER TABLE events DROP COLUMN location;
+
+CREATE INDEX idx_events_city ON events(city);
+
+ALTER TABLE events
+    ADD CONSTRAINT chk_events_venue   CHECK (CHAR_LENGTH(TRIM(venue)) > 0),
+    ADD CONSTRAINT chk_events_address CHECK (CHAR_LENGTH(TRIM(address)) > 0),
+    ADD CONSTRAINT chk_events_city    CHECK (CHAR_LENGTH(TRIM(city)) > 0);
+
+USE ticketboxqr;
+
+ALTER TABLE events
+    DROP CONSTRAINT chk_events_location;
+
+ALTER TABLE events
+    DROP COLUMN location;
