@@ -21,6 +21,10 @@ const envSchema = z.object({
 
   JWT_EXPIRES_IN: z.string().default("1h"),
 
+  MAIL_USER: z.string().email().optional(),
+  MAIL_APP_PASSWORD: z.string().min(1).optional(),
+  MAIL_FROM_NAME: z.string().default("TicketBox QR"),
+
   SEED_ADMIN_NAME: z.string().min(1).default("Admin"),
   SEED_ADMIN_EMAIL: z.string().email().default("admin@ticketbox.local"),
   SEED_STAFF_NAME: z.string().min(1).default("Staff"),

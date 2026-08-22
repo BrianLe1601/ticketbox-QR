@@ -25,6 +25,16 @@ export function TicketSelector({
     const totalTickets = Object.values(quantities).reduce((sum, q) => sum + q, 0);
     const canPurchase = eventStatus === "on-sale" && totalTickets > 0;
 
+    function handleCheckout() {
+        if (!canPurchase) return;
+        const selections = Object.entries(quantities)
+            .filter(([, qty]) => qty > 0)
+            .map(([ticketTypeId, quantity]) => ({ ticketTypeId, quantity }));
+        // Chưa có cart/store nào giữ lựa chọn vé -> truyền qua router state,
+        // trang checkout đọc lại từ location.state.
+        navigate(`/checkout/${eventId}`, { state: { selections } });
+    }
+
     return (
         <div className="bg-card border border-white/[0.08] rounded-2xl overflow-hidden">
             <div className="p-5 border-b border-white/[0.07]">
@@ -80,7 +90,7 @@ export function TicketSelector({
                     </div>
                 )}
                 <button
-                    onClick={() => canPurchase && navigate(`/checkout/${eventId}`)}
+                    onClick={handleCheckout}
                     disabled={!canPurchase}
                     className={cn(
                         "w-full py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all duration-200",
