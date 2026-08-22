@@ -20,6 +20,16 @@ const envSchema = z.object({
     .min(32, "JWT_SECRET must contain at least 32 characters"),
 
   JWT_EXPIRES_IN: z.string().default("1h"),
+
+  MAIL_USER: z.string().email().optional(),
+  MAIL_APP_PASSWORD: z.string().min(1).optional(),
+  MAIL_FROM_NAME: z.string().default("TicketBox QR"),
+
+  SEED_ADMIN_NAME: z.string().min(1).default("Admin"),
+  SEED_ADMIN_EMAIL: z.string().email().default("admin@ticketbox.local"),
+  SEED_STAFF_NAME: z.string().min(1).default("Staff"),
+  SEED_STAFF_EMAIL: z.string().email().default("staff@ticketbox.local"),
+  SEED_DEFAULT_PASSWORD: z.string().min(8).default("ticketbox@123"),
 });
 
 const result = envSchema.safeParse(process.env);

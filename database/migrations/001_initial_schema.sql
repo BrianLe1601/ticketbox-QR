@@ -3,7 +3,7 @@
 
 CREATE DATABASE IF NOT EXISTS ticketboxqr
   CHARACTER SET utf8mb4
-  COLLATE utf8mb4_0900_ai_ci;
+  COLLATE utf8mb4_unicode_ci;
 
 USE ticketboxqr;
 
@@ -38,7 +38,11 @@ CREATE TABLE events (
     name                VARCHAR(200) NOT NULL,
     slug                VARCHAR(220) NOT NULL,
     description         TEXT NULL,
-    location            VARCHAR(255) NOT NULL,
+    category            ENUM('music', 'conference', 'food', 'sports', 'art')
+                        NOT NULL DEFAULT 'music',
+    venue               VARCHAR(150) NOT NULL,
+    address             VARCHAR(255) NOT NULL,
+    city                VARCHAR(100) NOT NULL,
     cover_image_url     VARCHAR(500) NULL,
     start_time          DATETIME(3) NOT NULL,
     end_time            DATETIME(3) NOT NULL,
@@ -59,7 +63,9 @@ CREATE TABLE events (
         FOREIGN KEY (created_by) REFERENCES users(id)
         ON UPDATE RESTRICT ON DELETE RESTRICT,
     CONSTRAINT chk_events_name CHECK (CHAR_LENGTH(TRIM(name)) > 0),
-    CONSTRAINT chk_events_location CHECK (CHAR_LENGTH(TRIM(location)) > 0),
+    CONSTRAINT chk_events_venue CHECK (CHAR_LENGTH(TRIM(venue)) > 0),
+    CONSTRAINT chk_events_address CHECK (CHAR_LENGTH(TRIM(address)) > 0),
+    CONSTRAINT chk_events_city CHECK (CHAR_LENGTH(TRIM(city)) > 0),
     CONSTRAINT chk_events_duration CHECK (start_time < end_time),
     CONSTRAINT chk_events_sales_window CHECK (
         sales_start_at IS NULL OR sales_end_at IS NULL
@@ -73,6 +79,10 @@ CREATE TABLE events (
 
 CREATE INDEX idx_events_status_sales
     ON events(status, sales_start_at, sales_end_at);
+CREATE INDEX idx_events_category_status
+    ON events(category, status);
+CREATE INDEX idx_events_city
+    ON events(city);
 
 -- =========================================================
 -- 3. EVENT_STAFF
