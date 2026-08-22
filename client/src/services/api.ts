@@ -38,3 +38,19 @@ export async function apiGet<T>(path: string, params?: Record<string, string | n
 
     return { data: json.data, meta: json.meta };
 }
+
+export async function apiPost<T>(path: string, body: unknown): Promise<{ data: T }> {
+    const res = await fetch(`${API_BASE_URL}${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+    });
+    const json = (await res.json()) as ApiSuccess<T> | ApiError;
+
+    if (!res.ok || !json.success) {
+        const message = "message" in json ? json.message : `Request failed (${res.status})`;
+        throw new ApiRequestError(message, res.status);
+    }
+
+    return { data: json.data };
+}

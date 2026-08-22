@@ -4,6 +4,7 @@ import { HomePage } from "@/pages/public/HomePage";
 import { EventListPage } from "@/pages/public/EventListPage";
 import { EventDetailPage } from "@/pages/public/EventDetailPage";
 import { CheckoutPlaceholder } from "@/pages/public/CheckoutPlaceholder";
+import { OrderPaymentPage } from "@/pages/public/OrderPaymentPage";
 
 export function AppRoutes() {
     return (
@@ -13,6 +14,7 @@ export function AppRoutes() {
                 <Route path="/events" element={<EventListPage />} />
                 <Route path="/events/:id" element={<EventDetailPage />} />
                 <Route path="/checkout/:id" element={<CheckoutPlaceholder />} />
+                <Route path="/orders/:id" element={<OrderPaymentPage />} />
             </Route>
         </Routes>
     );

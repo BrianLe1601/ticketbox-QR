@@ -20,6 +20,10 @@ const envSchema = z.object({
     .min(32, "JWT_SECRET must contain at least 32 characters"),
 
   JWT_EXPIRES_IN: z.string().default("1h"),
+
+  MAIL_USER: z.string().email().optional(),
+  MAIL_APP_PASSWORD: z.string().min(1).optional(),
+  MAIL_FROM_NAME: z.string().default("TicketBox QR"),
 });
 
 const result = envSchema.safeParse(process.env);
