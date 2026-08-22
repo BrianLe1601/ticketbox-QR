@@ -14,7 +14,7 @@ export function NavSearch() {
 
     useEffect(() => {
         const trimmed = query.trim();
-        if (!trimmed) { setSuggestions([]); return; }
+        if (!trimmed) return;
         let cancelled = false;
         const t = setTimeout(() => {
             fetchEventList({ q: trimmed, limit: 5 })
@@ -24,7 +24,7 @@ export function NavSearch() {
         return () => { cancelled = true; clearTimeout(t); };
     }, [query]);
 
-    const showDropdown = focused && suggestions.length > 0;
+    const showDropdown = focused && query.trim().length > 0 && suggestions.length > 0;
 
     useEffect(() => {
         function onMouseDown(e: MouseEvent) {

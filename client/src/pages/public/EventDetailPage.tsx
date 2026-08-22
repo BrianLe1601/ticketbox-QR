@@ -10,23 +10,21 @@ import { TicketSelector } from "@/components/event/TicketSelector";
 export function EventDetailPage() {
     const { id } = useParams<{ id: string }>();
     const [event, setEvent] = useState<Event | null | undefined>(undefined); // undefined = đang tải
-    const [notFound, setNotFound] = useState(false);
+    const [notFoundId, setNotFoundId] = useState<string | null>(null);
 
     useEffect(() => {
-        if (!id) { setNotFound(true); return; }
+        if (!id) return;
         let cancelled = false;
-        setEvent(undefined);
-        setNotFound(false);
         fetchEventById(id).then((result) => {
             if (cancelled) return;
-            if (!result) setNotFound(true);
+            if (!result) setNotFoundId(id);
             else setEvent(result);
         });
         return () => { cancelled = true; };
     }, [id]);
 
-    if (notFound || event === null) return <Navigate to="/events" replace />;
-    if (event === undefined) {
+    if (!id || notFoundId === id || event === null) return <Navigate to="/events" replace />;
+    if (event === undefined || event.id !== id) {
         return <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 text-sm text-muted-foreground">Đang tải...</div>;
     }
 

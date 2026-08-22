@@ -34,7 +34,8 @@ export function EventListPage() {
 
     const loadPage = useCallback(
         async (targetPage: number, append: boolean) => {
-            append ? setLoadingMore(true) : setLoading(true);
+            if (append) setLoadingMore(true);
+            else setLoading(true);
             try {
                 const { events: pageEvents, total: pageTotal } = await fetchEventList({
                     q: query || undefined,
@@ -50,7 +51,8 @@ export function EventListPage() {
             } catch {
                 if (!append) { setEvents([]); setTotal(0); }
             } finally {
-                append ? setLoadingMore(false) : setLoading(false);
+                if (append) setLoadingMore(false);
+                else setLoading(false);
             }
         },
         [query, selectedCategory, selectedCity, sortBy]
@@ -60,7 +62,7 @@ export function EventListPage() {
     useEffect(() => {
         const t = setTimeout(() => loadPage(1, false), query ? 400 : 0);
         return () => clearTimeout(t);
-    }, [loadPage]);
+    }, [loadPage, query]);
 
     const timeFiltered = events.filter((event) => {
         if (selectedTime === "all") return true;

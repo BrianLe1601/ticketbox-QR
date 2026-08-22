@@ -16,10 +16,13 @@ export function CheckoutPlaceholder() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const location = useLocation();
-    const selections = (location.state as LocationState | null)?.selections ?? [];
+    const selections = useMemo(
+        () => (location.state as LocationState | null)?.selections ?? [],
+        [location.state],
+    );
 
     const [event, setEvent] = useState<Event | null | undefined>(undefined);
-    const [notFound, setNotFound] = useState(false);
+    const [notFoundId, setNotFoundId] = useState<string | null>(null);
     const [name, setName] = useState("");
     const [email, setEmail] = useState("");
     const [phone, setPhone] = useState("");
@@ -32,11 +35,11 @@ export function CheckoutPlaceholder() {
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        if (!id) { setNotFound(true); return; }
+        if (!id) return;
         let cancelled = false;
         fetchEventById(id).then((result) => {
             if (cancelled) return;
-            if (!result) setNotFound(true);
+            if (!result) setNotFoundId(id);
             else setEvent(result);
         });
         return () => { cancelled = true; };
@@ -56,7 +59,7 @@ export function CheckoutPlaceholder() {
     const totalAmount = lines.reduce((sum, l) => sum + l.lineTotal, 0);
     const totalQuantity = lines.reduce((sum, l) => sum + l.quantity, 0);
 
-    if (notFound) return <Navigate to="/events" replace />;
+    if (!id || notFoundId === id) return <Navigate to="/events" replace />;
 
     // Vào thẳng URL /checkout/:id hoặc reload mất router state -> không còn biết đã
     // chọn vé gì, đưa về trang sự kiện để chọn lại thay vì hiện form trống vô nghĩa.

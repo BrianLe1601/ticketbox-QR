@@ -15,7 +15,6 @@ export function CategorySection({ category }: { category: CategorySlug }) {
 
     useEffect(() => {
         let cancelled = false;
-        setLoading(true);
         fetchEventList({ category, limit: 3, sort: "upcoming" })
             .then(({ events }) => { if (!cancelled) setEvents(events); })
             .catch(() => { if (!cancelled) setEvents([]); })
