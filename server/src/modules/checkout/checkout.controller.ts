@@ -2,6 +2,8 @@ import type { NextFunction, Request, Response } from 'express';
 import { createOrder, getOrderByLookupToken, payOrder } from './checkout.service.js';
 import { sendSuccess } from '../../utils/response.js';
 import type { CreateOrderBody, OrderIdParam, OrderLookupQuery, PayOrderBody } from './checkout.schema.js';
+import type { RequestEmailVerificationBody, ConfirmEmailVerificationBody } from './checkout.schema.js';
+import { requestEmailVerification, confirmEmailVerification } from '../../services/email-verification.service.js';
 
 export async function postOrder(req: Request, res: Response, next: NextFunction) {
     try {
@@ -32,4 +34,15 @@ export async function postPayment(req: Request, res: Response, next: NextFunctio
     } catch (err) {
         next(err);
     }
+}
+
+export async function postEmailVerification(req: Request, res: Response, next: NextFunction) {
+    try { sendSuccess(res, await requestEmailVerification((req.body as RequestEmailVerificationBody).email)); } catch (err) { next(err); }
+}
+
+export async function postEmailVerificationConfirm(req: Request, res: Response, next: NextFunction) {
+    try {
+        const body = req.body as ConfirmEmailVerificationBody;
+        sendSuccess(res, confirmEmailVerification(body.email, body.code));
+    } catch (err) { next(err); }
 }

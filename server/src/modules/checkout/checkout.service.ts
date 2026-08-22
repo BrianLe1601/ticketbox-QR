@@ -9,6 +9,7 @@ import {
 import type { CreateOrderBody } from './checkout.schema.js';
 import { createTicketQrDataUrl } from '../../services/qr.service.js';
 import { sendTicketEmail } from '../../services/mail.service.js';
+import { assertEmailVerified, consumeEmailVerification } from '../../services/email-verification.service.js';
 
 const HOLD_MINUTES = 10;
 
@@ -61,6 +62,7 @@ function mapOrderResponse(
 }
 
 export async function createOrder(body: CreateOrderBody) {
+    assertEmailVerified(body.buyer.email, body.emailVerificationToken);
     const { raw: lookupTokenRaw, hash: lookupTokenHash } = generateLookupToken();
     const idempotencyKey = crypto.randomBytes(16).toString('hex');
     const expiresAt = new Date(Date.now() + HOLD_MINUTES * 60_000);
@@ -160,6 +162,7 @@ export async function createOrder(body: CreateOrderBody) {
     const order = await findOrderByIdReadOnly(orderId);
     const items = await findOrderItemsByOrderId(orderId);
     if (!order) throw AppError.notFound('Không tìm thấy đơn hàng vừa tạo');
+    consumeEmailVerification(body.emailVerificationToken);
     return mapOrderResponse(order, items, lookupTokenRaw);
 }
 

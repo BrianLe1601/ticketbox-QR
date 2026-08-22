@@ -3,11 +3,21 @@ import { env } from '../config/env.js';
 
 export interface MailTicket { ticketCode: string; ticketTypeName: string; qrDataUrl: string }
 
+function createTransporter() {
+    if (!env.MAIL_USER || !env.MAIL_APP_PASSWORD) throw new Error('Máy chủ chưa cấu hình MAIL_USER và MAIL_APP_PASSWORD');
+    return nodemailer.createTransport({ service: 'gmail', auth: { user: env.MAIL_USER, pass: env.MAIL_APP_PASSWORD } });
+}
+
+export function sendEmailVerificationCode(recipient: string, code: string) {
+    return createTransporter().sendMail({
+        from: `"${env.MAIL_FROM_NAME.replaceAll('"', '')}" <${env.MAIL_USER}>`, to: recipient,
+        subject: 'Mã xác minh Gmail - TicketBox QR',
+        html: `<h2>Xác minh Gmail nhận vé</h2><p>Mã xác minh của bạn là:</p><p style="font-size:30px;font-weight:bold;letter-spacing:6px">${code}</p><p>Mã có hiệu lực trong 5 phút. Không cung cấp mã này cho người khác.</p>`,
+    });
+}
+
 export async function sendTicketEmail(input: { recipient: string; buyerName: string; orderCode: string; tickets: MailTicket[] }) {
-    if (!env.MAIL_USER || !env.MAIL_APP_PASSWORD) {
-        throw new Error('Máy chủ chưa cấu hình MAIL_USER và MAIL_APP_PASSWORD');
-    }
-    const transporter = nodemailer.createTransport({ service: 'gmail', auth: { user: env.MAIL_USER, pass: env.MAIL_APP_PASSWORD } });
+    const transporter = createTransporter();
     const attachments = input.tickets.map((ticket, index) => ({
         filename: `${ticket.ticketCode}.png`, content: Buffer.from(ticket.qrDataUrl.split(',')[1] ?? '', 'base64'), cid: `ticket-${index}@ticketbox`,
     }));

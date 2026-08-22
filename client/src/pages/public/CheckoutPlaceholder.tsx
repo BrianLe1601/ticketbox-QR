@@ -1,10 +1,10 @@
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate, useLocation, Navigate } from "react-router-dom";
-import { ArrowLeft, ShoppingCart, Loader2 } from "lucide-react";
+import { ArrowLeft, ShoppingCart, Loader2, MailCheck } from "lucide-react";
 import type { Event } from "@/types/event.types";
 import type { TicketSelection } from "@/types/order.types";
 import { fetchEventById } from "@/services/event.service";
-import { createOrder } from "@/services/order.service";
+import { confirmEmailVerification, createOrder, requestEmailVerification } from "@/services/order.service";
 import { ApiRequestError } from "@/services/api";
 import { formatPrice } from "@/lib/utils";
 
@@ -23,6 +23,11 @@ export function CheckoutPlaceholder() {
     const [name, setName] = useState("");
     const [email, setEmail] = useState("");
     const [phone, setPhone] = useState("");
+    const [verificationCode, setVerificationCode] = useState("");
+    const [verificationToken, setVerificationToken] = useState("");
+    const [sendingCode, setSendingCode] = useState(false);
+    const [verifyingCode, setVerifyingCode] = useState(false);
+    const [codeSent, setCodeSent] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -66,11 +71,13 @@ export function CheckoutPlaceholder() {
     async function handleSubmit(e: FormEvent) {
         e.preventDefault();
         if (!event || totalQuantity === 0 || submitting) return;
+        if (!verificationToken) { setError("Vui lòng xác minh Gmail trước khi tiếp tục"); return; }
         setSubmitting(true);
         setError(null);
         try {
             const order = await createOrder({
                 eventId: event.id,
+                emailVerificationToken: verificationToken,
                 items: selections,
                 buyer: { name: name.trim(), email: email.trim(), phone: phone.trim() || undefined },
             });
@@ -82,6 +89,26 @@ export function CheckoutPlaceholder() {
         } finally {
             setSubmitting(false);
         }
+    }
+
+    async function handleSendCode() {
+        if (sendingCode) return;
+        setSendingCode(true); setError(null); setVerificationToken("");
+        try {
+            await requestEmailVerification(email.trim());
+            setCodeSent(true);
+        } catch (err) { setError(err instanceof ApiRequestError ? err.message : "Không gửi được mã xác minh"); }
+        finally { setSendingCode(false); }
+    }
+
+    async function handleVerifyCode() {
+        if (verifyingCode) return;
+        setVerifyingCode(true); setError(null);
+        try {
+            const result = await confirmEmailVerification(email.trim(), verificationCode.trim());
+            setVerificationToken(result.verificationToken);
+        } catch (err) { setError(err instanceof ApiRequestError ? err.message : "Không xác minh được Gmail"); }
+        finally { setVerifyingCode(false); }
     }
 
     return (
@@ -106,7 +133,15 @@ export function CheckoutPlaceholder() {
                     </div>
                     <div>
                         <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Email nhận vé</label>
-                        <input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="ban@example.com" className="w-full px-3.5 py-2.5 rounded-xl bg-card border border-white/[0.08] text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all" />
+                        <div className="flex gap-2">
+                            <input required type="email" value={email} disabled={Boolean(verificationToken)} onChange={(e) => { setEmail(e.target.value); setCodeSent(false); setVerificationToken(""); }} placeholder="ban@gmail.com" className="min-w-0 flex-1 px-3.5 py-2.5 rounded-xl bg-card border border-white/[0.08] text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 disabled:opacity-70" />
+                            <button type="button" onClick={handleSendCode} disabled={sendingCode || Boolean(verificationToken) || !email} className="px-3 rounded-xl border border-primary/30 text-primary text-xs font-bold disabled:opacity-50">{sendingCode ? "Đang gửi..." : "Gửi mã"}</button>
+                        </div>
+                        {codeSent && !verificationToken && <div className="flex gap-2 mt-2">
+                            <input value={verificationCode} onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric" placeholder="Nhập mã 6 số" className="min-w-0 flex-1 px-3.5 py-2.5 rounded-xl bg-card border border-white/[0.08] text-sm text-foreground" />
+                            <button type="button" onClick={handleVerifyCode} disabled={verifyingCode || verificationCode.length !== 6} className="px-3 rounded-xl bg-primary text-white text-xs font-bold disabled:opacity-50">{verifyingCode ? "Đang kiểm tra..." : "Xác minh"}</button>
+                        </div>}
+                        {verificationToken && <p className="mt-2 text-xs text-emerald-400 flex items-center gap-1"><MailCheck size={13} /> Gmail đã được xác minh</p>}
                     </div>
                     <div>
                         <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Số điện thoại <span className="text-muted-foreground/60 font-normal">(không bắt buộc)</span></label>
@@ -115,9 +150,9 @@ export function CheckoutPlaceholder() {
 
                     {error && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>}
 
-                    <button type="submit" disabled={submitting} className="w-full py-3.5 rounded-xl bg-primary text-white font-bold text-sm flex items-center justify-center gap-2 hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed shadow-lg shadow-primary/30 transition-all">
+                    <button type="submit" disabled={submitting || !verificationToken} className="w-full py-3.5 rounded-xl bg-primary text-white font-bold text-sm flex items-center justify-center gap-2 hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed shadow-lg shadow-primary/30 transition-all">
                         {submitting && <Loader2 size={15} className="animate-spin" />}
-                        {submitting ? "Đang giữ vé..." : "Giữ vé & tiếp tục"}
+                        {submitting ? "Đang giữ vé..." : "Tiếp tục"}
                     </button>
                     <p className="text-[11px] text-center text-muted-foreground">Vé sẽ được giữ trong 10 phút để hoàn tất thanh toán.</p>
                 </form>

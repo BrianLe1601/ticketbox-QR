@@ -3,6 +3,7 @@ import { apiGet, apiPost } from "./api";
 
 export interface CreateOrderPayload {
     eventId: string;
+    emailVerificationToken: string;
     items: TicketSelection[];
     buyer: BuyerInfo;
 }
@@ -10,6 +11,7 @@ export interface CreateOrderPayload {
 export async function createOrder(payload: CreateOrderPayload): Promise<CreateOrderResult> {
     const { data } = await apiPost<CreateOrderResult>("/checkout/orders", {
         eventId: payload.eventId,
+        emailVerificationToken: payload.emailVerificationToken,
         items: payload.items.map((i) => ({ ticketTypeId: i.ticketTypeId, quantity: i.quantity })),
         buyer: payload.buyer,
     });
@@ -23,6 +25,16 @@ export async function fetchOrder(orderId: string, token: string): Promise<Order 
     } catch {
         return null;
     }
+}
+
+export async function requestEmailVerification(email: string) {
+    const { data } = await apiPost<{ message: string; expiresInSeconds: number }>("/checkout/email-verifications", { email });
+    return data;
+}
+
+export async function confirmEmailVerification(email: string, code: string) {
+    const { data } = await apiPost<{ verificationToken: string; email: string }>("/checkout/email-verifications/confirm", { email, code });
+    return data;
 }
 
 export async function payOrder(orderId: number, token: string): Promise<PaymentResult> {
