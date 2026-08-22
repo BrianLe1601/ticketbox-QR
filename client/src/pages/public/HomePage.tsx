@@ -14,7 +14,6 @@ export function HomePage() {
 
     useEffect(() => {
         let cancelled = false;
-        setLoading(true);
         fetchEventList({ limit: 3, sort: "upcoming" })
             .then(({ events }) => {
                 if (!cancelled) setEvents(events);

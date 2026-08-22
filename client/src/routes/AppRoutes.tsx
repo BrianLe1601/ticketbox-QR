@@ -8,6 +8,7 @@ import { OrderPaymentPage } from "@/pages/public/OrderPaymentPage";
 import { LoginPage } from "@/pages/auth/LoginPage";
 import { AdminLayout } from "@/layouts/AdminLayout";
 import { AdminDashboardPage } from "@/pages/admin/AdminDashboardPage";
+import { AdminEventsPage } from "@/pages/admin/AdminEventsPage";
 import { AdminPlaceholderPage } from "@/pages/admin/AdminPlaceholderPage";
 import { StaffLayout } from "@/layouts/StaffLayout";
 import { StaffHomePage } from "@/pages/staff/StaffHomePage";
@@ -28,7 +29,7 @@ export function AppRoutes() {
             <Route element={<ProtectedRoute allowedRoles={["admin"]} />}>
                 <Route path="/admin" element={<AdminLayout />}>
                     <Route index element={<AdminDashboardPage />} />
-                    <Route path="events" element={<AdminPlaceholderPage />} />
+                    <Route path="events" element={<AdminEventsPage />} />
                     <Route path="ticket-types" element={<AdminPlaceholderPage />} />
                     <Route path="orders" element={<AdminPlaceholderPage />} />
                     <Route path="staff" element={<AdminPlaceholderPage />} />

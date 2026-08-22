@@ -2,7 +2,7 @@
 export type CategorySlug = "music" | "conference" | "food" | "sports" | "art";
 
 // Khớp đúng events.status ENUM trong DB (trạng thái quản trị)
-export type EventLifecycleStatus = "draft" | "published" | "ended" | "cancelled";
+export type EventLifecycleStatus = "draft" | "published" | "ongoing" | "completed" | "cancelled";
 
 // Trạng thái BÁN VÉ — không lưu trong DB, luôn được TÍNH ra từ
 // status + sales_start_at/sales_end_at + tồn kho vé
