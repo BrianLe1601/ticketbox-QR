@@ -4,7 +4,7 @@ import { Search, X, ChevronDown, SlidersHorizontal, ArrowUpDown } from "lucide-r
 import type { SortKey, Event, CategorySlug } from "@/types/event.types";
 import { fetchEventList } from "@/services/event.service";
 import {
-    CATEGORY_FILTER_OPTIONS, CITY_OPTIONS, CITY_LABELS,
+    CATEGORY_FILTER_OPTIONS, CITY_OPTIONS,
     TIME_OPTIONS, SORT_OPTIONS, PAGE_SIZE,
 } from "@/constants/eventconstants";
 import type { CategoryFilter } from "@/constants/eventconstants";

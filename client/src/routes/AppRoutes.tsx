@@ -4,6 +4,7 @@ import { HomePage } from "@/pages/public/HomePage";
 import { EventListPage } from "@/pages/public/EventListPage";
 import { EventDetailPage } from "@/pages/public/EventDetailPage";
 import { CheckoutPlaceholder } from "@/pages/public/CheckoutPlaceholder";
+import { OrderPaymentPage } from "@/pages/public/OrderPaymentPage";
 import { LoginPage } from "@/pages/auth/LoginPage";
 import { AdminLayout } from "@/layouts/AdminLayout";
 import { AdminDashboardPage } from "@/pages/admin/AdminDashboardPage";
@@ -20,6 +21,7 @@ export function AppRoutes() {
                 <Route path="/events" element={<EventListPage />} />
                 <Route path="/events/:id" element={<EventDetailPage />} />
                 <Route path="/checkout/:id" element={<CheckoutPlaceholder />} />
+                <Route path="/orders/:id" element={<OrderPaymentPage />} />
             </Route>
             <Route path="/login" element={<LoginPage />} />
 
