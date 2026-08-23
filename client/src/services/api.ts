@@ -54,3 +54,16 @@ export async function apiPost<T>(path: string, body: unknown): Promise<{ data: T
 
     return { data: json.data };
 }
+
+export async function apiRequest<T>(path: string, options: RequestInit = {}, token?: string | null): Promise<{ data: T; meta?: ApiSuccess<T>["meta"] }> {
+    const headers = new Headers(options.headers);
+    if (options.body) headers.set("Content-Type", "application/json");
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+    const res = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
+    if (res.status === 204) return { data: undefined as T };
+    const json = (await res.json()) as ApiSuccess<T> | ApiError;
+    if (!res.ok || !json.success) {
+        throw new ApiRequestError("message" in json ? json.message : `Request failed (${res.status})`, res.status);
+    }
+    return { data: json.data, meta: json.meta };
+}
