@@ -1,28 +1,11 @@
 import { CalendarClock, CalendarDays, Edit3, MapPin, Plus, Search, ShieldAlert, Ticket, Trash2, X } from "lucide-react";
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { createAdminEvent, deleteAdminEvent, listAdminEvents, publishAdminEvent, updateAdminEvent, type AdminEvent as ManagedEvent, type EventStatus as Status } from "@/services/admin-events.service";
 
-type Status = "draft" | "published" | "ongoing" | "completed" | "cancelled";
 type PublishMode = "manual" | "scheduled";
 
-interface ManagedEvent {
-  id: number;
-  name: string;
-  category: string;
-  venue: string;
-  address: string;
-  city: string;
-  startTime: string;
-  endTime: string;
-  salesStartAt: string;
-  salesEndAt: string;
-  scheduledPublishAt: string;
-  status: Status;
-  ticketTypeCount: number;
-  soldQuantity: number;
-}
-
 const emptyForm = {
-  name: "", category: "music", venue: "", address: "", city: "",
+  name: "", description: "", category: "music", venue: "", address: "", city: "", venueCapacity: "", coverImageUrl: "",
   startTime: "", endTime: "", salesStartAt: "", salesEndAt: "",
   publishMode: "manual" as PublishMode, scheduledPublishAt: "",
 };
@@ -35,6 +18,11 @@ export function AdminEventsPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [errors, setErrors] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    void listAdminEvents().then(({ data }) => setEvents(data)).catch((error: Error) => setErrors([error.message])).finally(() => setLoading(false));
+  }, []);
 
   const filtered = useMemo(() => events.filter((event) =>
     (status === "all" || event.status === status) &&
@@ -54,7 +42,10 @@ export function AdminEventsPage() {
 
   function openEdit(event: ManagedEvent) {
     setEditingId(event.id);
-    setForm({ ...event, publishMode: event.scheduledPublishAt ? "scheduled" : "manual" });
+    const local = (value: string | null) => value ? new Date(value).toISOString().slice(0, 16) : "";
+    setForm({ name:event.name, description:event.description??"", category:event.category, venue:event.venue, address:event.address, city:event.city,
+      venueCapacity:event.venueCapacity?.toString()??"", coverImageUrl:event.coverImageUrl??"", startTime:local(event.startTime), endTime:local(event.endTime),
+      salesStartAt:local(event.salesStartAt), salesEndAt:local(event.salesEndAt), publishMode:event.scheduledPublishAt?"scheduled":"manual", scheduledPublishAt:local(event.scheduledPublishAt) });
     setErrors([]); setDialogOpen(true);
   }
 
@@ -70,25 +61,30 @@ export function AdminEventsPage() {
     return next;
   }
 
-  function submit(event: FormEvent) {
+  async function submit(event: FormEvent) {
     event.preventDefault();
     const nextErrors = validate();
     if (nextErrors.length) { setErrors(nextErrors); return; }
-    const payload = {
-      ...form,
-      scheduledPublishAt: form.publishMode === "scheduled" ? form.scheduledPublishAt : "",
-    };
-    if (editingId) {
-      setEvents((current) => current.map((item) => item.id === editingId ? { ...item, ...payload } : item));
-    } else {
-      setEvents((current) => [{ ...payload, id: Date.now(), status: "draft", ticketTypeCount: 0, soldQuantity: 0 }, ...current]);
-    }
-    setDialogOpen(false);
+    const iso = (value: string) => value ? new Date(value).toISOString() : null;
+    const payload = { name:form.name.trim(), description:form.description.trim()||null, category:form.category as "music"|"conference"|"food"|"sports"|"art", venue:form.venue.trim(), address:form.address.trim(), city:form.city.trim(), venueCapacity:form.venueCapacity?Number(form.venueCapacity):null, coverImageUrl:form.coverImageUrl.trim()||null, startTime:iso(form.startTime)!, endTime:iso(form.endTime)!, salesStartAt:iso(form.salesStartAt), salesEndAt:iso(form.salesEndAt), checkinStartAt:null, checkinEndAt:null, scheduledPublishAt:form.publishMode==="scheduled"?iso(form.scheduledPublishAt):null };
+    try {
+      const saved = editingId ? await updateAdminEvent(editingId, payload) : await createAdminEvent(payload);
+      setEvents((current) => editingId ? current.map((item) => item.id === saved.id ? saved : item) : [saved, ...current]);
+      setDialogOpen(false);
+    } catch (error) { setErrors([error instanceof Error ? error.message : "Unable to save event."]); }
   }
 
-  function removeEvent(event: ManagedEvent) {
+  async function removeEvent(event: ManagedEvent) {
     if (event.status !== "draft" || event.soldQuantity > 0) return;
-    if (window.confirm(`Permanently delete draft “${event.name}”?`)) setEvents((current) => current.filter((item) => item.id !== event.id));
+    if (window.confirm(`Permanently delete draft “${event.name}”?`)) {
+      try { await deleteAdminEvent(event.id); setEvents((current) => current.filter((item) => item.id !== event.id)); }
+      catch (error) { setErrors([error instanceof Error ? error.message : "Unable to delete event."]); }
+    }
+  }
+
+  async function publish(event: ManagedEvent) {
+    try { const saved=await publishAdminEvent(event.id);setEvents((current)=>current.map((item)=>item.id===saved.id?saved:item)); }
+    catch(error){setErrors([error instanceof Error?error.message:"Event is not ready to publish."]);}
   }
 
   return (
@@ -110,12 +106,12 @@ export function AdminEventsPage() {
       </div>
 
       <div className="events-list-panel">
-        {filtered.length === 0 ? <div className="events-empty"><CalendarClock size={38} /><h3>No events found</h3><p>Create your first draft to begin configuring ticket types and publishing rules.</p><button onClick={openCreate}><Plus size={16} /> Create draft</button></div> : filtered.map((event) => (
+        {loading ? <div className="events-empty"><p>Loading events...</p></div> : filtered.length === 0 ? <div className="events-empty"><CalendarClock size={38} /><h3>No events found</h3><p>Create your first draft to begin configuring ticket types and publishing rules.</p><button onClick={openCreate}><Plus size={16} /> Create draft</button></div> : filtered.map((event) => (
           <article className="events-row" key={event.id}>
             <div className="events-date"><CalendarDays size={18} /><strong>{new Date(event.startTime).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}</strong></div>
             <div className="events-main"><div><span className={`event-status ${event.status}`}>{event.status}</span>{event.scheduledPublishAt && <span className="event-scheduled">AUTO · {new Date(event.scheduledPublishAt).toLocaleString("en-GB")}</span>}</div><h3>{event.name}</h3><p><MapPin size={13} /> {event.venue}, {event.city}</p></div>
-            <div className="events-ticket-health"><Ticket size={16} /><strong>{event.ticketTypeCount}</strong><span>ticket types</span></div>
-            <div className="events-actions"><button onClick={() => openEdit(event)} aria-label="Edit event"><Edit3 size={16} /></button><button disabled={event.status !== "draft" || event.soldQuantity > 0} onClick={() => removeEvent(event)} aria-label="Delete draft"><Trash2 size={16} /></button></div>
+            <div className="events-ticket-health" title={event.readiness.missing.join(", ")}><Ticket size={16} /><strong>{event.validTicketTypeCount}/{event.ticketTypeCount}</strong><span>{event.readiness.ready ? "ready to publish" : "requirements missing"}</span></div>
+            <div className="events-actions">{event.status === "draft" && <button disabled={!event.readiness.ready} onClick={() => void publish(event)} title={event.readiness.missing.join(", ")}>Publish</button>}<button disabled={event.status !== "draft"} onClick={() => openEdit(event)} aria-label="Edit event"><Edit3 size={16} /></button><button disabled={event.status !== "draft" || event.soldQuantity > 0} onClick={() => void removeEvent(event)} aria-label="Delete draft"><Trash2 size={16} /></button></div>
           </article>
         ))}
       </div>
@@ -126,10 +122,13 @@ export function AdminEventsPage() {
           {errors.length > 0 && <div className="events-form-errors">{errors.map((error) => <p key={error}>{error}</p>)}</div>}
           <div className="events-form-grid">
             <label className="wide">Event name<input value={form.name} onChange={(e) => setForm({...form, name:e.target.value})} /></label>
+            <label className="wide">Description<textarea value={form.description} onChange={(e) => setForm({...form, description:e.target.value})} /></label>
             <label>Category<select value={form.category} onChange={(e) => setForm({...form, category:e.target.value})}>{["music", "conference", "food", "sports", "art"].map((item) => <option key={item}>{item}</option>)}</select></label>
             <label>City<input value={form.city} onChange={(e) => setForm({...form, city:e.target.value})} /></label>
             <label>Venue<input value={form.venue} onChange={(e) => setForm({...form, venue:e.target.value})} /></label>
             <label>Address<input value={form.address} onChange={(e) => setForm({...form, address:e.target.value})} /></label>
+            <label>Venue capacity<input type="number" min="1" value={form.venueCapacity} onChange={(e) => setForm({...form, venueCapacity:e.target.value})} /></label>
+            <label>Cover image URL<input type="url" value={form.coverImageUrl} onChange={(e) => setForm({...form, coverImageUrl:e.target.value})} /></label>
             <label>Starts at<input type="datetime-local" value={form.startTime} onChange={(e) => setForm({...form, startTime:e.target.value})} /></label>
             <label>Ends at<input type="datetime-local" value={form.endTime} onChange={(e) => setForm({...form, endTime:e.target.value})} /></label>
             <label>Ticket sales start<input type="datetime-local" value={form.salesStartAt} onChange={(e) => setForm({...form, salesStartAt:e.target.value})} /></label>
