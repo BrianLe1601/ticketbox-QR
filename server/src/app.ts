@@ -9,6 +9,7 @@ import { errorHandler, notFoundHandler } from "./middlewares/error-handler.js";
 import { authorize } from "./middlewares/authorize.js";
 import { authenticate } from "./middlewares/authenticate.js";
 import { authRouter } from "./modules/auth/auth.routes.js";
+import { adminEventsRouter } from "./modules/events/admin-events.routes.js";
 import { router } from "./routes/index.js";
 
 export const app = express();
@@ -44,6 +45,7 @@ app.get("/api/health", async (_req, res, next) => {
 });
 
 app.use("/api/auth", authRouter);
+app.use("/api/admin/events", adminEventsRouter);
 
 // Route dùng để kiểm tra RBAC Admin
 app.get(
