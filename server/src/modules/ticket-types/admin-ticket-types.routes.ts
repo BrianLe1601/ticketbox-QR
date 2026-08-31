@@ -1,0 +1,13 @@
+import { Router } from "express";
+import { authenticate } from "../../middlewares/authenticate.js";
+import { authorize } from "../../middlewares/authorize.js";
+import { validate } from "../../middlewares/validate.js";
+import { create,list,remove,salesStatus,update } from "./admin-ticket-types.controller.js";
+import { createTicketTypeSchema,ticketSalesStatusSchema,ticketTypeIdSchema,ticketTypeListSchema,updateTicketTypeSchema } from "./admin-ticket-types.schema.js";
+export const adminTicketTypesRouter=Router();
+adminTicketTypesRouter.use(authenticate,authorize("admin"));
+adminTicketTypesRouter.get("/",validate(ticketTypeListSchema,"query"),list);
+adminTicketTypesRouter.post("/",validate(createTicketTypeSchema,"body"),create);
+adminTicketTypesRouter.patch("/:id",validate(ticketTypeIdSchema,"params"),validate(updateTicketTypeSchema,"body"),update);
+adminTicketTypesRouter.patch("/:id/sales-status",validate(ticketTypeIdSchema,"params"),validate(ticketSalesStatusSchema,"body"),salesStatus);
+adminTicketTypesRouter.delete("/:id",validate(ticketTypeIdSchema,"params"),remove);

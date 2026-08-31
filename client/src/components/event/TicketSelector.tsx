@@ -23,7 +23,10 @@ export function TicketSelector({
 
     const totalAmount = tickets.reduce((sum, t) => sum + (quantities[t.id] ?? 0) * t.price, 0);
     const totalTickets = Object.values(quantities).reduce((sum, q) => sum + q, 0);
-    const canPurchase = eventStatus === "on-sale" && totalTickets > 0;
+    const selectedTicketsAreOpen = Object.entries(quantities)
+        .filter(([, quantity]) => quantity > 0)
+        .every(([ticketId]) => tickets.find((ticket) => ticket.id === ticketId)?.saleStatus === "on-sale");
+    const canPurchase = eventStatus === "on-sale" && totalTickets > 0 && selectedTicketsAreOpen;
 
     function handleCheckout() {
         if (!canPurchase) return;
@@ -47,8 +50,9 @@ export function TicketSelector({
                     const qty = quantities[ticket.id] ?? 0;
                     const isLow = ticket.available > 0 && ticket.available <= 20;
                     const isSoldOut = ticket.available === 0;
-                    const isComingSoon = eventStatus === "coming-soon";
-                    const disabled = isSoldOut || isComingSoon;
+                    const isComingSoon = ticket.saleStatus === "coming-soon";
+                    const isClosed = ticket.saleStatus === "closed";
+                    const disabled = isSoldOut || isComingSoon || isClosed || eventStatus !== "on-sale";
 
                     return (
                         <div key={ticket.id} className={cn("p-5 transition-colors", qty > 0 && "bg-primary/5")}>
@@ -60,6 +64,16 @@ export function TicketSelector({
                                         {ticket.name === "Premium" && <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-400 border border-purple-500/20 font-semibold">EXCLUSIVE</span>}
                                     </div>
                                     <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{ticket.description}</p>
+                                    {isComingSoon && (
+                                        <div className="mt-2 rounded-lg border border-sky-400/20 bg-sky-400/[0.06] px-2.5 py-2 text-[10px] text-sky-300">
+                                            Coming soon · Opens {ticket.salesStartAt ? new Date(ticket.salesStartAt).toLocaleString("vi-VN") : "on schedule"}
+                                        </div>
+                                    )}
+                                    {isClosed && (
+                                        <div className="mt-2 rounded-lg border border-red-400/20 bg-red-400/[0.06] px-2.5 py-2 text-[10px] text-red-300">
+                                            Sales for this ticket tier have closed
+                                        </div>
+                                    )}
                                     <div className="flex items-center gap-3 mt-2">
                                         <span className="font-extrabold text-sm text-primary" style={{ fontFamily: "JetBrains Mono, monospace" }}>{formatPrice(ticket.price)}</span>
                                         {isLow && !isSoldOut && !isComingSoon && <span className="text-[10px] text-amber-400 font-semibold">Còn {ticket.available} vé</span>}
