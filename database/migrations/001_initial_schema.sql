@@ -1,7 +1,12 @@
--- TicketBoxQR - MySQL 8.0.16+
--- Run this entire script in MySQL Workbench.
+-- TicketBoxQR - Consolidated clean-install schema for MySQL 8.0.16+
+-- WARNING: This script permanently deletes the existing ticketboxqr database.
+-- This file already includes Event lifecycle, visibility, mandatory operational
+-- windows, Ticket inventory protection and authentication sessions.
+-- Run this entire file once after intentionally resetting the local database.
 
-CREATE DATABASE IF NOT EXISTS ticketboxqr
+DROP DATABASE IF EXISTS ticketboxqr;
+
+CREATE DATABASE ticketboxqr
   CHARACTER SET utf8mb4
   COLLATE utf8mb4_unicode_ci;
 
@@ -31,7 +36,48 @@ CREATE TABLE users (
 ) ENGINE = InnoDB;
 
 -- =========================================================
--- 2. EVENTS
+-- 2. AUTH_SESSIONS
+-- Only the SHA-256 hash of the refresh-token secret is stored.
+-- Rotated, revoked and expired sessions are retained temporarily for audit.
+-- =========================================================
+CREATE TABLE auth_sessions (
+    id              CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    user_id         BIGINT UNSIGNED NOT NULL,
+    token_hash      CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    expires_at      DATETIME(3) NOT NULL,
+    last_used_at    DATETIME(3) NULL,
+    revoked_at      DATETIME(3) NULL,
+    replaced_by     CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
+    user_agent      VARCHAR(500) NULL,
+    ip_address      VARCHAR(45) NULL,
+    created_at      DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    CONSTRAINT pk_auth_sessions PRIMARY KEY (id),
+    CONSTRAINT uq_auth_sessions_token_hash UNIQUE (token_hash),
+    CONSTRAINT fk_auth_sessions_user
+        FOREIGN KEY (user_id) REFERENCES users(id)
+        ON UPDATE RESTRICT ON DELETE CASCADE,
+    CONSTRAINT fk_auth_sessions_replaced_by
+        FOREIGN KEY (replaced_by) REFERENCES auth_sessions(id)
+        ON UPDATE RESTRICT ON DELETE SET NULL,
+    CONSTRAINT chk_auth_sessions_hash CHECK (
+        token_hash REGEXP '^[0-9A-Fa-f]{64}$'
+    ),
+    CONSTRAINT chk_auth_sessions_expiry CHECK (expires_at > created_at),
+    CONSTRAINT chk_auth_sessions_revocation CHECK (
+        revoked_at IS NULL OR revoked_at >= created_at
+    )
+) ENGINE = InnoDB;
+
+CREATE INDEX idx_auth_sessions_user_active
+    ON auth_sessions(user_id, revoked_at, expires_at);
+CREATE INDEX idx_auth_sessions_revoked_at
+    ON auth_sessions(revoked_at);
+CREATE INDEX idx_auth_sessions_expires_at
+    ON auth_sessions(expires_at);
+
+-- =========================================================
+-- 3. EVENTS
 -- =========================================================
 CREATE TABLE events (
     id                  BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -43,15 +89,29 @@ CREATE TABLE events (
     venue               VARCHAR(150) NOT NULL,
     address             VARCHAR(255) NOT NULL,
     city                VARCHAR(100) NOT NULL,
+    venue_capacity      INT UNSIGNED NOT NULL,
     cover_image_url     VARCHAR(500) NULL,
+    cover_image_public_id VARCHAR(255) NULL,
+    cover_image_alt     VARCHAR(255) NULL,
     start_time          DATETIME(3) NOT NULL,
     end_time            DATETIME(3) NOT NULL,
-    sales_start_at      DATETIME(3) NULL,
-    sales_end_at        DATETIME(3) NULL,
-    checkin_start_at    DATETIME(3) NULL,
-    checkin_end_at      DATETIME(3) NULL,
-    status              ENUM('draft', 'published', 'ended', 'cancelled')
+    sales_start_at      DATETIME(3) NOT NULL,
+    sales_end_at        DATETIME(3) NOT NULL,
+    checkin_start_at    DATETIME(3) NOT NULL,
+    checkin_end_at      DATETIME(3) NOT NULL,
+    status              ENUM('draft', 'published', 'ongoing', 'completed', 'cancelled')
                         NOT NULL DEFAULT 'draft',
+    visibility          ENUM('visible', 'hidden') NOT NULL DEFAULT 'visible',
+    hidden_at           DATETIME(3) NULL,
+    hidden_reason       VARCHAR(500) NULL,
+    hidden_by           BIGINT UNSIGNED NULL,
+    scheduled_publish_at DATETIME(3) NULL,
+    published_at        DATETIME(3) NULL,
+    cancelled_at        DATETIME(3) NULL,
+    cancellation_reason VARCHAR(500) NULL,
+    completed_at        DATETIME(3) NULL,
+    last_publish_attempt_at DATETIME(3) NULL,
+    publish_failure_reason VARCHAR(500) NULL,
     created_by          BIGINT UNSIGNED NOT NULL,
     created_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     updated_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
@@ -62,30 +122,64 @@ CREATE TABLE events (
     CONSTRAINT fk_events_created_by
         FOREIGN KEY (created_by) REFERENCES users(id)
         ON UPDATE RESTRICT ON DELETE RESTRICT,
+    CONSTRAINT fk_events_hidden_by
+        FOREIGN KEY (hidden_by) REFERENCES users(id)
+        ON UPDATE RESTRICT ON DELETE RESTRICT,
     CONSTRAINT chk_events_name CHECK (CHAR_LENGTH(TRIM(name)) > 0),
     CONSTRAINT chk_events_venue CHECK (CHAR_LENGTH(TRIM(venue)) > 0),
     CONSTRAINT chk_events_address CHECK (CHAR_LENGTH(TRIM(address)) > 0),
     CONSTRAINT chk_events_city CHECK (CHAR_LENGTH(TRIM(city)) > 0),
+    CONSTRAINT chk_events_venue_capacity CHECK (
+        venue_capacity > 0
+    ),
     CONSTRAINT chk_events_duration CHECK (start_time < end_time),
     CONSTRAINT chk_events_sales_window CHECK (
-        sales_start_at IS NULL OR sales_end_at IS NULL
-        OR sales_start_at < sales_end_at
+        sales_start_at < sales_end_at
     ),
     CONSTRAINT chk_events_checkin_window CHECK (
-        checkin_start_at IS NULL OR checkin_end_at IS NULL
-        OR checkin_start_at < checkin_end_at
+        checkin_start_at < checkin_end_at
+    ),
+    CONSTRAINT chk_events_checkin_before_end CHECK (
+        checkin_end_at <= end_time
+    ),
+    CONSTRAINT chk_events_sales_before_end CHECK (
+        sales_end_at <= end_time
+    ),
+    CONSTRAINT chk_events_sales_start_before_event CHECK (
+        sales_start_at < start_time
+    ),
+    CONSTRAINT chk_events_checkin_starts_early CHECK (
+        checkin_start_at <= start_time - INTERVAL 30 MINUTE
+    ),
+    CONSTRAINT chk_events_scheduled_publish CHECK (
+        scheduled_publish_at IS NULL OR scheduled_publish_at < start_time
+    ),
+    CONSTRAINT chk_events_lifecycle_dates CHECK (
+        (status <> 'published' OR published_at IS NOT NULL)
+        AND (status <> 'cancelled'
+            OR (cancelled_at IS NOT NULL AND cancellation_reason IS NOT NULL))
+        AND (status <> 'completed' OR completed_at IS NOT NULL)
+    ),
+    CONSTRAINT chk_events_visibility CHECK (
+        (visibility = 'visible' AND hidden_at IS NULL AND hidden_by IS NULL)
+        OR (visibility = 'hidden' AND hidden_at IS NOT NULL AND hidden_by IS NOT NULL
+            AND hidden_reason IS NOT NULL AND CHAR_LENGTH(TRIM(hidden_reason)) >= 5)
     )
 ) ENGINE = InnoDB;
 
 CREATE INDEX idx_events_status_sales
-    ON events(status, sales_start_at, sales_end_at);
+    ON events(status, visibility, sales_start_at, sales_end_at);
 CREATE INDEX idx_events_category_status
     ON events(category, status);
 CREATE INDEX idx_events_city
     ON events(city);
+CREATE INDEX idx_events_scheduled_publish
+    ON events(status, scheduled_publish_at);
+CREATE INDEX idx_events_publish_retry
+    ON events(status, scheduled_publish_at, last_publish_attempt_at);
 
 -- =========================================================
--- 3. EVENT_STAFF
+-- 4. EVENT_STAFF
 -- =========================================================
 CREATE TABLE event_staff (
     id              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -116,7 +210,7 @@ CREATE INDEX idx_event_staff_staff_active
     ON event_staff(staff_id, is_active);
 
 -- =========================================================
--- 4. TICKET_TYPES
+-- 5. TICKET_TYPES
 -- reserved_quantity: held by non-expired pending orders
 -- sold_quantity: confirmed quantity (including later-cancelled tickets unless
 -- the business transaction explicitly returns them to inventory)
@@ -158,7 +252,7 @@ CREATE INDEX idx_ticket_types_event_active
     ON ticket_types(event_id, is_active);
 
 -- =========================================================
--- 5. ORDERS
+-- 6. ORDERS
 -- lookup_token_hash should contain SHA-256 hex (64 characters), not raw token.
 -- =========================================================
 CREATE TABLE orders (
@@ -220,7 +314,7 @@ CREATE INDEX idx_orders_expiration
     ON orders(status, expires_at);
 
 -- =========================================================
--- 6. ORDER_ITEMS
+-- 7. ORDER_ITEMS
 -- The name and price are immutable purchase-time snapshots.
 -- =========================================================
 CREATE TABLE order_items (
@@ -256,7 +350,7 @@ CREATE INDEX idx_order_items_ticket_type
     ON order_items(ticket_type_id);
 
 -- =========================================================
--- 7. TICKETS
+-- 8. TICKETS
 -- A ticket belongs to exactly one order item. order_id and ticket_type_id are
 -- intentionally not duplicated here.
 -- =========================================================
@@ -313,7 +407,7 @@ CREATE INDEX idx_tickets_order_item_status
     ON tickets(order_item_id, status);
 
 -- =========================================================
--- 8. PAYMENTS
+-- 9. PAYMENTS
 -- Multiple attempts are allowed for one order.
 -- =========================================================
 CREATE TABLE payments (
@@ -346,7 +440,7 @@ CREATE INDEX idx_payments_order_status
     ON payments(order_id, status);
 
 -- =========================================================
--- 9. CHECKIN_LOGS
+-- 10. CHECKIN_LOGS
 -- event_id is the scanner context. ticket_id is nullable for invalid codes.
 -- =========================================================
 CREATE TABLE checkin_logs (
@@ -398,7 +492,7 @@ CREATE INDEX idx_checkin_logs_staff_time
     ON checkin_logs(staff_id, checked_at);
 
 -- =========================================================
--- 10. EMAIL_LOGS (optional operational history)
+-- 11. EMAIL_LOGS (optional operational history)
 -- =========================================================
 CREATE TABLE email_logs (
     id                  BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,

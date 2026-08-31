@@ -23,6 +23,7 @@ function mapEventSummary(row: Awaited<ReturnType<typeof findPublishedEvents>>['r
         status: row.status,
         minPrice: row.min_price !== null ? Number(row.min_price) : 0,
         hasAvailable: Boolean(row.has_available),
+        saleStatus: row.sale_status,
     };
 }
 
@@ -41,6 +42,29 @@ export async function getEventDetail(id: number) {
     }
 
     const ticketTypes = await findTicketTypesByEventId(id);
+    const now = Date.now();
+    const mappedTicketTypes = ticketTypes.map((t) => {
+        const available = Math.max(0, t.capacity - t.reserved_quantity - t.sold_quantity);
+        const salesStartAt = t.sales_start_at ?? event.sales_start_at;
+        const salesEndAt = t.sales_end_at ?? event.sales_end_at;
+        const start = salesStartAt?.getTime() ?? null;
+        const end = salesEndAt?.getTime() ?? null;
+        const saleStatus = start !== null && now < start
+            ? 'coming-soon'
+            : end !== null && now > end
+                ? 'closed'
+                : available <= 0
+                    ? 'sold-out'
+                    : 'on-sale';
+        return {id:t.id,name:t.name,description:t.description,price:Number(t.price),capacity:t.capacity,reservedQuantity:t.reserved_quantity,soldQuantity:t.sold_quantity,available,maxPerOrder:t.max_per_order,salesStartAt,salesEndAt,saleStatus,isActive:Boolean(t.is_active)};
+    });
+    const eventSaleStatus = mappedTicketTypes.some((ticket)=>ticket.saleStatus==='on-sale')
+        ? 'on-sale'
+        : mappedTicketTypes.some((ticket)=>ticket.saleStatus==='coming-soon')
+            ? 'coming-soon'
+            : mappedTicketTypes.length>0&&mappedTicketTypes.every((ticket)=>ticket.saleStatus==='sold-out')
+                ? 'sold-out'
+                : 'closed';
 
     return {
         id: event.id,
@@ -59,19 +83,7 @@ export async function getEventDetail(id: number) {
         checkinStartAt: event.checkin_start_at,
         checkinEndAt: event.checkin_end_at,
         status: event.status,
-        ticketTypes: ticketTypes.map((t) => ({
-            id: t.id,
-            name: t.name,
-            description: t.description,
-            price: Number(t.price),
-            capacity: t.capacity,
-            reservedQuantity: t.reserved_quantity,
-            soldQuantity: t.sold_quantity,
-            available: t.capacity - t.reserved_quantity - t.sold_quantity,
-            maxPerOrder: t.max_per_order,
-            salesStartAt: t.sales_start_at,
-            salesEndAt: t.sales_end_at,
-            isActive: Boolean(t.is_active),
-        })),
+        saleStatus: eventSaleStatus,
+        ticketTypes: mappedTicketTypes,
     };
 }

@@ -19,11 +19,20 @@ const envSchema = z.object({
     .string()
     .min(32, "JWT_SECRET must contain at least 32 characters"),
 
-  JWT_EXPIRES_IN: z.string().default("1h"),
+  JWT_EXPIRES_IN: z.string().default("15m"),
+  REFRESH_TOKEN_DAYS: z.coerce.number().int().min(1).max(30).default(7),
+  AUTH_SESSION_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(30),
+  AUTH_SESSION_CLEANUP_HOURS: z.coerce.number().int().min(1).max(168).default(24),
+  AUTH_SESSION_CLEANUP_BATCH_SIZE: z.coerce.number().int().min(10).max(5000).default(500),
 
   MAIL_USER: z.string().email().optional(),
   MAIL_APP_PASSWORD: z.string().min(1).optional(),
   MAIL_FROM_NAME: z.string().default("TicketBox QR"),
+
+  CLOUDINARY_CLOUD_NAME: z.string().min(1).optional(),
+  CLOUDINARY_API_KEY: z.string().min(1).optional(),
+  CLOUDINARY_API_SECRET: z.string().min(1).optional(),
+  CLOUDINARY_EVENT_FOLDER: z.string().min(1).default("ticketbox/events"),
 
   SEED_ADMIN_NAME: z.string().min(1).default("Admin"),
   SEED_ADMIN_EMAIL: z.string().email().default("admin@ticketbox.local"),
