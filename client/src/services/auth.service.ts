@@ -8,7 +8,8 @@ import type {
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000/api";
 
-const TOKEN_KEY = "ticketbox_access_token";
+let memoryAccessToken: string | null = null;
+let refreshPromise: Promise<LoginResult> | null = null;
 
 async function readJson(response: Response): Promise<unknown> {
   try {
@@ -38,6 +39,7 @@ export async function loginRequest(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(credentials),
+    credentials: "include",
   });
 
   const payload = await readJson(response);
@@ -63,14 +65,29 @@ export async function getMeRequest(token: string) {
   return (payload as MeResponse).data.user;
 }
 
+async function performRefresh():Promise<LoginResult>{
+  const response=await fetch(`${API_BASE_URL}/auth/refresh`,{method:"POST",credentials:"include"});
+  const payload=await readJson(response);if(!response.ok)throw new Error(getErrorMessage(payload));
+  const result=(payload as AuthResponse).data;memoryAccessToken=result.accessToken;return result;
+}
+
+export function refreshSessionRequest():Promise<LoginResult>{
+  if(!refreshPromise)refreshPromise=performRefresh().finally(()=>{refreshPromise=null;});
+  return refreshPromise;
+}
+
+export async function logoutRequest():Promise<void>{
+  try{await fetch(`${API_BASE_URL}/auth/logout`,{method:"POST",credentials:"include"});}finally{memoryAccessToken=null;}
+}
+
 export function getStoredToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
+  return memoryAccessToken;
 }
 
 export function storeToken(token: string): void {
-  localStorage.setItem(TOKEN_KEY, token);
+  memoryAccessToken = token;
 }
 
 export function clearStoredToken(): void {
-  localStorage.removeItem(TOKEN_KEY);
+  memoryAccessToken = null;
 }

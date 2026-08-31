@@ -34,7 +34,7 @@ Bửu tạo Event và Ticket Type
               ↓
 Tài xây dựng Order, Payment, Ticket, QR và Email
               ↓
-Khôi xây dựng Scanner, Check-in, Logs và Reporting
+Khôi xây dựng Scanner, Check-in Logs và Reporting
 ```
 
 ## 3. Công nghệ sử dụng

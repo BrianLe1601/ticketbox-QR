@@ -6,6 +6,8 @@ import { validateBody } from "../../middlewares/validate.js";
 import {
   getMeController,
   loginController,
+  logoutController,
+  refreshController,
 } from "./auth.controller.js";
 import { loginSchema } from "./auth.schema.js";
 
@@ -30,3 +32,5 @@ authRouter.post(
 );
 
 authRouter.get("/me", authenticate, getMeController);
+authRouter.post("/refresh", refreshController);
+authRouter.post("/logout", logoutController);
