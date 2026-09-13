@@ -9,6 +9,7 @@ import { LoginPage } from "@/pages/auth/LoginPage";
 import { AdminLayout } from "@/layouts/AdminLayout";
 import { AdminDashboardPage } from "@/pages/admin/AdminDashboardPage";
 import { AdminEventsPage } from "@/pages/admin/AdminEventsPage";
+import { AdminOrdersPage } from "@/pages/admin/AdminOrdersPage";
 import { AdminPlaceholderPage } from "@/pages/admin/AdminPlaceholderPage";
 import { StaffLayout } from "@/layouts/StaffLayout";
 import { StaffHomePage } from "@/pages/staff/StaffHomePage";
@@ -31,7 +32,7 @@ export function AppRoutes() {
                     <Route index element={<AdminDashboardPage />} />
                     <Route path="events" element={<AdminEventsPage />} />
                     <Route path="ticket-types" element={<AdminPlaceholderPage />} />
-                    <Route path="orders" element={<AdminPlaceholderPage />} />
+                    <Route path="orders" element={<AdminOrdersPage />} />
                     <Route path="staff" element={<AdminPlaceholderPage />} />
                     <Route path="checkins" element={<AdminPlaceholderPage />} />
                     <Route path="reports" element={<AdminPlaceholderPage />} />
