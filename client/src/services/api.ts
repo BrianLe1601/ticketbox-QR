@@ -44,10 +44,12 @@ export async function apiGet<T>(path: string, params?: Record<string, string | n
     return { data: json.data, meta: json.meta };
 }
 
-export async function apiPost<T>(path: string, body: unknown): Promise<{ data: T }> {
+export async function apiPost<T>(path: string, body: unknown, headers?: HeadersInit): Promise<{ data: T }> {
+    const requestHeaders = new Headers(headers);
+    requestHeaders.set("Content-Type", "application/json");
     const res = await fetch(`${API_BASE_URL}${path}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: requestHeaders,
         body: JSON.stringify(body),
     });
     const json = (await res.json()) as ApiSuccess<T> | ApiError;

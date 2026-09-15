@@ -38,6 +38,7 @@ export interface OrderRow extends RowDataPacket {
     total_amount: string;
     status: 'pending_payment' | 'confirmed' | 'expired' | 'cancelled';
     lookup_token_hash: string;
+    idempotency_key: string;
     expires_at: Date | null;
     confirmed_at: Date | null;
     expired_at: Date | null;
@@ -107,10 +108,15 @@ export async function lockTicketTypes(conn: PoolConnection, ticketTypeIds: numbe
 }
 
 export async function incrementReserved(conn: PoolConnection, ticketTypeId: number, quantity: number) {
-    await conn.query(
-        `UPDATE ticket_types SET reserved_quantity = reserved_quantity + ? WHERE id = ?`,
-        [quantity, ticketTypeId]
+    const [result] = await conn.query<ResultSetHeader>(
+        `UPDATE ticket_types
+         SET reserved_quantity = reserved_quantity + ?
+         WHERE id = ? AND reserved_quantity + sold_quantity + ? <= capacity`,
+        [quantity, ticketTypeId, quantity]
     );
+    if (result.affectedRows !== 1) {
+        throw new Error(`Không thể giữ ${quantity} vé cho ticket type ${ticketTypeId}: tồn kho đã thay đổi`);
+    }
 }
 
 export async function insertOrder(conn: PoolConnection, data: {
@@ -164,6 +170,23 @@ export async function findOrderByIdForUpdate(conn: PoolConnection, orderId: numb
     return rows[0] ?? null;
 }
 
+export async function findOrderByIdempotencyKeyForUpdate(conn: PoolConnection, idempotencyKey: string) {
+    const [rows] = await conn.query<OrderRow[]>(
+        `SELECT * FROM orders WHERE idempotency_key = ? LIMIT 1 FOR UPDATE`,
+        [idempotencyKey]
+    );
+    return rows[0] ?? null;
+}
+
+export async function findOrderItemsByOrderIdForUpdate(conn: PoolConnection, orderId: number) {
+    const [rows] = await conn.query<OrderItemRow[]>(
+        `SELECT id, ticket_type_id, ticket_type_name, unit_price, quantity, line_total
+         FROM order_items WHERE order_id = ? ORDER BY ticket_type_id ASC FOR UPDATE`,
+        [orderId]
+    );
+    return rows;
+}
+
 /**
  * Settlement/expiry flows first resolve the immutable Event id, then lock the
  * Event before locking the Order. This keeps the global lock order identical
@@ -188,6 +211,14 @@ export async function findOrderByIdReadOnly(orderId: number) {
     const [rows] = await pool.query<OrderRow[]>(
         `SELECT * FROM orders WHERE id = ? LIMIT 1`,
         [orderId]
+    );
+    return rows[0] ?? null;
+}
+
+export async function findOrderByIdempotencyKeyReadOnly(idempotencyKey: string) {
+    const [rows] = await pool.query<OrderRow[]>(
+        `SELECT * FROM orders WHERE idempotency_key = ? LIMIT 1`,
+        [idempotencyKey]
     );
     return rows[0] ?? null;
 }
@@ -221,18 +252,17 @@ export async function issueTicket(conn: PoolConnection, data: {
 }
 
 export async function confirmOrderAndInventory(conn: PoolConnection, orderId: number) {
-    const [items] = await conn.query<OrderItemRow[]>(
-        `SELECT id, ticket_type_id, ticket_type_name, unit_price, quantity, line_total
-         FROM order_items WHERE order_id = ? ORDER BY id ASC FOR UPDATE`,
-        [orderId]
-    );
+    const items = await findOrderItemsByOrderIdForUpdate(conn, orderId);
     for (const item of items) {
-        await conn.query(
+        const [result] = await conn.query<ResultSetHeader>(
             `UPDATE ticket_types
-             SET reserved_quantity = GREATEST(0, reserved_quantity - ?), sold_quantity = sold_quantity + ?
-             WHERE id = ?`,
-            [item.quantity, item.quantity, item.ticket_type_id]
+             SET reserved_quantity = reserved_quantity - ?, sold_quantity = sold_quantity + ?
+             WHERE id = ? AND reserved_quantity >= ?`,
+            [item.quantity, item.quantity, item.ticket_type_id, item.quantity]
         );
+        if (result.affectedRows !== 1) {
+            throw new Error(`Không thể chốt order ${orderId}: reserved_quantity không nhất quán`);
+        }
     }
     await conn.query(`UPDATE orders SET status = 'confirmed', confirmed_at = NOW(3) WHERE id = ?`, [orderId]);
     return items;
@@ -267,15 +297,17 @@ export async function finishEmailLog(id: number, success: boolean, providerId?: 
 
 /** Trả reserved_quantity đã giữ về ticket_types rồi chuyển order sang expired. */
 export async function expireOrder(conn: PoolConnection, orderId: number) {
-    const [items] = await conn.query<OrderItemRow[]>(
-        `SELECT ticket_type_id, quantity FROM order_items WHERE order_id = ?`,
-        [orderId]
-    );
+    const items = await findOrderItemsByOrderIdForUpdate(conn, orderId);
     for (const item of items) {
-        await conn.query(
-            `UPDATE ticket_types SET reserved_quantity = GREATEST(0, reserved_quantity - ?) WHERE id = ?`,
-            [item.quantity, item.ticket_type_id]
+        const [result] = await conn.query<ResultSetHeader>(
+            `UPDATE ticket_types
+             SET reserved_quantity = reserved_quantity - ?
+             WHERE id = ? AND reserved_quantity >= ?`,
+            [item.quantity, item.ticket_type_id, item.quantity]
         );
+        if (result.affectedRows !== 1) {
+            throw new Error(`Không thể hết hạn order ${orderId}: reserved_quantity không nhất quán`);
+        }
     }
     await conn.query(
         `UPDATE orders SET status = 'expired', expired_at = NOW(3) WHERE id = ?`,
