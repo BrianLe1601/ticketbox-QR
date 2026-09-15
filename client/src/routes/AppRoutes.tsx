@@ -30,6 +30,7 @@ const AdminLayout = lazy(() => import("@/layouts/AdminLayout").then((module) => 
 const AdminDashboardPage = lazy(() => import("@/pages/admin/AdminDashboardPage").then((module) => ({ default: module.AdminDashboardPage })));
 const AdminEventsPage = lazy(() => import("@/pages/admin/AdminEventsPage").then((module) => ({ default: module.AdminEventsPage })));
 const AdminTicketTypesPage = lazy(() => import("@/pages/admin/AdminTicketTypesPage").then((module) => ({ default: module.AdminTicketTypesPage })));
+const AdminCategoriesPage = lazy(() => import("@/pages/admin/AdminCategoriesPage").then((module) => ({ default: module.AdminCategoriesPage })));
 const AdminPlaceholderPage = lazy(() => import("@/pages/admin/AdminPlaceholderPage").then((module) => ({ default: module.AdminPlaceholderPage })));
 const StaffLayout = lazy(() => import("@/layouts/StaffLayout").then((module) => ({ default: module.StaffLayout })));
 const StaffHomePage = lazy(() => import("@/pages/staff/StaffHomePage").then((module) => ({ default: module.StaffHomePage })));
@@ -55,6 +56,7 @@ export function AppRoutes() {
                     <Route path="orders" element={<AdminOrdersPage />} />
 =======
                     <Route path="ticket-types" element={<AdminTicketTypesPage />} />
+                    <Route path="categories" element={<AdminCategoriesPage />} />
                     <Route path="orders" element={<AdminPlaceholderPage />} />
 >>>>>>> acc8e0fadc9a168c80a9ee9b76a3044b32ca4d5c
                     <Route path="staff" element={<AdminPlaceholderPage />} />

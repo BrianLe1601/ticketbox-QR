@@ -8,6 +8,8 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "seed": "tsx src/database/seed.ts",
+    "seed:workflows": "tsx src/database/seed-workflows.ts",
+    "db:verify": "tsx src/database/verify-workflows.ts",
     "typecheck": "tsc --noEmit",
     "test:watch": "vitest"
   },

@@ -23,9 +23,9 @@ TicketBox QR hỗ trợ toàn bộ quy trình quản lý vé sự kiện:
 
 | Thành viên | Phạm vi chính | Module |
 |---|---|---|
-| Bửu | Leader, nền tảng và quản trị | Auth, RBAC, Admin, Event, Ticket Type, tích hợp hệ thống |
-| Tài | Quy trình đặt và phát hành vé | Public Event, Checkout, Order, Payment, Ticket, QR, Email |
-| Khôi | Vận hành tại sự kiện | Staff, Assignment, Scanner, Check-in, Logs, Reporting |
+| Bửu | Leader, Platform, CSDL và quản trị | Backend Auth, Login, Admin Event, Admin Ticket Type, Admin Staff, Admin Category |
+| Tài | Quy trình đặt và phát hành vé | Public Event, Order, Payment, Ticket, QR, Email |
+| Khôi | Vận hành và báo cáo tại sự kiện | Scanner, Check-in, Admin Check-in Logs, Admin Reports |
 
 Luồng bàn giao chính:
 
@@ -88,8 +88,8 @@ Khôi xây dựng Scanner, Check-in Logs và Reporting
 - [x] Cài đặt Tailwind CSS và thư viện frontend.
 - [x] Khởi tạo Node.js, Express và TypeScript.
 - [x] Cài đặt thư viện backend.
-- [x] Thiết kế database gồm 10 bảng.
-- [x] Lưu migration `001_initial_schema.sql`.
+- [x] Thiết kế database quan hệ và migration baseline.
+- [x] Tổng hợp toàn bộ database vào một file schema có thể reset và khởi tạo lại.
 - [x] Cấu hình biến môi trường backend.
 - [x] Tạo MySQL connection pool.
 - [x] Kết nối backend với database `ticketboxqr`.
@@ -99,8 +99,8 @@ Chưa hoàn thành:
 
 - [ ] Chuẩn hóa cấu trúc frontend.
 - [ ] Chuẩn hóa cấu trúc backend.
-- [ ] Authentication và phân quyền.
-- [ ] Quản lý Event và Ticket Type.
+- [x] Authentication, refresh session và phân quyền Admin/Staff.
+- [x] Quản lý Event, Ticket Type và Category ở Admin.
 - [ ] Đặt vé, giữ vé và thanh toán.
 - [ ] Phát hành QR và gửi email.
 - [ ] Quản lý Staff và phân công sự kiện.
@@ -115,8 +115,8 @@ ticketbox-QR/
 ├── client/                         # Frontend React
 ├── server/                         # Backend Node.js và Express
 ├── database/
-│   ├── migrations/                # Các lần thay đổi cấu trúc database
-│   │   └── 001_initial_schema.sql
+│   ├── migrations/
+│   │   └── 001_initial_schema.sql # Toàn bộ database, chạy một lần khi reset
 │   └── seeds/                     # Dữ liệu mẫu để phát triển và kiểm thử
 ├── .gitignore
 └── README.md
@@ -263,11 +263,13 @@ MySQL
 
 ## 8. Database
 
-Database `ticketboxqr` gồm 10 bảng:
+Database `ticketboxqr` có các bảng nghiệp vụ cốt lõi sau:
 
 | Bảng | Chức năng |
 |---|---|
 | `users` | Tài khoản Admin và Staff |
+| `auth_sessions` | Refresh session đã hash, rotation và thu hồi phiên đăng nhập |
+| `categories` | Danh mục Event do Admin quản lý; Event tham chiếu bằng khóa ngoại |
 | `events` | Thông tin và trạng thái sự kiện |
 | `event_staff` | Phân công Staff vào Event |
 | `ticket_types` | Loại vé, giá, sức chứa và thời gian bán |
@@ -275,6 +277,7 @@ Database `ticketboxqr` gồm 10 bảng:
 | `order_items` | Mỗi loại vé và số lượng trong đơn |
 | `tickets` | Từng vé độc lập cùng QR token |
 | `payments` | Các lần thanh toán của đơn |
+| `refunds` | Tiến trình hoàn tiền có lịch sử kiểm toán cho đơn đã xác nhận |
 | `checkin_logs` | Lưu tất cả lần quét thành công hoặc thất bại |
 | `email_logs` | Theo dõi trạng thái gửi email |
 
@@ -282,6 +285,7 @@ Quan hệ chính:
 
 ```text
 Event
+├── Category
 ├── Ticket Types
 ├── Orders
 └── Event Staff
@@ -290,6 +294,7 @@ Order
 ├── Order Items
 │   └── Tickets
 ├── Payments
+├── Refund
 └── Email Logs
 
 Ticket
@@ -314,7 +319,7 @@ Ticket
 3. Backend kiểm tra số vé còn lại.
 4. Backend tạo Order có `expires_at`.
 5. Vé được giữ trong một khoảng thời gian.
-6. Khi thanh toán thành công, Order chuyển sang `PAID`.
+6. Khi thanh toán thành công, Order chuyển sang `confirmed`.
 7. Backend tạo từng Ticket và QR token riêng.
 8. Vé được gửi đến email khách hàng.
 9. Nếu hết hạn, Order bị hủy và số vé được nhả ra.
@@ -379,18 +384,34 @@ cd ticketbox-QR
 
 ### Khởi tạo database
 
-Mở và chạy file sau trong MySQL Workbench:
+Khi chủ động reset database local, mở và chạy duy nhất file sau trong MySQL Workbench. File này có `DROP DATABASE`, vì vậy không dùng trên production hoặc database có dữ liệu cần giữ:
 
 ```text
 database/migrations/001_initial_schema.sql
 ```
 
-Kiểm tra:
+Chọn toàn bộ nội dung file và chạy một lần. Sau đó kiểm tra:
 
 ```sql
 USE ticketboxqr;
 SHOW TABLES;
 ```
+
+Nên chạy file schema bằng tài khoản MySQL quản trị. Sau đó tạo user riêng cho backend local; thay `your_local_password` bằng mật khẩu chỉ dùng trên máy phát triển:
+
+```sql
+CREATE USER IF NOT EXISTS 'ticketbox_app'@'localhost'
+IDENTIFIED BY 'your_local_password';
+ALTER USER 'ticketbox_app'@'localhost'
+IDENTIFIED BY 'your_local_password';
+GRANT SELECT, INSERT, UPDATE, DELETE ON ticketboxqr.*
+TO 'ticketbox_app'@'localhost';
+FLUSH PRIVILEGES;
+```
+
+Không đưa mật khẩu trên vào Git và không dùng tài khoản MySQL `root` để chạy backend.
+
+Schema hoàn chỉnh bao gồm Users/Auth Sessions, Categories, Events, Event Staff, Ticket Types, Orders, Order Items, Tickets, Payments, Refunds, Check-in Logs, Email Logs, indexes, constraints, triggers và reporting views.
 
 ### Chạy backend
 
@@ -398,7 +419,6 @@ SHOW TABLES;
 cd server
 npm install
 Copy-Item .env.example .env
-npm run dev
 ```
 
 Điền thông tin thật trong `server/.env`:
@@ -410,6 +430,35 @@ DB_PORT=3306
 DB_NAME=ticketboxqr
 DB_USER=ticketbox_app
 DB_PASSWORD=your_password
+JWT_SECRET=replace_with_a_random_secret_of_at_least_32_characters
+SEED_ADMIN_NAME=Admin
+SEED_ADMIN_EMAIL=admin@ticketbox.local
+SEED_STAFF_NAME=Staff
+SEED_STAFF_EMAIL=staff@ticketbox.local
+SEED_DEFAULT_PASSWORD=ticketbox@123
+```
+
+`DB_PASSWORD` phải trùng với mật khẩu `ticketbox_app` vừa tạo. Đặt `NODE_ENV=development` để cho phép seed.
+
+Tạo hoặc cập nhật hai tài khoản test từ các biến `SEED_*`:
+
+```powershell
+npm run seed
+```
+
+Seed có thể chạy lại an toàn: email đã tồn tại sẽ được cập nhật tên, role, mật khẩu và kích hoạt lại. Seed bị chặn khi `NODE_ENV=production`.
+
+Tài khoản mặc định từ `.env.example`:
+
+| Vai trò | Email | Mật khẩu |
+|---|---|---|
+| Admin | `admin@ticketbox.local` | `ticketbox@123` |
+| Staff | `staff@ticketbox.local` | `ticketbox@123` |
+
+Sau khi seed thành công, khởi động backend:
+
+```powershell
+npm run dev
 ```
 
 Kiểm tra backend:
@@ -453,6 +502,71 @@ npm run typecheck
 npm run build
 npm test
 ```
+
+### Database workflow và dữ liệu kiểm thử tích hợp
+
+Sau khi chạy lại schema và `npm run seed`, tạo bộ dữ liệu QA riêng biệt:
+
+```powershell
+cd server
+npm run seed:workflows
+npm run db:verify
+```
+
+`seed:workflows` chỉ quản lý dữ liệu thuộc Category `qa-workflow`, không xóa Event của Admin ở Category khác. Có thể chạy lại để thay thế bộ fixture cũ. Lệnh bị chặn hoàn toàn khi `NODE_ENV=production`.
+
+| Event fixture | Trạng thái | Dữ liệu liên quan | Mục đích kiểm thử |
+|---|---|---|---|
+| `[QA] Draft — Missing Cover & Ticket` | Draft | Không ảnh, không tier | Readiness phải báo thiếu ảnh và Ticket Type |
+| `[QA] Draft — Ready To Publish` | Draft | Một tier đủ sức chứa | Publish happy path |
+| `[QA] Published — Coming Soon` | Published/Visible | Tier active, lịch bán tương lai | Public hiển thị `coming-soon`, không cho đặt vé sớm |
+| `[QA] Published — On Sale With Orders` | Published/Visible | Tier đang bán, tier Last Minute, một Order pending và một confirmed | Giữ chỗ, tồn kho, thanh toán và lịch bán riêng |
+| `[QA] Hidden — All Tiers Paused` | Published/Hidden | Tất cả tier paused | Show Event phải bị chặn cho tới khi kích hoạt tier hợp lệ |
+| `[QA] Ongoing — Check-in Active` | Ongoing/Visible | Staff assignment, Order confirmed, Ticket checked-in, SUCCESS log | Scanner, chống check-in sai Staff/Event |
+| `[QA] Completed — Read-only History` | Completed | Tier lịch sử | Trạng thái terminal không thể mở lại |
+| `[QA] Cancelled — No Orders` | Cancelled/Hidden | Không Order/Refund/Email | Hủy sự kiện chưa có khách |
+| `[QA] Cancelled — Orders & Refund` | Cancelled/Hidden | Pending Order đã hủy, confirmed Order, QR invalid, Refund pending, Email pending | Toàn bộ workflow hủy có khách |
+
+Tài khoản `qa.staff@ticketbox.local` dùng cùng mật khẩu local với Admin đã seed. Đây chỉ là dữ liệu development.
+
+`db:verify` kiểm tra cả happy path và các thao tác bắt buộc phải thất bại: xóa Category đang được dùng, phân Staff trùng lịch, Show Event không có tier active, vượt venue capacity, mở lại Completed Event, sửa snapshot Order Item và check-in bằng Staff chưa được phân công. Mọi phép thử lỗi đều chạy trong transaction rồi rollback.
+
+### Hợp đồng transaction dùng chung
+
+Mọi module phải khóa theo cùng thứ tự để tránh deadlock:
+
+```text
+Event -> Orders theo id tăng dần -> Ticket Types theo id tăng dần -> Ticket
+```
+
+- Checkout: khóa Event và Ticket Types, kiểm tra tồn kho rồi tăng `reserved_quantity` trong một transaction.
+- Hết hạn Order: khóa Event và Order, giảm reservation rồi chuyển Order sang `expired`.
+- Thanh toán: khóa Event và Order, chuyển reserved sang sold, xác nhận Order, ghi Payment và phát hành Ticket trong một transaction.
+- Check-in: khóa Ticket, kiểm tra Event/Staff assignment/cửa sổ check-in, đổi Ticket sang `checked_in` và ghi log trong một transaction.
+- Cancel Event: khóa Event cùng toàn bộ Order, đóng bán, nhả giữ chỗ, hủy pending Order/Payment, vô hiệu QR, tạo Refund và queue Email Log trong một transaction. Gửi email/hoàn tiền qua provider được xử lý ngoài transaction.
+
+### Quy tắc dữ liệu không được phá vỡ
+
+- Category có Event không được xóa; hãy inactive Category.
+- Event public phải có ít nhất một active Ticket Type hợp lệ.
+- Tổng capacity các tier không vượt venue capacity.
+- Giá vé không đổi sau khi đã reserved/sold; mở tier mới nếu cần giá mới.
+- Order Item là snapshot tên tier, đơn giá và số lượng tại lúc mua, không phải dữ liệu dư thừa.
+- Order/Payment/Ticket/Refund/Email/Check-in là lịch sử kiểm toán, không hard-delete sau giao dịch.
+- Public API là nguồn quyết định trạng thái `coming-soon`, `on-sale`, `sold-out`, `closed`; UI không tự suy đoán.
+
+## Admin Categories API
+
+Admin Categories là nhiệm vụ của Bửu và là nguồn dữ liệu động cho form Events:
+
+| Method | Endpoint | Ý nghĩa |
+|---|---|---|
+| `GET` | `/api/admin/categories?includeInactive=true` | Danh sách kèm số Event đang tham chiếu |
+| `POST` | `/api/admin/categories` | Tạo danh mục |
+| `PATCH` | `/api/admin/categories/:id` | Sửa nội dung, thứ tự hoặc active/inactive |
+| `DELETE` | `/api/admin/categories/:id` | Chỉ xóa khi chưa có Event tham chiếu |
+
+Slug danh mục đã được Event sử dụng không được đổi. Danh mục inactive không xuất hiện trong form tạo Event mới nhưng Event cũ vẫn giữ quan hệ và lịch sử.
 
 Lưu ý: một số lệnh test chỉ hoạt động sau khi nhóm bổ sung file kiểm thử.
 
@@ -511,7 +625,7 @@ chore(scope): cập nhật cấu hình
 - Không commit `node_modules`, `dist` hoặc file log.
 - Không dùng tài khoản MySQL `root` khi triển khai.
 - Không tự ý sửa migration cũ đã chia sẻ cho nhóm.
-- Mỗi thay đổi database phải có migration mới.
+- Trong giai đoạn hiện tại, mọi thay đổi database được tích hợp vào duy nhất `database/migrations/001_initial_schema.sql`; không tạo SQL thứ hai. Trước production phải chuyển sang migration tăng dần thực sự.
 - Backend phải tự tính giá và tổng tiền.
 - Không sử dụng ID tăng dần làm nội dung QR.
 - Giữ vé, thanh toán và check-in phải dùng transaction.

@@ -87,9 +87,7 @@
 }
 
 .tech-login-page {
-  background:
-    linear-gradient(90deg, rgba(2, 7, 18, .2) 0 42%, rgba(2, 7, 18, .06) 55% 100%),
-    url("../assets/backgrounds/login-robot-room.png") center / cover fixed no-repeat;
+  background: #06111f;
 }
 
 .admin-room {
@@ -178,7 +176,7 @@
   overflow:hidden;
   background:
     linear-gradient(rgba(2, 7, 18, .52), rgba(2, 7, 18, .82)),
-    url("../assets/backgrounds/staff-event-entry.png") center / cover fixed no-repeat !important;
+    url("../assets/backgrounds/staff-event-entry.webp") center / cover no-repeat !important;
 }
 .staff-tech-room > header { position:relative; z-index:5; }
 .staff-tech-grid { position:fixed; z-index:0; inset:0; pointer-events:none; opacity:.25; background-image:linear-gradient(rgba(57,217,255,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(57,217,255,.08) 1px,transparent 1px); background-size:44px 44px; mask-image:linear-gradient(black,transparent 90%); }
@@ -562,9 +560,9 @@
   perspective:1200px;
 }
 .gate-inside-layer,.gate-open-layer,.gate-door,.gate-vignette,.gate-light-seam,.gate-floor-light { position:absolute;inset:0;pointer-events:none }
-.gate-inside-layer { z-index:-5;background:url("../assets/backgrounds/login-gate-inside.jpg") center/cover no-repeat;opacity:0;transform:scale(.98);filter:brightness(.55);transition:opacity .8s ease,transform 1.2s cubic-bezier(.16,1,.3,1),filter .8s ease }
-.gate-open-layer { z-index:-4;background:url("../assets/backgrounds/login-gate-open.jpg") center/cover no-repeat;opacity:0;transform:scale(1.025);transition:opacity .65s ease,transform 1.4s ease }
-.gate-door { z-index:-2;width:50.15%;background-image:url("../assets/backgrounds/login-gate-closed.jpg");background-repeat:no-repeat;background-size:200% 100%;will-change:transform;transition:transform 1.25s cubic-bezier(.65,0,.2,1),filter .5s ease }
+.gate-inside-layer { z-index:-5;background:#06111f;opacity:0 }
+.gate-open-layer { z-index:-4;background:#06111f;opacity:0 }
+.gate-door { z-index:-2;width:50.15%;background:#06111f }
 .gate-door-left { right:auto;background-position:left center;transform-origin:left center }
 .gate-door-right { left:auto;background-position:right center;transform-origin:right center }
 .gate-vignette { z-index:-1;background:radial-gradient(circle at 50% 45%,transparent 0 32%,rgba(0,4,12,.28) 65%,rgba(0,3,10,.78) 100%),linear-gradient(180deg,rgba(0,4,12,.38),transparent 28%,rgba(0,4,12,.55));box-shadow:inset 0 0 120px #01040b }
@@ -648,7 +646,7 @@ body:has(.gate-login) { overflow:hidden }
 /* Route airlock: closes before navigation and opens onto the next factory bay. */
 .admin-airlock { position:fixed;z-index:45;inset:0;overflow:hidden;pointer-events:none;visibility:hidden }
 .admin-airlock-door { position:absolute;top:0;bottom:0;width:50.1%;will-change:transform;backface-visibility:hidden;transform:translateZ(0) }
-.admin-airlock[data-variant="image"] .admin-airlock-door { background-image:linear-gradient(rgba(0,7,16,.19),rgba(0,7,16,.19)),url("../assets/backgrounds/admin-airlock-door-v2.jpg");background-repeat:no-repeat;background-size:200% 100%;box-shadow:inset 0 0 65px rgba(1,8,18,.35);filter:brightness(.78) saturate(.9) }
+.admin-airlock[data-variant="image"] .admin-airlock-door { background:#06111f }
 .admin-airlock[data-variant="image"] .admin-airlock-door::before,.admin-airlock[data-variant="image"] .admin-airlock-door i { display:none }
 .admin-airlock[data-variant="classic"] .admin-airlock-door { background:linear-gradient(90deg,rgba(5,18,31,.98),rgba(12,39,57,.98)),repeating-linear-gradient(0deg,transparent 0 76px,rgba(110,227,255,.12) 77px,transparent 79px 154px);box-shadow:inset 0 0 70px rgba(81,213,255,.1) }
 .admin-airlock[data-variant="classic"] .admin-airlock-door::before { position:absolute;inset:7% 5%;border:1px solid rgba(111,230,255,.2);clip-path:polygon(0 7%,7% 0,93% 0,100% 7%,100% 93%,93% 100%,7% 100%,0 93%);background:linear-gradient(145deg,rgba(70,190,224,.04),rgba(3,13,25,.35));content:"" }
@@ -1563,3 +1561,147 @@ body:has(.gate-login) { overflow:hidden }
 }
 .events-cancel-button,.events-cancel-confirm{display:inline-flex;align-items:center;justify-content:center;gap:.45rem;border:1px solid rgba(251,113,133,.38);border-radius:.65rem;background:rgba(127,29,29,.28);color:#fecdd3;font-weight:700;transition:transform .18s ease,background-color .18s ease,border-color .18s ease}.events-cancel-button{height:2.25rem;padding:0 .8rem}.events-cancel-button:hover,.events-cancel-confirm:hover:not(:disabled){transform:translateY(-1px);background:rgba(190,24,93,.38);border-color:rgba(251,113,133,.75)}.events-cancel-dialog{max-width:620px}.events-cancel-impact{display:flex;gap:.8rem;padding:1rem;border:1px solid rgba(251,113,133,.3);border-radius:.85rem;background:rgba(76,5,25,.35);color:#fecdd3}.events-cancel-impact p{margin:.3rem 0 0;color:#cbd5e1;font-size:.82rem;line-height:1.55}.events-cancel-confirm{padding:.65rem 1rem}.events-cancel-confirm:disabled{cursor:not-allowed;opacity:.45}
 .events-action-alert{position:fixed;z-index:85;top:92px;right:24px;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:.8rem;width:min(460px,calc(100vw - 32px));border:1px solid rgba(251,113,133,.55);border-radius:14px;background:linear-gradient(135deg,rgba(70,12,31,.96),rgba(13,21,38,.98));padding:14px 15px;color:#fda4af;box-shadow:0 18px 55px rgba(0,0,0,.45),0 0 28px rgba(244,63,94,.12);animation:tech-panel-in .28s ease both}.events-action-alert>svg{margin-top:2px}.events-action-alert strong{display:block;color:#fecdd3;font:700 11px/1.3 "JetBrains Mono",monospace;letter-spacing:.06em}.events-action-alert p{margin:.25rem 0;color:#f8fafc;font-size:13px;line-height:1.45}.events-action-alert small{display:block;color:#cbd5e1;font-size:11px;line-height:1.5}.events-action-alert button{display:grid;place-items:center;width:30px;height:30px;border-radius:8px;color:#94a3b8;transition:background-color .18s ease,color .18s ease}.events-action-alert button:hover{background:rgba(255,255,255,.09);color:#fff}@media(max-width:640px){.events-action-alert{top:72px;right:16px}}
+
+/* Performance-first Login and Admin shell.
+   Workflow feedback remains visible; decorative full-screen animation and blur are disabled. */
+.simple-login {
+  position: relative;
+  isolation: isolate;
+  min-height: 100svh;
+  overflow: auto;
+  background-color: #06111f;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  color: #eefaff;
+}
+
+.simple-login-overlay {
+  position: fixed;
+  z-index: -1;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(3, 11, 22, .62), rgba(3, 11, 22, .28) 52%, rgba(3, 11, 22, .58)),
+    linear-gradient(180deg, rgba(3, 11, 22, .18), rgba(3, 11, 22, .72));
+  pointer-events: none;
+}
+
+.simple-login-brand {
+  position: absolute;
+  z-index: 2;
+  top: 28px;
+  left: clamp(20px, 4vw, 64px);
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  color: #f4fbff;
+  text-align: left;
+}
+
+.simple-login-brand > span {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid rgba(103, 232, 249, .42);
+  border-radius: 12px;
+  background: rgba(5, 20, 35, .9);
+  color: #67e8f9;
+}
+
+.simple-login-brand strong { font-size: 13px; letter-spacing: .12em; }
+.simple-login-brand small { display: block; margin-top: 4px; color: #83a5b8; font: 8px/1 monospace; letter-spacing: .18em; }
+
+.simple-login-content {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(360px, 480px);
+  align-items: center;
+  gap: clamp(36px, 7vw, 110px);
+  width: min(1180px, calc(100% - 48px));
+  min-height: 100svh;
+  margin: auto;
+  padding: 100px 0 48px;
+}
+
+.simple-login-copy { max-width: 560px; text-shadow: 0 2px 18px rgba(0, 0, 0, .75); }
+.simple-login-copy > span { display: inline-flex; align-items: center; gap: 8px; color: #8be8f7; font-size: 10px; font-weight: 800; letter-spacing: .14em; }
+.simple-login-copy h1 { margin: 16px 0 13px; color: #fff; font-size: clamp(36px, 4.5vw, 62px); line-height: 1.03; letter-spacing: -.045em; }
+.simple-login-copy p { max-width: 520px; color: #c5d5df; font-size: 14px; line-height: 1.7; }
+
+.simple-login-card {
+  width: 100%;
+  border: 1px solid rgba(117, 208, 231, .3);
+  border-radius: 18px;
+  background: rgba(4, 16, 30, .94);
+  padding: clamp(22px, 3vw, 32px);
+  box-shadow: 0 22px 60px rgba(0, 0, 0, .34);
+}
+
+.simple-login-card > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 26px; }
+.simple-login-card > header p { color: #67e8f9; font-size: 9px; font-weight: 800; letter-spacing: .15em; }
+.simple-login-card > header h2 { margin: 5px 0; color: #f8fdff; font-size: 27px; letter-spacing: -.03em; }
+.simple-login-card > header span { color: #8da5b5; font-size: 12px; }
+.simple-login-card > header i { display: grid; flex: 0 0 44px; width: 44px; height: 44px; place-items: center; border: 1px solid rgba(103, 232, 249, .22); border-radius: 12px; background: rgba(103, 232, 249, .07); color: #67e8f9; }
+.simple-login-card > footer { display: flex; align-items: center; justify-content: center; gap: 7px; margin-top: 20px; color: #708b9e; font-size: 10px; }
+
+.simple-login .tech-input-wrap { background: #071525; transition: border-color .15s ease, box-shadow .15s ease; }
+.simple-login .tech-input-wrap:focus-within { transform: none; }
+.simple-login .tech-login-button { box-shadow: none; transition: background-color .15s ease, filter .15s ease; }
+.simple-login .tech-login-button:hover:not(:disabled) { transform: none; }
+
+.admin-room-simple { background: #07111f; }
+.admin-room-simple .admin-room-background {
+  opacity: .24;
+  transform: none;
+  filter: none;
+  will-change: auto;
+}
+.admin-room-simple .admin-room-background::after {
+  background: linear-gradient(90deg, rgba(4, 13, 25, .76), rgba(4, 13, 25, .62) 48%, rgba(4, 13, 25, .72));
+}
+.admin-room-simple .admin-sidebar {
+  background: rgba(5, 16, 29, .96) !important;
+  box-shadow: 1px 0 rgba(103, 232, 249, .08);
+  text-shadow: none;
+}
+.admin-room-simple .admin-topbar {
+  background: rgba(6, 18, 32, .96);
+  text-shadow: none;
+  animation: none;
+}
+.admin-room-simple .admin-content { text-shadow: none; }
+.admin-room-simple .admin-route-stage,
+.admin-room-simple .factory-module-page,
+.admin-room-simple .events-dialog,
+.admin-room-simple .ticket-dialog,
+.admin-room-simple .category-dialog,
+.admin-room-simple .events-action-alert,
+.admin-room-simple .admin-status-chip span,
+.admin-room-simple .admin-radar-sweep,
+.admin-room-simple .factory-console-visual::before {
+  animation: none !important;
+  will-change: auto;
+}
+.admin-room-simple *,
+.admin-room-simple *::before,
+.admin-room-simple *::after {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+.admin-room-simple .admin-backdrop { background: rgba(2, 8, 18, .62); }
+.admin-room-simple .events-dialog-backdrop,
+.admin-room-simple .ticket-dialog-backdrop,
+.admin-room-simple .category-dialog-backdrop { background: rgba(2, 8, 18, .66); }
+.admin-room-simple .events-row,
+.admin-room-simple .ticket-type-row { content-visibility: auto; contain-intrinsic-size: auto 110px; }
+
+@media (max-width: 780px) {
+  .simple-login-content { grid-template-columns: 1fr; width: min(500px, calc(100% - 32px)); padding-top: 104px; }
+  .simple-login-copy { display: none; }
+  .simple-login-card { align-self: center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .simple-login *,
+  .admin-room-simple * { scroll-behavior: auto !important; transition-duration: .01ms !important; }
+}

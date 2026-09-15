@@ -4,7 +4,7 @@ import { getStoredToken } from "@/services/auth.service";
 export type EventStatus = "draft" | "published" | "ongoing" | "completed" | "cancelled";
 export interface PublishReadiness { ready:boolean; missing:string[] }
 export interface AdminEvent {
-  id:number; name:string; description:string|null; category:string; venue:string; address:string; city:string;
+  id:number; name:string; description:string|null; categoryId:number; category:string; venue:string; address:string; city:string;
   venueCapacity:number; coverImageUrl:string|null; coverImagePublicId:string|null; coverImageAlt:string|null; startTime:string; endTime:string; salesStartAt:string;
   salesEndAt:string; checkinStartAt:string; checkinEndAt:string; status:EventStatus;
   visibility:"visible"|"hidden"; hiddenAt:string|null; hiddenReason:string|null;
@@ -12,7 +12,7 @@ export interface AdminEvent {
   soldQuantity:number; pendingOrderCount:number; confirmedOrderCount:number; readiness:PublishReadiness;
 }
 export interface EventPayload {
-  name:string; description:string|null; category:"music"|"conference"|"food"|"sports"|"art";
+  name:string; description:string|null; category:string;
   venue:string; address:string; city:string; venueCapacity:number; coverImageUrl:string|null;
   coverImagePublicId:string|null; coverImageAlt:string|null;
   startTime:string; endTime:string; salesStartAt:string; salesEndAt:string;

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const categorySchema = z.enum(["music", "conference", "food", "sports", "art"]);
+const categorySchema = z.string().trim().min(2).max(100).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
 const statusSchema = z.enum(["draft", "published", "ongoing", "completed", "cancelled"]);
 const optionalDate = z.string().datetime({ offset: true }).nullable().optional();
 const requiredDate = z.string().datetime({ offset: true });

@@ -1,6 +1,6 @@
 import type { CategorySlug, Event, TicketType, TicketSaleStatus, SortKey, SelectOption } from "@/types/event.types";
 
-export const CATEGORY_LABELS: Record<CategorySlug, string> = {
+export const CATEGORY_LABELS: Record<string, string> = {
     music: "Âm nhạc",
     conference: "Hội nghị",
     food: "Ẩm thực",
@@ -11,7 +11,7 @@ export const CATEGORY_LABELS: Record<CategorySlug, string> = {
 export const CATEGORY_SLUGS: CategorySlug[] = ["music", "conference", "food", "sports", "art"];
 
 export function getCategoryLabel(slug: CategorySlug): string {
-    return CATEGORY_LABELS[slug] ?? slug;
+    return CATEGORY_LABELS[slug] ?? slug.split("-").map((part)=>part.charAt(0).toUpperCase()+part.slice(1)).join(" ");
 }
 
 export const CITY_LABELS: Record<string, string> = {
@@ -20,7 +20,7 @@ export const CITY_LABELS: Record<string, string> = {
     dn: "Đà Nẵng",
 };
 
-/** available = capacity - reservedQuantity - soldQuantity, đúng như view v_ticket_type_inventory */
+/** Available inventory is derived from capacity - reservedQuantity - soldQuantity. */
 export function computeAvailable(t: Pick<TicketType, "capacity" | "reservedQuantity" | "soldQuantity">): number {
     return Math.max(0, t.capacity - t.reservedQuantity - t.soldQuantity);
 }
