@@ -62,7 +62,7 @@ export async function apiPost<T>(path: string, body: unknown, headers?: HeadersI
     return { data: json.data };
 }
 
-export async function apiRequest<T>(path: string, options: RequestInit = {}, token?: string | null): Promise<{ data: T; meta?: ApiSuccess<T>["meta"] }> {
+async function authenticatedFetch(path: string, options: RequestInit, token?: string | null): Promise<Response> {
     const headers = new Headers(options.headers);
     if (options.body) headers.set("Content-Type", "application/json");
     if (token) headers.set("Authorization", `Bearer ${token}`);
@@ -70,10 +70,24 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}, tok
     if(res.status===401 && !path.startsWith("/auth/")){
       try{const renewed=await refreshSessionRequest();headers.set("Authorization",`Bearer ${renewed.accessToken}`);res=await fetch(`${API_BASE_URL}${path}`,{...options,headers,credentials:"include"});}catch{/* handled by original response below */}
     }
+    return res;
+}
+
+export async function apiRequest<T>(path: string, options: RequestInit = {}, token?: string | null): Promise<{ data: T; meta?: ApiSuccess<T>["meta"] }> {
+    const res = await authenticatedFetch(path, options, token);
     if (res.status === 204) return { data: undefined as T };
     const json = (await res.json()) as ApiSuccess<T> | ApiError;
     if (!res.ok || !json.success) {
         throw new ApiRequestError("message" in json ? json.message : `Request failed (${res.status})`, res.status, "code" in json ? json.code : undefined);
     }
     return { data: json.data, meta: json.meta };
+}
+
+export async function apiDownload(path: string, token?: string | null): Promise<Blob> {
+    const res = await authenticatedFetch(path, {}, token);
+    if (!res.ok) {
+        const error = await res.json().catch(() => ({})) as { message?: string; code?: string };
+        throw new ApiRequestError(error.message ?? 'Không thể xuất Excel.', res.status, error.code);
+    }
+    return res.blob();
 }
