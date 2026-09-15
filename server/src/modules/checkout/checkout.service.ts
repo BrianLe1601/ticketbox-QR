@@ -5,12 +5,14 @@ import {
     insertOrder, insertOrderItem, findOrderByIdForUpdate, findOrderByIdReadOnly,
     findOrderItemsByOrderId, expireOrder, findExpiredPendingOrderIds, insertSuccessfulPayment,
     issueTicket, confirmOrderAndInventory, insertEmailLog, finishEmailLog,
-    findOrderEventId, lockEventRow,
+    findOrderEventId, lockEventRow, findOrderByIdempotencyKeyForUpdate,
+    findOrderItemsByOrderIdForUpdate, findOrderByIdempotencyKeyReadOnly,
 } from './checkout.repository.js';
 import type { CreateOrderBody } from './checkout.schema.js';
 import { createTicketQrDataUrl } from '../../services/qr.service.js';
 import { sendTicketEmail } from '../../services/mail.service.js';
 import { assertEmailVerified, consumeEmailVerification } from '../../services/email-verification.service.js';
+import { env } from '../../config/env.js';
 
 const HOLD_MINUTES = 10;
 
@@ -23,10 +25,32 @@ function generateOrderCode(): string {
     return `TBQ-${y}${m}${d}-${suffix}`;
 }
 
-function generateLookupToken(): { raw: string; hash: string } {
-    const raw = crypto.randomBytes(32).toString('hex');
+function generateLookupToken(idempotencyKey: string): { raw: string; hash: string } {
+    // Sinh token quyết định từ khóa retry để response bị thất lạc vẫn có thể
+    // trả lại đúng lookup token, nhưng client không thể tự suy ra nếu thiếu secret.
+    const raw = crypto.createHmac('sha256', env.JWT_SECRET)
+        .update(`order-lookup:${idempotencyKey}`)
+        .digest('hex');
     const hash = crypto.createHash('sha256').update(raw).digest('hex');
     return { raw, hash };
+}
+
+function requestMatchesExistingOrder(
+    order: NonNullable<Awaited<ReturnType<typeof findOrderByIdempotencyKeyForUpdate>>>,
+    storedItems: Awaited<ReturnType<typeof findOrderItemsByOrderIdForUpdate>>,
+    body: CreateOrderBody,
+): boolean {
+    const requestedItems = [...body.items].sort((a, b) => a.ticketTypeId - b.ticketTypeId);
+    const normalizedPhone = body.buyer.phone?.trim() || null;
+    return order.event_id === body.eventId
+        && order.buyer_name === body.buyer.name
+        && order.buyer_email === body.buyer.email
+        && order.buyer_phone === normalizedPhone
+        && storedItems.length === requestedItems.length
+        && storedItems.every((item, index) => (
+            item.ticket_type_id === requestedItems[index]?.ticketTypeId
+            && item.quantity === requestedItems[index]?.quantity
+        ));
 }
 
 function mapOrderResponse(
@@ -62,14 +86,29 @@ function mapOrderResponse(
     };
 }
 
-export async function createOrder(body: CreateOrderBody) {
-    assertEmailVerified(body.buyer.email, body.emailVerificationToken);
-    const { raw: lookupTokenRaw, hash: lookupTokenHash } = generateLookupToken();
-    const idempotencyKey = crypto.randomBytes(16).toString('hex');
+export async function createOrder(body: CreateOrderBody, idempotencyKey: string) {
+    const { raw: lookupTokenRaw, hash: lookupTokenHash } = generateLookupToken(idempotencyKey);
     const expiresAt = new Date(Date.now() + HOLD_MINUTES * 60_000);
+    // Tránh khóa Event của request rồi mới khóa một Order thuộc Event khác.
+    // event_id của Order là immutable nên preflight read này đủ để từ chối
+    // trường hợp tái sử dụng key xuyên Event mà vẫn giữ global lock order.
+    const existingSnapshot = await findOrderByIdempotencyKeyReadOnly(idempotencyKey);
+    if (existingSnapshot && existingSnapshot.event_id !== body.eventId) {
+        throw new AppError(409, 'Idempotency-Key đã được dùng cho một yêu cầu khác', 'IDEMPOTENCY_CONFLICT');
+    }
 
-    const orderId = await withTransaction(async (conn) => {
+    const transactionResult = await withTransaction(async (conn) => {
         const event = await findEventForOrder(conn, body.eventId);
+        const existingOrder = await findOrderByIdempotencyKeyForUpdate(conn, idempotencyKey);
+        if (existingOrder) {
+            const existingItems = await findOrderItemsByOrderIdForUpdate(conn, existingOrder.id);
+            if (!requestMatchesExistingOrder(existingOrder, existingItems, body)) {
+                throw new AppError(409, 'Idempotency-Key đã được dùng cho một yêu cầu khác', 'IDEMPOTENCY_CONFLICT');
+            }
+            return { orderId: existingOrder.id, created: false };
+        }
+
+        assertEmailVerified(body.buyer.email, body.emailVerificationToken);
         if (!event || !['published','ongoing'].includes(event.status) || event.visibility !== 'visible') {
             throw AppError.badRequest('Sự kiện không tồn tại hoặc chưa mở bán', 'EVENT_NOT_AVAILABLE');
         }
@@ -144,6 +183,11 @@ export async function createOrder(body: CreateOrderBody) {
                 lastError = err;
                 const isDupOrderCode = (err as { code?: string; sqlMessage?: string })?.code === 'ER_DUP_ENTRY'
                     && (err as { sqlMessage?: string }).sqlMessage?.includes('order_code');
+                const isDupIdempotencyKey = (err as { code?: string; sqlMessage?: string })?.code === 'ER_DUP_ENTRY'
+                    && (err as { sqlMessage?: string }).sqlMessage?.includes('idempotency_key');
+                if (isDupIdempotencyKey) {
+                    throw new AppError(409, 'Idempotency-Key đã được dùng cho một yêu cầu khác', 'IDEMPOTENCY_CONFLICT');
+                }
                 if (!isDupOrderCode) throw err;
             }
         }
@@ -161,19 +205,19 @@ export async function createOrder(body: CreateOrderBody) {
             await incrementReserved(conn, item.ticketTypeId, item.quantity);
         }
 
-        return newOrderId;
+        return { orderId: newOrderId, created: true };
     });
 
-    const order = await findOrderByIdReadOnly(orderId);
-    const items = await findOrderItemsByOrderId(orderId);
+    const order = await findOrderByIdReadOnly(transactionResult.orderId);
+    const items = await findOrderItemsByOrderId(transactionResult.orderId);
     if (!order) throw AppError.notFound('Không tìm thấy đơn hàng vừa tạo');
-    consumeEmailVerification(body.emailVerificationToken);
+    if (transactionResult.created) consumeEmailVerification(body.emailVerificationToken);
     return mapOrderResponse(order, items, lookupTokenRaw);
 }
 
 /** Nếu order đang pending mà đã quá expires_at thì chuyển sang expired ngay lúc đọc,
  *  không cần đợi job nền -> người dùng luôn thấy trạng thái đúng khi F5/gọi lại API. */
-async function expireIfNeeded(orderId: number) {
+export async function expireOrderIfNeeded(orderId: number) {
     await withTransaction(async (conn) => {
         const eventId = await findOrderEventId(conn, orderId);
         if (eventId === null) return;
@@ -187,7 +231,7 @@ async function expireIfNeeded(orderId: number) {
 }
 
 export async function getOrderByLookupToken(orderId: number, token: string) {
-    await expireIfNeeded(orderId);
+    await expireOrderIfNeeded(orderId);
 
     const order = await findOrderByIdReadOnly(orderId);
     if (!order) {
@@ -207,16 +251,16 @@ export async function getOrderByLookupToken(orderId: number, token: string) {
 export async function expireStaleOrders(): Promise<number> {
     const ids = await findExpiredPendingOrderIds();
     for (const id of ids) {
-        await expireIfNeeded(id);
+        await expireOrderIfNeeded(id);
     }
     return ids.length;
 }
 
 export async function payOrder(orderId: number, token: string) {
-    // Chốt trạng thái hết hạn trước khi mở transaction thanh toán để vé được nhả
-    // ngay cả khi người dùng bấm nút đúng lúc đồng hồ vừa về 00:00.
-    await expireIfNeeded(orderId);
-    const issued = await withTransaction(async (conn) => {
+    // Kiểm tra hạn và thanh toán trong cùng một transaction. Như vậy không có
+    // khe thời gian nơi đồng hồ vừa hết hạn nhưng release lại bị rollback hoặc
+    // payment vẫn tiếp tục.
+    const paymentOutcome = await withTransaction(async (conn) => {
         const eventId = await findOrderEventId(conn, orderId);
         if (eventId === null) throw AppError.notFound('Không tìm thấy đơn hàng');
         await lockEventRow(conn, eventId);
@@ -230,7 +274,9 @@ export async function payOrder(orderId: number, token: string) {
         }
         if (!order.expires_at || order.expires_at.getTime() <= Date.now()) {
             await expireOrder(conn, order.id);
-            throw AppError.badRequest('Đơn hàng đã hết 10 phút giữ vé', 'ORDER_EXPIRED');
+            // Không throw trong transaction: phải commit việc nhả reserved trước,
+            // rồi mới trả lỗi cho client ở bên ngoài transaction.
+            return { kind: 'expired' as const };
         }
 
         const items = await confirmOrderAndInventory(conn, order.id);
@@ -251,8 +297,13 @@ export async function payOrder(orderId: number, token: string) {
                 tickets.push({ ticketCode, ticketTypeName: item.ticket_type_name, rawToken });
             }
         }
-        return { order, tickets };
+        return { kind: 'issued' as const, order, tickets };
     });
+
+    if (paymentOutcome.kind === 'expired') {
+        throw AppError.badRequest('Đơn hàng đã hết 10 phút giữ vé', 'ORDER_EXPIRED');
+    }
+    const issued = paymentOutcome;
 
     const tickets = await Promise.all(issued.tickets.map(async (ticket) => ({
         ticketCode: ticket.ticketCode,

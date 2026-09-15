@@ -1,14 +1,24 @@
 import type { NextFunction, Request, Response } from 'express';
 import { createOrder, getOrderByLookupToken, payOrder } from './checkout.service.js';
 import { sendSuccess } from '../../utils/response.js';
+import { idempotencyKeySchema } from './checkout.schema.js';
 import type { CreateOrderBody, OrderIdParam, OrderLookupQuery, PayOrderBody } from './checkout.schema.js';
 import type { RequestEmailVerificationBody, ConfirmEmailVerificationBody } from './checkout.schema.js';
 import { requestEmailVerification, confirmEmailVerification } from '../../services/email-verification.service.js';
+import { AppError } from '../../utils/app-error.js';
 
 export async function postOrder(req: Request, res: Response, next: NextFunction) {
     try {
         const body = req.body as CreateOrderBody;
-        const order = await createOrder(body);
+        const rawIdempotencyKey = req.get('Idempotency-Key');
+        if (!rawIdempotencyKey) {
+            throw AppError.badRequest('Thiếu Idempotency-Key', 'IDEMPOTENCY_KEY_REQUIRED');
+        }
+        const parsedIdempotencyKey = idempotencyKeySchema.safeParse(rawIdempotencyKey);
+        if (!parsedIdempotencyKey.success) {
+            throw AppError.badRequest(parsedIdempotencyKey.error.issues[0]?.message, 'INVALID_IDEMPOTENCY_KEY');
+        }
+        const order = await createOrder(body, parsedIdempotencyKey.data);
         sendSuccess(res, order, 201);
     } catch (err) {
         next(err);
