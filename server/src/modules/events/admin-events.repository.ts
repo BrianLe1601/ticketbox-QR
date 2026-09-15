@@ -3,7 +3,7 @@ import { pool } from "../../database/pool.js";
 import type { AdminEventListInput, CreateAdminEventInput, UpdateAdminEventInput } from "./admin-events.schema.js";
 
 export interface AdminEventRow extends RowDataPacket {
-  id:number; name:string; slug:string; description:string|null; category:string;
+  id:number; name:string; slug:string; description:string|null; category_id:number; category:string;
   venue:string; address:string; city:string; venue_capacity:number;
   cover_image_url:string|null; cover_image_public_id:string|null; cover_image_alt:string|null; start_time:Date; end_time:Date;
   sales_start_at:Date; sales_end_at:Date; checkin_start_at:Date;
@@ -15,7 +15,7 @@ export interface AdminEventRow extends RowDataPacket {
   pending_order_count:number; confirmed_order_count:number;
 }
 
-const SELECT = `e.*,
+const SELECT = `e.*, c.slug category,
   COUNT(DISTINCT tt.id) ticket_type_count,
   COUNT(DISTINCT CASE WHEN tt.is_active=TRUE AND tt.capacity>0 AND tt.max_per_order>0
     AND (tt.sales_start_at IS NULL OR tt.sales_end_at IS NULL OR tt.sales_start_at < tt.sales_end_at)
@@ -41,20 +41,20 @@ export async function listAdminEvents(input: AdminEventListInput) {
   if(input.status){conditions.push("e.status=?");params.push(input.status);}
   const where=conditions.length?`WHERE ${conditions.join(" AND ")}`:"";
   const offset=(input.page-1)*input.limit;
-  const [rows]=await pool.query<AdminEventRow[]>(`SELECT ${SELECT} FROM events e LEFT JOIN ticket_types tt ON tt.event_id=e.id ${where} GROUP BY e.id ORDER BY e.created_at DESC LIMIT ? OFFSET ?`,[...params,input.limit,offset]);
+  const [rows]=await pool.query<AdminEventRow[]>(`SELECT ${SELECT} FROM events e JOIN categories c ON c.id=e.category_id LEFT JOIN ticket_types tt ON tt.event_id=e.id ${where} GROUP BY e.id,c.slug ORDER BY e.created_at DESC LIMIT ? OFFSET ?`,[...params,input.limit,offset]);
   const [counts]=await pool.query<RowDataPacket[]>(`SELECT COUNT(*) total FROM events e ${where}`,params);
   return {rows,total:Number(counts[0]?.total??0)};
 }
 
 export async function findAdminEvent(id:number, forUpdate=false, connection=pool) {
   const suffix=forUpdate?" FOR UPDATE":"";
-  const [rows]=await connection.query<AdminEventRow[]>(`SELECT ${SELECT} FROM events e LEFT JOIN ticket_types tt ON tt.event_id=e.id WHERE e.id=? GROUP BY e.id${suffix}`,[id]);
+  const [rows]=await connection.query<AdminEventRow[]>(`SELECT ${SELECT} FROM events e JOIN categories c ON c.id=e.category_id LEFT JOIN ticket_types tt ON tt.event_id=e.id WHERE e.id=? GROUP BY e.id,c.slug${suffix}`,[id]);
   return rows[0]??null;
 }
 
 function dbValues(input:CreateAdminEventInput|UpdateAdminEventInput){
   return {
-    name:input.name, description:input.description, category:input.category, venue:input.venue,
+    name:input.name, description:input.description, venue:input.venue,
     address:input.address, city:input.city, venue_capacity:input.venueCapacity,
     cover_image_url:input.coverImageUrl, cover_image_public_id:input.coverImagePublicId,
     cover_image_alt:input.coverImageAlt,
@@ -65,17 +65,18 @@ function dbValues(input:CreateAdminEventInput|UpdateAdminEventInput){
   };
 }
 
-export async function insertAdminEvent(input:CreateAdminEventInput, slug:string, adminId:number){
+export async function insertAdminEvent(input:CreateAdminEventInput, categoryId:number, slug:string, adminId:number){
   const [result]=await pool.execute<ResultSetHeader>(`INSERT INTO events
-    (name,slug,description,category,venue,address,city,venue_capacity,cover_image_url,cover_image_public_id,cover_image_alt,start_time,end_time,sales_start_at,sales_end_at,checkin_start_at,checkin_end_at,status,scheduled_publish_at,created_by)
+    (name,slug,description,category_id,venue,address,city,venue_capacity,cover_image_url,cover_image_public_id,cover_image_alt,start_time,end_time,sales_start_at,sales_end_at,checkin_start_at,checkin_end_at,status,scheduled_publish_at,created_by)
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'draft',?,?)`,
-    [input.name,slug,input.description??null,input.category,input.venue,input.address,input.city,input.venueCapacity,input.coverImageUrl??null,input.coverImagePublicId??null,input.coverImageAlt??null,toDatabaseDate(input.startTime)!,toDatabaseDate(input.endTime)!,toDatabaseDate(input.salesStartAt)!,toDatabaseDate(input.salesEndAt)!,toDatabaseDate(input.checkinStartAt)!,toDatabaseDate(input.checkinEndAt)!,toDatabaseDate(input.scheduledPublishAt)??null,adminId]);
+    [input.name,slug,input.description??null,categoryId,input.venue,input.address,input.city,input.venueCapacity,input.coverImageUrl??null,input.coverImagePublicId??null,input.coverImageAlt??null,toDatabaseDate(input.startTime)!,toDatabaseDate(input.endTime)!,toDatabaseDate(input.salesStartAt)!,toDatabaseDate(input.salesEndAt)!,toDatabaseDate(input.checkinStartAt)!,toDatabaseDate(input.checkinEndAt)!,toDatabaseDate(input.scheduledPublishAt)??null,adminId]);
   return result.insertId;
 }
 
-export async function updateAdminEventRecord(id:number,input:UpdateAdminEventInput){
+export async function updateAdminEventRecord(id:number,input:UpdateAdminEventInput,categoryId?:number){
   const values=dbValues(input); const sets:string[]=[]; const params:(string|number|null)[]=[];
   for(const [column,value] of Object.entries(values)){if(value!==undefined){sets.push(`${column}=?`);params.push(value as string|number|null);}}
+  if(categoryId!==undefined){sets.push("category_id=?");params.push(categoryId);}
   if(!sets.length)return;
   await pool.execute(`UPDATE events SET ${sets.join(", ")}, publish_failure_reason=NULL WHERE id=?`,[...params,id]);
 }
@@ -83,8 +84,10 @@ export async function updateAdminEventRecord(id:number,input:UpdateAdminEventInp
 export async function deleteDraftEvent(id:number){
   const connection=await pool.getConnection();
   try{await connection.beginTransaction();
-    const [orders]=await connection.query<RowDataPacket[]>("SELECT COUNT(*) total FROM orders WHERE event_id=?",[id]);
-    if(Number(orders[0]?.total??0)>0){await connection.rollback();return false;}
+    const [events]=await connection.query<RowDataPacket[]>("SELECT id FROM events WHERE id=? AND status='draft' FOR UPDATE",[id]);
+    if(!events.length){await connection.rollback();return false;}
+    const [orders]=await connection.query<RowDataPacket[]>("SELECT id FROM orders WHERE event_id=? ORDER BY id FOR UPDATE",[id]);
+    if(orders.length>0){await connection.rollback();return false;}
     await connection.execute("DELETE FROM event_staff WHERE event_id=?",[id]);
     await connection.execute("DELETE FROM ticket_types WHERE event_id=?",[id]);
     const [result]=await connection.execute<ResultSetHeader>("DELETE FROM events WHERE id=? AND status='draft'",[id]);
@@ -99,8 +102,16 @@ export async function setEventCancelled(id:number,reason:string,adminId:number):
   const connection=await pool.getConnection();
   try{
     await connection.beginTransaction();
-    const [eventResult]=await connection.execute<ResultSetHeader>("UPDATE events SET status='cancelled', visibility='hidden', hidden_at=NOW(3), hidden_reason=?, hidden_by=?, cancelled_at=NOW(3), cancellation_reason=?, scheduled_publish_at=NULL WHERE id=? AND status IN ('published','ongoing')",[reason,adminId,reason,id]);
-    if(eventResult.affectedRows!==1)throw new Error("Event is no longer cancellable");
+    const [eventRows]=await connection.query<RowDataPacket[]>("SELECT id,status FROM events WHERE id=? AND status IN ('published','ongoing') FOR UPDATE",[id]);
+    if(!eventRows.length)throw new Error("Event is no longer cancellable");
+
+    // Lock Orders before reading cancellation impact. Checkout also locks the
+    // parent Event first, so both workflows share Event -> Order -> Ticket order.
+    await connection.query("SELECT id FROM orders WHERE event_id=? ORDER BY id FOR UPDATE",[id]);
+
+    // Hide first while the Event is still published/ongoing. The final status
+    // transition happens only after inventory, QR and audit rows are complete.
+    await connection.execute("UPDATE events SET visibility='hidden', hidden_at=NOW(3), hidden_reason=?, hidden_by=?, scheduled_publish_at=NULL WHERE id=?",[reason,adminId,id]);
     const [mailResult]=await connection.execute<ResultSetHeader>(`INSERT INTO email_logs(order_id,recipient,email_type,status)
       SELECT recipients.order_id,recipients.recipient,'order_cancelled','pending' FROM (
         SELECT o.id order_id,o.buyer_email recipient FROM orders o
@@ -124,6 +135,8 @@ export async function setEventCancelled(id:number,reason:string,adminId:number):
       SET t.status='cancelled',t.cancelled_at=NOW(3),t.cancelled_by=?,t.cancel_reason=?
       WHERE o.event_id=? AND o.status='confirmed' AND t.status IN ('issued','checked_in')`,[adminId,reason,id]);
     await connection.execute("UPDATE ticket_types SET is_active=FALSE WHERE event_id=?",[id]);
+    const [eventResult]=await connection.execute<ResultSetHeader>("UPDATE events SET status='cancelled', cancelled_at=NOW(3), cancellation_reason=? WHERE id=? AND status IN ('published','ongoing')",[reason,id]);
+    if(eventResult.affectedRows!==1)throw new Error("Event is no longer cancellable");
     await connection.commit();
     return {cancelledPendingOrders:pendingResult.affectedRows,confirmedOrders:Number(confirmedRows[0]?.total??0),refundRecords:refundResult.affectedRows,notificationLogs:mailResult.affectedRows};
   }catch(error){await connection.rollback();throw error;}finally{connection.release();}

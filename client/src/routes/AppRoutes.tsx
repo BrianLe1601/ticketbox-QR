@@ -13,6 +13,7 @@ const AdminLayout = lazy(() => import("@/layouts/AdminLayout").then((module) => 
 const AdminDashboardPage = lazy(() => import("@/pages/admin/AdminDashboardPage").then((module) => ({ default: module.AdminDashboardPage })));
 const AdminEventsPage = lazy(() => import("@/pages/admin/AdminEventsPage").then((module) => ({ default: module.AdminEventsPage })));
 const AdminTicketTypesPage = lazy(() => import("@/pages/admin/AdminTicketTypesPage").then((module) => ({ default: module.AdminTicketTypesPage })));
+const AdminCategoriesPage = lazy(() => import("@/pages/admin/AdminCategoriesPage").then((module) => ({ default: module.AdminCategoriesPage })));
 const AdminPlaceholderPage = lazy(() => import("@/pages/admin/AdminPlaceholderPage").then((module) => ({ default: module.AdminPlaceholderPage })));
 const StaffLayout = lazy(() => import("@/layouts/StaffLayout").then((module) => ({ default: module.StaffLayout })));
 const StaffHomePage = lazy(() => import("@/pages/staff/StaffHomePage").then((module) => ({ default: module.StaffHomePage })));
@@ -34,6 +35,7 @@ export function AppRoutes() {
                     <Route index element={<AdminDashboardPage />} />
                     <Route path="events" element={<AdminEventsPage />} />
                     <Route path="ticket-types" element={<AdminTicketTypesPage />} />
+                    <Route path="categories" element={<AdminCategoriesPage />} />
                     <Route path="orders" element={<AdminPlaceholderPage />} />
                     <Route path="staff" element={<AdminPlaceholderPage />} />
                     <Route path="checkins" element={<AdminPlaceholderPage />} />

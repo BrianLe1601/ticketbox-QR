@@ -5,6 +5,7 @@ import {
     insertOrder, insertOrderItem, findOrderByIdForUpdate, findOrderByIdReadOnly,
     findOrderItemsByOrderId, expireOrder, findExpiredPendingOrderIds, insertSuccessfulPayment,
     issueTicket, confirmOrderAndInventory, insertEmailLog, finishEmailLog,
+    findOrderEventId, lockEventRow,
 } from './checkout.repository.js';
 import type { CreateOrderBody } from './checkout.schema.js';
 import { createTicketQrDataUrl } from '../../services/qr.service.js';
@@ -174,6 +175,9 @@ export async function createOrder(body: CreateOrderBody) {
  *  không cần đợi job nền -> người dùng luôn thấy trạng thái đúng khi F5/gọi lại API. */
 async function expireIfNeeded(orderId: number) {
     await withTransaction(async (conn) => {
+        const eventId = await findOrderEventId(conn, orderId);
+        if (eventId === null) return;
+        await lockEventRow(conn, eventId);
         const order = await findOrderByIdForUpdate(conn, orderId);
         if (!order) return;
         if (order.status === 'pending_payment' && order.expires_at && order.expires_at.getTime() <= Date.now()) {
@@ -213,6 +217,9 @@ export async function payOrder(orderId: number, token: string) {
     // ngay cả khi người dùng bấm nút đúng lúc đồng hồ vừa về 00:00.
     await expireIfNeeded(orderId);
     const issued = await withTransaction(async (conn) => {
+        const eventId = await findOrderEventId(conn, orderId);
+        if (eventId === null) throw AppError.notFound('Không tìm thấy đơn hàng');
+        await lockEventRow(conn, eventId);
         const order = await findOrderByIdForUpdate(conn, orderId);
         if (!order) throw AppError.notFound('Không tìm thấy đơn hàng');
 

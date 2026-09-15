@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { Search, X, ChevronDown, SlidersHorizontal, ArrowUpDown } from "lucide-react";
 import type { SortKey, Event, CategorySlug } from "@/types/event.types";
 import { fetchEventList } from "@/services/event.service";
+import { fetchCategories } from "@/services/category.service";
 import {
     CATEGORY_FILTER_OPTIONS, CITY_OPTIONS,
     TIME_OPTIONS, SORT_OPTIONS, PAGE_SIZE,
@@ -25,12 +26,15 @@ export function EventListPage() {
     const [selectedTime, setSelectedTime] = useState("all");
     const [sortBy, setSortBy] = useState<SortKey>("upcoming");
     const [filterOpen, setFilterOpen] = useState(false);
+    const [categoryOptions,setCategoryOptions]=useState(CATEGORY_FILTER_OPTIONS);
 
     const [events, setEvents] = useState<Event[]>([]);
     const [total, setTotal] = useState(0);
     const [page, setPage] = useState(1);
     const [loading, setLoading] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
+
+    useEffect(()=>{let active=true;void fetchCategories().then(items=>{if(active)setCategoryOptions([{value:"all",label:"Tất cả"},...items.map(item=>({value:item.slug,label:item.name}))]);}).catch(()=>{});return()=>{active=false;};},[]);
 
     const loadPage = useCallback(
         async (targetPage: number, append: boolean) => {
@@ -79,7 +83,7 @@ export function EventListPage() {
     }
 
     const hasActiveFilters = query || selectedCategory !== "all" || selectedCity !== "all" || selectedTime !== "all";
-    const selectedCategoryLabel = CATEGORY_FILTER_OPTIONS.find((c) => c.value === selectedCategory)?.label;
+    const selectedCategoryLabel = categoryOptions.find((c) => c.value === selectedCategory)?.label;
 
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
@@ -111,7 +115,7 @@ export function EventListPage() {
             <div className={cn("mb-8", !filterOpen && "hidden sm:block")}>
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
                     <div className="flex flex-wrap gap-2 flex-1">
-                        {CATEGORY_FILTER_OPTIONS.map(({ value, label }) => (
+                        {categoryOptions.map(({ value, label }) => (
                             <button key={value} onClick={() => setSelectedCategory(value)} className={cn("flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold border transition-all", selectedCategory === value ? "bg-primary text-white border-primary shadow-lg shadow-primary/25" : "bg-card text-muted-foreground border-white/[0.08] hover:border-primary/30 hover:text-foreground")}>
                                 {value !== "all" && <CategoryIcon category={value} size={11} />} {label}
                             </button>
