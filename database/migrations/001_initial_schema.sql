@@ -1,7 +1,8 @@
 -- TicketBoxQR - Consolidated clean-install schema for MySQL 8.0.16+
 -- WARNING: This script permanently deletes the existing ticketboxqr database.
 -- This file already includes Event lifecycle, visibility, mandatory operational
--- windows, Ticket inventory protection and authentication sessions.
+-- windows, Ticket inventory protection, authentication sessions, managed
+-- Categories, cancellation refunds, and retryable email delivery.
 -- Run this entire file once after intentionally resetting the local database.
 
 DROP DATABASE IF EXISTS ticketboxqr;
@@ -77,15 +78,49 @@ CREATE INDEX idx_auth_sessions_expires_at
     ON auth_sessions(expires_at);
 
 -- =========================================================
--- 3. EVENTS
+-- 3. CATEGORIES
+-- Admin-managed taxonomy. Public filters use slug; Events use category_id.
+-- =========================================================
+CREATE TABLE categories (
+    id              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    name            VARCHAR(100) NOT NULL,
+    slug            VARCHAR(100) NOT NULL,
+    description     VARCHAR(500) NULL,
+    icon            VARCHAR(50) NULL,
+    is_active       BOOLEAN NOT NULL DEFAULT TRUE,
+    sort_order      INT UNSIGNED NOT NULL DEFAULT 0,
+    created_at      DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at      DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
+                                  ON UPDATE CURRENT_TIMESTAMP(3),
+
+    CONSTRAINT pk_categories PRIMARY KEY (id),
+    CONSTRAINT uq_categories_name UNIQUE (name),
+    CONSTRAINT uq_categories_slug UNIQUE (slug),
+    CONSTRAINT chk_categories_name CHECK (CHAR_LENGTH(TRIM(name)) > 0),
+    CONSTRAINT chk_categories_slug CHECK (
+        slug REGEXP '^[a-z0-9]+(-[a-z0-9]+)*$'
+    )
+) ENGINE = InnoDB;
+
+CREATE INDEX idx_categories_active_order
+    ON categories(is_active, sort_order, name);
+
+INSERT INTO categories(name, slug, description, icon, sort_order) VALUES
+    ('Music & Concerts', 'music', 'Concerts, festivals and live music.', 'music', 10),
+    ('Conferences', 'conference', 'Conferences, seminars and professional events.', 'monitor', 20),
+    ('Food & Drinks', 'food', 'Food, beverage and culinary events.', 'utensils', 30),
+    ('Sports & Fitness', 'sports', 'Sports, races and fitness activities.', 'dumbbell', 40),
+    ('Art & Culture', 'art', 'Art, exhibitions and cultural events.', 'palette', 50);
+
+-- =========================================================
+-- 4. EVENTS
 -- =========================================================
 CREATE TABLE events (
     id                  BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     name                VARCHAR(200) NOT NULL,
     slug                VARCHAR(220) NOT NULL,
     description         TEXT NULL,
-    category            ENUM('music', 'conference', 'food', 'sports', 'art')
-                        NOT NULL DEFAULT 'music',
+    category_id         BIGINT UNSIGNED NOT NULL,
     venue               VARCHAR(150) NOT NULL,
     address             VARCHAR(255) NOT NULL,
     city                VARCHAR(100) NOT NULL,
@@ -119,6 +154,9 @@ CREATE TABLE events (
 
     CONSTRAINT pk_events PRIMARY KEY (id),
     CONSTRAINT uq_events_slug UNIQUE (slug),
+    CONSTRAINT fk_events_category
+        FOREIGN KEY (category_id) REFERENCES categories(id)
+        ON UPDATE RESTRICT ON DELETE RESTRICT,
     CONSTRAINT fk_events_created_by
         FOREIGN KEY (created_by) REFERENCES users(id)
         ON UPDATE RESTRICT ON DELETE RESTRICT,
@@ -152,13 +190,27 @@ CREATE TABLE events (
         checkin_start_at <= start_time - INTERVAL 30 MINUTE
     ),
     CONSTRAINT chk_events_scheduled_publish CHECK (
-        scheduled_publish_at IS NULL OR scheduled_publish_at < start_time
+        (scheduled_publish_at IS NULL OR scheduled_publish_at < start_time)
+        AND (status = 'draft' OR scheduled_publish_at IS NULL)
     ),
     CONSTRAINT chk_events_lifecycle_dates CHECK (
-        (status <> 'published' OR published_at IS NOT NULL)
-        AND (status <> 'cancelled'
-            OR (cancelled_at IS NOT NULL AND cancellation_reason IS NOT NULL))
-        AND (status <> 'completed' OR completed_at IS NOT NULL)
+        (status = 'draft'
+            AND published_at IS NULL AND cancelled_at IS NULL
+            AND cancellation_reason IS NULL AND completed_at IS NULL)
+        OR (status = 'published'
+            AND published_at IS NOT NULL AND cancelled_at IS NULL
+            AND cancellation_reason IS NULL AND completed_at IS NULL)
+        OR (status = 'ongoing'
+            AND published_at IS NOT NULL AND cancelled_at IS NULL
+            AND cancellation_reason IS NULL AND completed_at IS NULL)
+        OR (status = 'completed'
+            AND published_at IS NOT NULL AND completed_at IS NOT NULL
+            AND cancelled_at IS NULL AND cancellation_reason IS NULL)
+        OR (status = 'cancelled'
+            AND published_at IS NOT NULL AND cancelled_at IS NOT NULL
+            AND cancellation_reason IS NOT NULL
+            AND CHAR_LENGTH(TRIM(cancellation_reason)) >= 10
+            AND completed_at IS NULL AND visibility = 'hidden')
     ),
     CONSTRAINT chk_events_visibility CHECK (
         (visibility = 'visible' AND hidden_at IS NULL AND hidden_by IS NULL)
@@ -170,16 +222,14 @@ CREATE TABLE events (
 CREATE INDEX idx_events_status_sales
     ON events(status, visibility, sales_start_at, sales_end_at);
 CREATE INDEX idx_events_category_status
-    ON events(category, status);
+    ON events(category_id, status);
 CREATE INDEX idx_events_city
     ON events(city);
-CREATE INDEX idx_events_scheduled_publish
-    ON events(status, scheduled_publish_at);
 CREATE INDEX idx_events_publish_retry
     ON events(status, scheduled_publish_at, last_publish_attempt_at);
 
 -- =========================================================
--- 4. EVENT_STAFF
+-- 5. EVENT_STAFF
 -- =========================================================
 CREATE TABLE event_staff (
     id              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -189,9 +239,15 @@ CREATE TABLE event_staff (
     assigned_at     DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     revoked_at      DATETIME(3) NULL,
     is_active       BOOLEAN NOT NULL DEFAULT TRUE,
+    active_assignment_marker TINYINT
+                    GENERATED ALWAYS AS (CASE WHEN is_active THEN 1 ELSE NULL END) STORED,
 
     CONSTRAINT pk_event_staff PRIMARY KEY (id),
-    CONSTRAINT uq_event_staff_event_staff UNIQUE (event_id, staff_id),
+    -- Multiple historical assignments are allowed; only one may be active for
+    -- the same Staff/Event pair. MySQL UNIQUE permits multiple NULL markers.
+    CONSTRAINT uq_event_staff_active UNIQUE (
+        event_id, staff_id, active_assignment_marker
+    ),
     CONSTRAINT fk_event_staff_event
         FOREIGN KEY (event_id) REFERENCES events(id)
         ON UPDATE RESTRICT ON DELETE RESTRICT,
@@ -201,16 +257,18 @@ CREATE TABLE event_staff (
     CONSTRAINT fk_event_staff_assigned_by
         FOREIGN KEY (assigned_by) REFERENCES users(id)
         ON UPDATE RESTRICT ON DELETE RESTRICT,
-    CONSTRAINT chk_event_staff_revoke CHECK (
-        revoked_at IS NULL OR revoked_at >= assigned_at
+    CONSTRAINT chk_event_staff_state CHECK (
+        (is_active = TRUE AND revoked_at IS NULL)
+        OR (is_active = FALSE AND revoked_at IS NOT NULL
+            AND revoked_at >= assigned_at)
     )
 ) ENGINE = InnoDB;
 
 CREATE INDEX idx_event_staff_staff_active
-    ON event_staff(staff_id, is_active);
+    ON event_staff(staff_id, is_active, event_id);
 
 -- =========================================================
--- 5. TICKET_TYPES
+-- 6. TICKET_TYPES
 -- reserved_quantity: held by non-expired pending orders
 -- sold_quantity: confirmed quantity (including later-cancelled tickets unless
 -- the business transaction explicitly returns them to inventory)
@@ -239,7 +297,8 @@ CREATE TABLE ticket_types (
         ON UPDATE RESTRICT ON DELETE RESTRICT,
     CONSTRAINT chk_ticket_types_price CHECK (price >= 0),
     CONSTRAINT chk_ticket_types_capacity CHECK (
-        reserved_quantity + sold_quantity <= capacity
+        capacity > 0
+        AND reserved_quantity + sold_quantity <= capacity
     ),
     CONSTRAINT chk_ticket_types_max_per_order CHECK (max_per_order > 0),
     CONSTRAINT chk_ticket_types_sales_window CHECK (
@@ -252,7 +311,7 @@ CREATE INDEX idx_ticket_types_event_active
     ON ticket_types(event_id, is_active);
 
 -- =========================================================
--- 6. ORDERS
+-- 7. ORDERS
 -- lookup_token_hash should contain SHA-256 hex (64 characters), not raw token.
 -- =========================================================
 CREATE TABLE orders (
@@ -299,10 +358,14 @@ CREATE TABLE orders (
         lookup_token_hash REGEXP '^[0-9A-Fa-f]{64}$'
     ),
     CONSTRAINT chk_orders_status_dates CHECK (
-        (status <> 'pending_payment' OR expires_at IS NOT NULL)
-        AND (status <> 'confirmed' OR confirmed_at IS NOT NULL)
-        AND (status <> 'expired' OR expired_at IS NOT NULL)
-        AND (status <> 'cancelled' OR cancelled_at IS NOT NULL)
+        (status = 'pending_payment' AND expires_at IS NOT NULL
+            AND confirmed_at IS NULL AND expired_at IS NULL AND cancelled_at IS NULL)
+        OR (status = 'confirmed' AND confirmed_at IS NOT NULL
+            AND expired_at IS NULL AND cancelled_at IS NULL)
+        OR (status = 'expired' AND expired_at IS NOT NULL
+            AND confirmed_at IS NULL AND cancelled_at IS NULL)
+        OR (status = 'cancelled' AND cancelled_at IS NOT NULL
+            AND confirmed_at IS NULL AND expired_at IS NULL)
     )
 ) ENGINE = InnoDB;
 
@@ -314,7 +377,7 @@ CREATE INDEX idx_orders_expiration
     ON orders(status, expires_at);
 
 -- =========================================================
--- 7. ORDER_ITEMS
+-- 8. ORDER_ITEMS
 -- The name and price are immutable purchase-time snapshots.
 -- =========================================================
 CREATE TABLE order_items (
@@ -350,7 +413,7 @@ CREATE INDEX idx_order_items_ticket_type
     ON order_items(ticket_type_id);
 
 -- =========================================================
--- 8. TICKETS
+-- 9. TICKETS
 -- A ticket belongs to exactly one order item. order_id and ticket_type_id are
 -- intentionally not duplicated here.
 -- =========================================================
@@ -407,7 +470,7 @@ CREATE INDEX idx_tickets_order_item_status
     ON tickets(order_item_id, status);
 
 -- =========================================================
--- 9. PAYMENTS
+-- 10. PAYMENTS
 -- Multiple attempts are allowed for one order.
 -- =========================================================
 CREATE TABLE payments (
@@ -440,7 +503,40 @@ CREATE INDEX idx_payments_order_status
     ON payments(order_id, status);
 
 -- =========================================================
--- 10. CHECKIN_LOGS
+-- 11. REFUNDS
+-- One auditable refund workflow per confirmed Order.
+-- =========================================================
+CREATE TABLE refunds (
+    id              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    order_id        BIGINT UNSIGNED NOT NULL,
+    amount          DECIMAL(12,2) NOT NULL,
+    status          ENUM('not_required', 'pending', 'processing', 'completed', 'failed')
+                    NOT NULL DEFAULT 'pending',
+    reason          VARCHAR(500) NOT NULL,
+    requested_at    DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    completed_at    DATETIME(3) NULL,
+    failure_reason  VARCHAR(500) NULL,
+    created_at      DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at      DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
+                                  ON UPDATE CURRENT_TIMESTAMP(3),
+
+    CONSTRAINT pk_refunds PRIMARY KEY (id),
+    CONSTRAINT uq_refunds_order UNIQUE (order_id),
+    CONSTRAINT fk_refunds_order
+        FOREIGN KEY (order_id) REFERENCES orders(id)
+        ON UPDATE RESTRICT ON DELETE RESTRICT,
+    CONSTRAINT chk_refunds_amount CHECK (amount >= 0),
+    CONSTRAINT chk_refunds_result CHECK (
+        (status <> 'completed' OR completed_at IS NOT NULL)
+        AND (status <> 'failed' OR failure_reason IS NOT NULL)
+    )
+) ENGINE = InnoDB;
+
+CREATE INDEX idx_refunds_status_requested
+    ON refunds(status, requested_at);
+
+-- =========================================================
+-- 12. CHECKIN_LOGS
 -- event_id is the scanner context. ticket_id is nullable for invalid codes.
 -- =========================================================
 CREATE TABLE checkin_logs (
@@ -492,7 +588,7 @@ CREATE INDEX idx_checkin_logs_staff_time
     ON checkin_logs(staff_id, checked_at);
 
 -- =========================================================
--- 11. EMAIL_LOGS (optional operational history)
+-- 13. EMAIL_LOGS (retryable operational history)
 -- =========================================================
 CREATE TABLE email_logs (
     id                  BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -500,10 +596,12 @@ CREATE TABLE email_logs (
     recipient           VARCHAR(150) NOT NULL,
     email_type          ENUM('ticket_issued', 'ticket_resent', 'order_cancelled')
                         NOT NULL,
-    status              ENUM('pending', 'sent', 'failed')
+    status              ENUM('pending', 'processing', 'sent', 'failed')
                         NOT NULL DEFAULT 'pending',
     provider_id         VARCHAR(255) NULL,
     error_message       VARCHAR(500) NULL,
+    attempt_count       INT UNSIGNED NOT NULL DEFAULT 0,
+    next_attempt_at     DATETIME(3) NULL,
     sent_at             DATETIME(3) NULL,
     created_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 
@@ -522,6 +620,8 @@ CREATE TABLE email_logs (
 
 CREATE INDEX idx_email_logs_order_status
     ON email_logs(order_id, status, created_at);
+CREATE INDEX idx_email_logs_delivery
+    ON email_logs(email_type, status, next_attempt_at, created_at);
 
 -- =========================================================
 -- CROSS-TABLE INTEGRITY TRIGGERS
@@ -530,16 +630,64 @@ CREATE INDEX idx_email_logs_order_status
 -- =========================================================
 DELIMITER $$
 
+CREATE TRIGGER trg_users_active_assignment_bu
+BEFORE UPDATE ON users
+FOR EACH ROW
+BEGIN
+    IF (NEW.role <> OLD.role OR NEW.is_active = FALSE)
+       AND EXISTS (
+           SELECT 1 FROM event_staff
+           WHERE staff_id = OLD.id AND is_active = TRUE
+           LIMIT 1
+       ) THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Revoke active Event assignments before changing Staff access';
+    END IF;
+END$$
+
+CREATE TRIGGER trg_categories_contract_bu
+BEFORE UPDATE ON categories
+FOR EACH ROW
+BEGIN
+    IF NEW.slug <> OLD.slug AND EXISTS (
+        SELECT 1 FROM events WHERE category_id = OLD.id LIMIT 1
+    ) THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'A Category slug referenced by Events is immutable';
+    END IF;
+END$$
+
 CREATE TRIGGER trg_events_creator_admin_bi
 BEFORE INSERT ON events
 FOR EACH ROW
 BEGIN
+    IF NEW.status <> 'draft' THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Events must be created as Drafts';
+    END IF;
+
     IF NOT EXISTS (
         SELECT 1 FROM users
         WHERE id = NEW.created_by AND role = 'admin' AND is_active = TRUE
     ) THEN
         SIGNAL SQLSTATE '45000'
             SET MESSAGE_TEXT = 'events.created_by must be an active admin';
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM categories
+        WHERE id = NEW.category_id AND is_active = TRUE
+    ) THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'events.category_id must reference an active Category';
+    END IF;
+
+    IF NEW.visibility = 'hidden' AND NOT EXISTS (
+        SELECT 1 FROM users
+        WHERE id = NEW.hidden_by AND role = 'admin' AND is_active = TRUE
+    ) THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'events.hidden_by must be an active admin';
     END IF;
 END$$
 
@@ -547,12 +695,99 @@ CREATE TRIGGER trg_events_creator_admin_bu
 BEFORE UPDATE ON events
 FOR EACH ROW
 BEGIN
-    IF NEW.created_by <> OLD.created_by AND NOT EXISTS (
-        SELECT 1 FROM users
-        WHERE id = NEW.created_by AND role = 'admin' AND is_active = TRUE
+    IF NEW.created_by <> OLD.created_by THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'events.created_by is immutable';
+    END IF;
+
+    IF NEW.category_id <> OLD.category_id AND NOT EXISTS (
+        SELECT 1 FROM categories
+        WHERE id = NEW.category_id AND is_active = TRUE
     ) THEN
         SIGNAL SQLSTATE '45000'
-            SET MESSAGE_TEXT = 'events.created_by must be an active admin';
+            SET MESSAGE_TEXT = 'events.category_id must reference an active Category';
+    END IF;
+
+    IF NOT (
+        NEW.status = OLD.status
+        OR (OLD.status = 'draft' AND NEW.status = 'published')
+        OR (OLD.status = 'published' AND NEW.status IN ('ongoing', 'cancelled'))
+        OR (OLD.status = 'ongoing' AND NEW.status IN ('completed', 'cancelled'))
+    ) THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Invalid Event lifecycle transition';
+    END IF;
+
+    IF (NEW.start_time <> OLD.start_time OR NEW.end_time <> OLD.end_time)
+       AND EXISTS (
+            SELECT 1 FROM event_staff
+            WHERE event_id = OLD.id AND is_active = TRUE
+            LIMIT 1
+       ) THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Revoke active Staff assignments before changing Event schedule';
+    END IF;
+
+    IF NEW.venue_capacity < (
+        SELECT COALESCE(SUM(capacity), 0)
+        FROM ticket_types
+        WHERE event_id = OLD.id
+    ) THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Event venue capacity cannot be below allocated Ticket capacity';
+    END IF;
+
+    IF EXISTS (
+        SELECT 1
+        FROM ticket_types tt
+        WHERE tt.event_id = OLD.id
+          AND (
+              COALESCE(tt.sales_start_at, NEW.sales_start_at)
+                  >= COALESCE(tt.sales_end_at, NEW.sales_end_at)
+              OR COALESCE(tt.sales_end_at, NEW.sales_end_at) > NEW.end_time
+          )
+        LIMIT 1
+    ) THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Event schedule would invalidate a Ticket sales window';
+    END IF;
+
+    -- A public Event must always have something that can become purchasable.
+    -- The time window may still be in the future; is_active expresses that the
+    -- tier is enabled, while the Public API computes scheduled/on-sale/closed.
+    IF NEW.status IN ('published', 'ongoing')
+       AND NEW.visibility = 'visible'
+       AND NOT EXISTS (
+            SELECT 1
+            FROM ticket_types tt
+            WHERE tt.event_id = OLD.id
+              AND tt.is_active = TRUE
+              AND tt.capacity > 0
+              AND COALESCE(tt.sales_start_at, NEW.sales_start_at)
+                    < COALESCE(tt.sales_end_at, NEW.sales_end_at)
+              AND COALESCE(tt.sales_end_at, NEW.sales_end_at) <= NEW.end_time
+            LIMIT 1
+       ) THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'A visible Published/Ongoing Event requires an active valid Ticket Type';
+    END IF;
+
+    IF NEW.status = 'cancelled' AND EXISTS (
+        SELECT 1
+        FROM ticket_types tt
+        WHERE tt.event_id = OLD.id AND tt.is_active = TRUE
+        LIMIT 1
+    ) THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Deactivate all Ticket Types before cancelling an Event';
+    END IF;
+
+    IF NEW.visibility = 'hidden' AND NOT EXISTS (
+        SELECT 1 FROM users
+        WHERE id = NEW.hidden_by AND role = 'admin' AND is_active = TRUE
+    ) THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'events.hidden_by must be an active admin';
     END IF;
 END$$
 
@@ -560,10 +795,18 @@ CREATE TRIGGER trg_event_staff_roles_bi
 BEFORE INSERT ON event_staff
 FOR EACH ROW
 BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM users
-        WHERE id = NEW.staff_id AND role = 'staff' AND is_active = TRUE
-    ) THEN
+    DECLARE v_staff_role VARCHAR(10) DEFAULT NULL;
+    DECLARE v_staff_active BOOLEAN DEFAULT FALSE;
+
+    -- Locking the shared Staff row serializes concurrent assignments for the
+    -- same person, so two requests cannot both pass the overlap check.
+    SELECT role, is_active
+      INTO v_staff_role, v_staff_active
+      FROM users
+     WHERE id = NEW.staff_id
+     FOR UPDATE;
+
+    IF v_staff_role IS NULL OR v_staff_role <> 'staff' OR v_staff_active = FALSE THEN
         SIGNAL SQLSTATE '45000'
             SET MESSAGE_TEXT = 'event_staff.staff_id must be an active staff user';
     END IF;
@@ -575,26 +818,241 @@ BEGIN
         SIGNAL SQLSTATE '45000'
             SET MESSAGE_TEXT = 'event_staff.assigned_by must be an active admin';
     END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM events
+        WHERE id = NEW.event_id AND status IN ('draft', 'published', 'ongoing')
+    ) THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Staff cannot be assigned to a closed Event';
+    END IF;
+
+    IF NEW.assigned_at > CURRENT_TIMESTAMP(3) THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'event_staff.assigned_at cannot be in the future';
+    END IF;
+
+    IF NEW.is_active = TRUE AND EXISTS (
+        SELECT 1
+        FROM event_staff es
+        JOIN events existing_event ON existing_event.id = es.event_id
+        JOIN events target_event ON target_event.id = NEW.event_id
+        WHERE es.staff_id = NEW.staff_id
+          AND es.is_active = TRUE
+          AND existing_event.status IN ('draft', 'published', 'ongoing')
+          AND target_event.start_time < existing_event.end_time
+          AND target_event.end_time > existing_event.start_time
+        LIMIT 1
+    ) THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Staff is already assigned to an overlapping Event';
+    END IF;
 END$$
 
 CREATE TRIGGER trg_event_staff_roles_bu
 BEFORE UPDATE ON event_staff
 FOR EACH ROW
 BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM users
-        WHERE id = NEW.staff_id AND role = 'staff'
-    ) THEN
+    DECLARE v_staff_role VARCHAR(10) DEFAULT NULL;
+    DECLARE v_staff_active BOOLEAN DEFAULT FALSE;
+
+    IF NEW.event_id <> OLD.event_id
+       OR NEW.staff_id <> OLD.staff_id
+       OR NEW.assigned_by <> OLD.assigned_by
+       OR NEW.assigned_at <> OLD.assigned_at THEN
         SIGNAL SQLSTATE '45000'
-            SET MESSAGE_TEXT = 'event_staff.staff_id must reference a staff user';
+            SET MESSAGE_TEXT = 'Assignment identity is immutable; revoke and create a new assignment';
     END IF;
 
-    IF NOT EXISTS (
-        SELECT 1 FROM users
-        WHERE id = NEW.assigned_by AND role = 'admin'
+    IF NEW.is_active = TRUE THEN
+        SELECT role, is_active
+          INTO v_staff_role, v_staff_active
+          FROM users
+         WHERE id = NEW.staff_id
+         FOR UPDATE;
+
+        IF v_staff_role IS NULL OR v_staff_role <> 'staff' OR v_staff_active = FALSE THEN
+            SIGNAL SQLSTATE '45000'
+                SET MESSAGE_TEXT = 'Only an active Staff user can hold an active assignment';
+        END IF;
+
+        IF EXISTS (
+            SELECT 1
+            FROM event_staff es
+            JOIN events existing_event ON existing_event.id = es.event_id
+            JOIN events target_event ON target_event.id = NEW.event_id
+            WHERE es.staff_id = NEW.staff_id
+              AND es.is_active = TRUE
+              AND es.id <> OLD.id
+              AND existing_event.status IN ('draft', 'published', 'ongoing')
+              AND target_event.start_time < existing_event.end_time
+              AND target_event.end_time > existing_event.start_time
+            LIMIT 1
+        ) THEN
+            SIGNAL SQLSTATE '45000'
+                SET MESSAGE_TEXT = 'Staff is already assigned to an overlapping Event';
+        END IF;
+    END IF;
+END$$
+
+CREATE TRIGGER trg_ticket_types_integrity_bi
+BEFORE INSERT ON ticket_types
+FOR EACH ROW
+BEGIN
+    DECLARE v_venue_capacity BIGINT UNSIGNED DEFAULT NULL;
+    DECLARE v_event_sales_start DATETIME(3);
+    DECLARE v_event_sales_end DATETIME(3);
+    DECLARE v_event_end DATETIME(3);
+    DECLARE v_event_status VARCHAR(12);
+    DECLARE v_allocated BIGINT UNSIGNED DEFAULT 0;
+
+    -- All Ticket allocation changes lock the parent Event first. This is the
+    -- common serialization point for concurrent tier creation and resizing.
+    SELECT venue_capacity, sales_start_at, sales_end_at, end_time, status
+      INTO v_venue_capacity, v_event_sales_start, v_event_sales_end, v_event_end,
+           v_event_status
+      FROM events
+     WHERE id = NEW.event_id
+     FOR UPDATE;
+
+    SELECT COALESCE(SUM(capacity), 0)
+      INTO v_allocated
+      FROM ticket_types
+     WHERE event_id = NEW.event_id;
+
+    IF v_venue_capacity IS NULL OR v_allocated + NEW.capacity > v_venue_capacity THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Ticket allocation exceeds Event venue capacity';
+    END IF;
+
+    IF v_event_status IN ('completed', 'cancelled') THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Ticket Types cannot be added to a closed Event';
+    END IF;
+
+    IF v_event_status <> 'draft' AND NEW.is_active = TRUE THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'A Ticket Type added after publishing must start paused';
+    END IF;
+
+    IF COALESCE(NEW.sales_start_at, v_event_sales_start)
+          >= COALESCE(NEW.sales_end_at, v_event_sales_end)
+       OR COALESCE(NEW.sales_end_at, v_event_sales_end) > v_event_end THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Ticket sales window is outside the Event operating window';
+    END IF;
+END$$
+
+CREATE TRIGGER trg_ticket_types_integrity_bu
+BEFORE UPDATE ON ticket_types
+FOR EACH ROW
+BEGIN
+    DECLARE v_venue_capacity BIGINT UNSIGNED DEFAULT NULL;
+    DECLARE v_event_sales_start DATETIME(3);
+    DECLARE v_event_sales_end DATETIME(3);
+    DECLARE v_event_end DATETIME(3);
+    DECLARE v_event_status VARCHAR(12);
+    DECLARE v_event_visibility VARCHAR(10);
+    DECLARE v_allocated BIGINT UNSIGNED DEFAULT 0;
+
+    IF NEW.event_id <> OLD.event_id THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'ticket_types.event_id is immutable';
+    END IF;
+
+    SELECT venue_capacity, sales_start_at, sales_end_at, end_time, status, visibility
+      INTO v_venue_capacity, v_event_sales_start, v_event_sales_end, v_event_end,
+           v_event_status, v_event_visibility
+      FROM events
+     WHERE id = NEW.event_id
+     FOR UPDATE;
+
+    SELECT COALESCE(SUM(capacity), 0)
+      INTO v_allocated
+      FROM ticket_types
+     WHERE event_id = NEW.event_id AND id <> OLD.id;
+
+    IF v_allocated + NEW.capacity > v_venue_capacity THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Ticket allocation exceeds Event venue capacity';
+    END IF;
+
+    IF v_event_status IN ('completed', 'cancelled') THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Ticket inventory for a closed Event is immutable';
+    END IF;
+
+    IF NEW.price <> OLD.price
+       AND OLD.reserved_quantity + OLD.sold_quantity > 0 THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Ticket price is immutable after reservation or sale';
+    END IF;
+
+    IF v_event_status <> 'draft' AND NEW.capacity < OLD.capacity THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Published Ticket capacity may only increase';
+    END IF;
+
+    IF COALESCE(NEW.sales_start_at, v_event_sales_start)
+          >= COALESCE(NEW.sales_end_at, v_event_sales_end)
+       OR COALESCE(NEW.sales_end_at, v_event_sales_end) > v_event_end THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Ticket sales window is outside the Event operating window';
+    END IF;
+
+    IF OLD.is_active = TRUE AND NEW.is_active = FALSE
+       AND v_event_status IN ('published', 'ongoing')
+       AND v_event_visibility = 'visible'
+       AND NOT EXISTS (
+           SELECT 1 FROM ticket_types
+           WHERE event_id = OLD.event_id
+             AND id <> OLD.id
+             AND is_active = TRUE
+             AND capacity > 0
+             AND max_per_order > 0
+           LIMIT 1
+       ) THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'A visible Event must retain an active Ticket Type';
+    END IF;
+END$$
+
+CREATE TRIGGER trg_ticket_types_integrity_bd
+BEFORE DELETE ON ticket_types
+FOR EACH ROW
+BEGIN
+    DECLARE v_event_status VARCHAR(12);
+    DECLARE v_event_visibility VARCHAR(10);
+
+    SELECT status, visibility
+      INTO v_event_status, v_event_visibility
+      FROM events
+     WHERE id = OLD.event_id
+     FOR UPDATE;
+
+    IF EXISTS (
+        SELECT 1 FROM order_items
+        WHERE ticket_type_id = OLD.id
+        LIMIT 1
     ) THEN
         SIGNAL SQLSTATE '45000'
-            SET MESSAGE_TEXT = 'event_staff.assigned_by must reference an admin';
+            SET MESSAGE_TEXT = 'A Ticket Type referenced by Orders cannot be deleted';
+    END IF;
+
+    IF OLD.is_active = TRUE
+       AND v_event_status IN ('published', 'ongoing')
+       AND v_event_visibility = 'visible'
+       AND NOT EXISTS (
+           SELECT 1 FROM ticket_types
+           WHERE event_id = OLD.event_id
+             AND id <> OLD.id
+             AND is_active = TRUE
+             AND capacity > 0
+             AND max_per_order > 0
+           LIMIT 1
+       ) THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'A visible Event must retain an active Ticket Type';
     END IF;
 END$$
 
@@ -618,6 +1076,17 @@ CREATE TRIGGER trg_order_items_same_event_bu
 BEFORE UPDATE ON order_items
 FOR EACH ROW
 BEGIN
+    IF NEW.order_id <> OLD.order_id
+       OR NEW.ticket_type_id <> OLD.ticket_type_id
+       OR NEW.ticket_type_name <> OLD.ticket_type_name
+       OR NEW.unit_price <> OLD.unit_price
+       OR NEW.quantity <> OLD.quantity
+       OR NEW.line_total <> OLD.line_total
+       OR NEW.created_at <> OLD.created_at THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Order item purchase snapshots are immutable';
+    END IF;
+
     IF NOT EXISTS (
         SELECT 1
         FROM orders o
@@ -647,6 +1116,23 @@ CREATE TRIGGER trg_payments_match_order_bu
 BEFORE UPDATE ON payments
 FOR EACH ROW
 BEGIN
+    IF NEW.order_id <> OLD.order_id
+       OR NEW.payment_code <> OLD.payment_code
+       OR NEW.method <> OLD.method
+       OR NEW.amount <> OLD.amount
+       OR NEW.created_at <> OLD.created_at THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Payment identity and amount are immutable';
+    END IF;
+
+    IF NOT (
+        NEW.status = OLD.status
+        OR (OLD.status = 'pending' AND NEW.status IN ('success', 'failed', 'cancelled'))
+    ) THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Invalid Payment status transition';
+    END IF;
+
     IF NOT EXISTS (
         SELECT 1 FROM orders
         WHERE id = NEW.order_id AND total_amount = NEW.amount
@@ -656,62 +1142,162 @@ BEGIN
     END IF;
 END$$
 
+CREATE TRIGGER trg_orders_integrity_bu
+BEFORE UPDATE ON orders
+FOR EACH ROW
+BEGIN
+    IF NEW.order_code <> OLD.order_code
+       OR NEW.event_id <> OLD.event_id
+       OR NEW.total_quantity <> OLD.total_quantity
+       OR NEW.subtotal_amount <> OLD.subtotal_amount
+       OR NEW.discount_amount <> OLD.discount_amount
+       OR NEW.total_amount <> OLD.total_amount
+       OR NEW.lookup_token_hash <> OLD.lookup_token_hash
+       OR NOT (NEW.idempotency_key <=> OLD.idempotency_key)
+       OR NEW.created_at <> OLD.created_at THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Order identity and financial snapshot are immutable';
+    END IF;
+
+    IF NOT (
+        NEW.status = OLD.status
+        OR (OLD.status = 'pending_payment'
+            AND NEW.status IN ('confirmed', 'expired', 'cancelled'))
+    ) THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Invalid Order status transition';
+    END IF;
+END$$
+
+CREATE TRIGGER trg_tickets_integrity_bu
+BEFORE UPDATE ON tickets
+FOR EACH ROW
+BEGIN
+    IF NEW.order_item_id <> OLD.order_item_id
+       OR NEW.ticket_code <> OLD.ticket_code
+       OR NEW.qr_token_hash <> OLD.qr_token_hash
+       OR NEW.issued_at <> OLD.issued_at
+       OR NEW.created_at <> OLD.created_at THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Ticket identity and QR credential are immutable';
+    END IF;
+
+    IF NOT (
+        NEW.status = OLD.status
+        OR (OLD.status = 'issued' AND NEW.status IN ('checked_in', 'cancelled'))
+        OR (OLD.status = 'checked_in' AND NEW.status = 'cancelled')
+    ) THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Invalid Ticket status transition';
+    END IF;
+END$$
+
+CREATE TRIGGER trg_refunds_integrity_bu
+BEFORE UPDATE ON refunds
+FOR EACH ROW
+BEGIN
+    IF NEW.order_id <> OLD.order_id
+       OR NEW.amount <> OLD.amount
+       OR NEW.requested_at <> OLD.requested_at
+       OR NEW.created_at <> OLD.created_at THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Refund identity and amount are immutable';
+    END IF;
+
+    IF NOT (
+        NEW.status = OLD.status
+        OR (OLD.status = 'pending' AND NEW.status IN ('processing', 'completed', 'failed'))
+        OR (OLD.status = 'processing' AND NEW.status IN ('completed', 'failed'))
+        OR (OLD.status = 'failed' AND NEW.status IN ('pending', 'processing'))
+    ) THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Invalid Refund status transition';
+    END IF;
+END$$
+
+CREATE TRIGGER trg_email_logs_integrity_bu
+BEFORE UPDATE ON email_logs
+FOR EACH ROW
+BEGIN
+    IF NEW.order_id <> OLD.order_id
+       OR NEW.recipient <> OLD.recipient
+       OR NEW.email_type <> OLD.email_type
+       OR NEW.created_at <> OLD.created_at THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Email delivery identity is immutable';
+    END IF;
+
+    IF NOT (
+        NEW.status = OLD.status
+        OR (OLD.status = 'pending' AND NEW.status IN ('processing', 'sent', 'failed'))
+        OR (OLD.status = 'processing' AND NEW.status IN ('pending', 'sent', 'failed'))
+        OR (OLD.status = 'failed' AND NEW.status IN ('pending', 'processing'))
+    ) THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Invalid Email delivery status transition';
+    END IF;
+END$$
+
 CREATE TRIGGER trg_checkin_staff_role_bi
 BEFORE INSERT ON checkin_logs
 FOR EACH ROW
 BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM users
-        WHERE id = NEW.staff_id AND role = 'staff'
+        WHERE id = NEW.staff_id AND role = 'staff' AND is_active = TRUE
     ) THEN
         SIGNAL SQLSTATE '45000'
-            SET MESSAGE_TEXT = 'checkin_logs.staff_id must reference a staff user';
+            SET MESSAGE_TEXT = 'checkin_logs.staff_id must reference an active Staff user';
+    END IF;
+
+    IF NEW.result_code = 'SUCCESS' AND NOT EXISTS (
+        SELECT 1 FROM event_staff
+        WHERE event_id = NEW.event_id
+          AND staff_id = NEW.staff_id
+          AND is_active = TRUE
+        LIMIT 1
+    ) THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Successful check-in requires an active Event assignment';
+    END IF;
+
+    IF NEW.result_code = 'SUCCESS' AND NOT EXISTS (
+        SELECT 1
+        FROM tickets t
+        JOIN order_items oi ON oi.id = t.order_item_id
+        JOIN orders o ON o.id = oi.order_id
+        WHERE t.id = NEW.ticket_id
+          AND o.event_id = NEW.event_id
+        LIMIT 1
+    ) THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Successful check-in Ticket must belong to the scanner Event';
+    END IF;
+
+    IF NEW.result_code = 'SUCCESS' AND NOT EXISTS (
+        SELECT 1
+        FROM events e
+        WHERE e.id = NEW.event_id
+          AND e.status IN ('published', 'ongoing')
+          AND NEW.checked_at >= e.checkin_start_at
+          AND NEW.checked_at <= e.checkin_end_at
+        LIMIT 1
+    ) THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Successful check-in must be inside the Event check-in window';
+    END IF;
+
+    IF NEW.result_code = 'SUCCESS' AND NOT EXISTS (
+        SELECT 1
+        FROM tickets t
+        WHERE t.id = NEW.ticket_id AND t.status = 'checked_in'
+        LIMIT 1
+    ) THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Ticket must be marked checked_in before writing a SUCCESS log';
     END IF;
 END$$
 
 DELIMITER ;
-
--- =========================================================
--- REPORTING / CONSISTENCY VIEWS
--- =========================================================
-CREATE OR REPLACE VIEW v_ticket_details AS
-SELECT
-    t.id AS ticket_id,
-    t.ticket_code,
-    t.status AS ticket_status,
-    t.holder_name,
-    t.holder_email,
-    t.issued_at,
-    t.checked_in_at,
-    oi.id AS order_item_id,
-    oi.ticket_type_id,
-    oi.ticket_type_name,
-    oi.unit_price,
-    o.id AS order_id,
-    o.order_code,
-    o.status AS order_status,
-    o.buyer_name,
-    o.buyer_email,
-    o.event_id
-FROM tickets t
-JOIN order_items oi ON oi.id = t.order_item_id
-JOIN orders o ON o.id = oi.order_id;
-
-CREATE OR REPLACE VIEW v_ticket_type_inventory AS
-SELECT
-    tt.id AS ticket_type_id,
-    tt.event_id,
-    tt.name,
-    tt.capacity,
-    tt.reserved_quantity,
-    tt.sold_quantity,
-    tt.capacity - tt.reserved_quantity - tt.sold_quantity AS available_quantity,
-    COUNT(t.id) AS issued_ticket_rows
-FROM ticket_types tt
-LEFT JOIN order_items oi ON oi.ticket_type_id = tt.id
-LEFT JOIN tickets t ON t.order_item_id = oi.id
-GROUP BY
-    tt.id, tt.event_id, tt.name, tt.capacity,
-    tt.reserved_quantity, tt.sold_quantity;
 
 -- End of schema.

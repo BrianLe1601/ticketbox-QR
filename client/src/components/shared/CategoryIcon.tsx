@@ -1,7 +1,7 @@
 import { Music, Monitor, Utensils, Dumbbell, Palette, TrendingUp } from "lucide-react";
 import type { CategorySlug } from "@/types/event.types";
 
-const ICON_MAP: Record<CategorySlug, React.ElementType> = {
+const ICON_MAP: Record<string, React.ElementType> = {
     music: Music,
     conference: Monitor,
     food: Utensils,
