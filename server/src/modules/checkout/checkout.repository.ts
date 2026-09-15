@@ -77,7 +77,8 @@ export async function withTransaction<T>(fn: (conn: PoolConnection) => Promise<T
 
 export async function findEventForOrder(conn: PoolConnection, eventId: number) {
     const [rows] = await conn.query<EventForOrderRow[]>(
-        `SELECT id, status, visibility, start_time, end_time, sales_start_at, sales_end_at FROM events WHERE id = ? LIMIT 1`,
+        `SELECT id, status, visibility, start_time, end_time, sales_start_at, sales_end_at
+         FROM events WHERE id = ? LIMIT 1 FOR UPDATE`,
         [eventId]
     );
     return rows[0] ?? null;
@@ -161,6 +162,26 @@ export async function findOrderByIdForUpdate(conn: PoolConnection, orderId: numb
         [orderId]
     );
     return rows[0] ?? null;
+}
+
+/**
+ * Settlement/expiry flows first resolve the immutable Event id, then lock the
+ * Event before locking the Order. This keeps the global lock order identical
+ * to checkout creation and Event cancellation: Event -> Order -> Ticket Type.
+ */
+export async function findOrderEventId(conn: PoolConnection, orderId: number) {
+    const [rows] = await conn.query<RowDataPacket[]>(
+        `SELECT event_id FROM orders WHERE id = ? LIMIT 1`,
+        [orderId]
+    );
+    return rows[0] ? Number(rows[0].event_id) : null;
+}
+
+export async function lockEventRow(conn: PoolConnection, eventId: number) {
+    await conn.query(
+        `SELECT id FROM events WHERE id = ? LIMIT 1 FOR UPDATE`,
+        [eventId]
+    );
 }
 
 export async function findOrderByIdReadOnly(orderId: number) {

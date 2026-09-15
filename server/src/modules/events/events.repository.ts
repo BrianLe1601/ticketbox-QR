@@ -7,7 +7,7 @@ export interface EventRow extends RowDataPacket {
     name: string;
     slug: string;
     description: string | null;
-    category: 'music' | 'conference' | 'food' | 'sports' | 'art';
+    category: string;
     venue: string;
     address: string;
     city: string;
@@ -40,7 +40,7 @@ export interface TicketTypeRow extends RowDataPacket {
 }
 
 const EVENT_SELECT = `
-    e.id, e.name, e.slug, e.description, e.category,
+    e.id, e.name, e.slug, e.description, c.slug AS category,
     e.venue, e.address, e.city,
     e.cover_image_url, e.start_time, e.end_time,
     e.sales_start_at, e.sales_end_at,
@@ -59,7 +59,7 @@ export async function findPublishedEvents(query: ListEventsQuery) {
         params.push(`%${q}%`, `%${q}%`, `%${q}%`);
     }
     if (category) {
-        conditions.push(`e.category = ?`);
+        conditions.push(`c.slug = ?`);
         params.push(category);
     }
     if (city) {
@@ -101,9 +101,10 @@ export async function findPublishedEvents(query: ListEventsQuery) {
               ELSE 'closed'
             END AS sale_status
         FROM events e
+        JOIN categories c ON c.id = e.category_id
         LEFT JOIN ticket_types tt ON tt.event_id = e.id AND tt.is_active = TRUE
         ${whereClause}
-        GROUP BY e.id
+        GROUP BY e.id,c.slug
         ORDER BY ${orderBy}
         LIMIT ? OFFSET ?
     `;
@@ -111,6 +112,7 @@ export async function findPublishedEvents(query: ListEventsQuery) {
     const countSql = `
         SELECT COUNT(*) AS total
         FROM events e
+        JOIN categories c ON c.id = e.category_id
         ${whereClause}
     `;
 
@@ -127,6 +129,7 @@ export async function findEventById(id: number) {
     const [rows] = await pool.query<EventRow[]>(
         `SELECT ${EVENT_SELECT}
          FROM events e
+         JOIN categories c ON c.id = e.category_id
          WHERE e.id = ? AND e.status IN ('published','ongoing') AND e.visibility = 'visible'
          LIMIT 1`,
         [id]

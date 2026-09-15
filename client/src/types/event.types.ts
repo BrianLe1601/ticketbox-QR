@@ -1,5 +1,5 @@
-// Slug khớp đúng với events.category ENUM trong DB
-export type CategorySlug = "music" | "conference" | "food" | "sports" | "art";
+// Slug động từ bảng categories; quan hệ nội bộ dùng events.category_id.
+export type CategorySlug = string;
 
 // Khớp đúng events.status ENUM trong DB (trạng thái quản trị)
 export type EventLifecycleStatus = "draft" | "published" | "ongoing" | "completed" | "cancelled";

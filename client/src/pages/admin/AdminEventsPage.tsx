@@ -37,6 +37,7 @@ import { useNavigate } from "react-router-dom";
 
 import { EventCoverUploader } from "@/components/admin/EventCoverUploader";
 import { ApiRequestError } from "@/services/api";
+import { listAdminCategories, type AdminCategory } from "@/services/admin-categories.service";
 import {
   createAdminEvent,
   cancelAdminEvent,
@@ -51,12 +52,12 @@ import {
 
 type PublishMode = "manual" | "scheduled";
 type ViewMode = "grid" | "list";
-type CategoryFilter = "all" | "music" | "conference" | "food" | "sports" | "art";
+type CategoryFilter = string;
 
 const emptyForm = {
   name: "",
   description: "",
-  category: "music" as "music" | "conference" | "food" | "sports" | "art",
+  category: "",
   venue: "",
   address: "",
   city: "",
@@ -74,18 +75,12 @@ const emptyForm = {
   scheduledPublishAt: "",
 };
 
-const CATEGORIES: { id: CategoryFilter; label: string; icon: typeof Music }[] = [
-  { id: "all", label: "All Categories", icon: Globe },
-  { id: "music", label: "Music & Concerts", icon: Music },
-  { id: "conference", label: "Conferences", icon: Video },
-  { id: "food", label: "Food & Drinks", icon: Utensils },
-  { id: "sports", label: "Sports & Fitness", icon: Zap },
-  { id: "art", label: "Art & Culture", icon: Sparkles },
-];
+const CATEGORY_ICONS:Record<string,typeof Music>={music:Music,conference:Video,food:Utensils,sports:Zap,art:Sparkles};
 
 export function AdminEventsPage() {
   const navigate = useNavigate();
   const [events, setEvents] = useState<ManagedEvent[]>([]);
+  const [categoryOptions,setCategoryOptions]=useState<AdminCategory[]>([]);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"all" | Status | "hidden" | "live">("all");
   const [category, setCategory] = useState<CategoryFilter>("all");
@@ -107,8 +102,8 @@ export function AdminEventsPage() {
   const [actionError, setActionError] = useState<{code:string;message:string;hint:string}|null>(null);
 
   useEffect(() => {
-    void listAdminEvents()
-      .then(({ data }) => setEvents(data))
+    void Promise.all([listAdminEvents(),listAdminCategories(false)])
+      .then(([{data},categories]) => {setEvents(data);setCategoryOptions(categories);})
       .catch((error: Error) => setErrors([error.message]))
       .finally(() => setLoading(false));
   }, []);
@@ -165,7 +160,7 @@ export function AdminEventsPage() {
 
   function openCreate() {
     setEditingId(null);
-    setForm(emptyForm);
+    setForm({...emptyForm,category:categoryOptions[0]?.slug??""});
     setActiveStep(1);
     setReviewConfirmed(false);
     setErrors([]);
@@ -185,7 +180,7 @@ export function AdminEventsPage() {
     setForm({
       name: event.name,
       description: event.description ?? "",
-      category: event.category as "music" | "conference" | "food" | "sports" | "art",
+      category: event.category,
       venue: event.venue,
       address: event.address,
       city: event.city,
@@ -211,6 +206,7 @@ export function AdminEventsPage() {
   function validate() {
     const next: string[] = [];
     if (!form.name.trim()) next.push("Event title is required.");
+    if (!form.category) next.push("Select an active Category.");
     if (!form.venue.trim() || !form.address.trim() || !form.city.trim()) {
       next.push("Venue name, address, and city are required.");
     }
@@ -588,8 +584,8 @@ export function AdminEventsPage() {
 
         {/* Category Filter Chips */}
         <div className="events-category-bar">
-          {CATEGORIES.map((cat) => {
-            const Icon = cat.icon;
+          {[{id:"all",label:"All Categories"},...categoryOptions.map((item)=>({id:item.slug,label:item.name}))].map((cat) => {
+            const Icon = cat.id === "all" ? Globe : (CATEGORY_ICONS[cat.id] ?? Sparkles);
             const isSelected = category === cat.id;
             return (
               <button
@@ -1098,9 +1094,9 @@ export function AdminEventsPage() {
                             })
                           }
                         >
-                          {CATEGORIES.filter((c) => c.id !== "all").map((item) => (
-                            <option key={item.id} value={item.id}>
-                              {item.label}
+                          {categoryOptions.map((item) => (
+                            <option key={item.id} value={item.slug}>
+                              {item.name}
                             </option>
                           ))}
                         </select>
