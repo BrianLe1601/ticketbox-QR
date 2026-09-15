@@ -20,7 +20,8 @@ export interface EventRow extends RowDataPacket {
     checkin_end_at: Date | null;
     status: 'draft' | 'published' | 'ended' | 'cancelled';
     min_price: number | null;
-    has_available: number; // 0 hoặc 1, MySQL trả tinyint từ MAX(CASE...)
+    has_available: number;
+    sale_status: 'on-sale' | 'coming-soon' | 'sold-out' | 'closed';
 }
 
 export interface TicketTypeRow extends RowDataPacket {
@@ -50,7 +51,7 @@ export async function findPublishedEvents(query: ListEventsQuery) {
     const { q, category, city, page, limit } = query;
     const offset = (page - 1) * limit;
 
-    const conditions: string[] = [`e.status = 'published'`];
+    const conditions: string[] = [`e.status IN ('published','ongoing')`, `e.visibility = 'visible'`];
     const params: unknown[] = [];
 
     if (q) {
@@ -83,7 +84,22 @@ export async function findPublishedEvents(query: ListEventsQuery) {
             IFNULL(MAX(CASE
                 WHEN (tt.capacity - tt.reserved_quantity - tt.sold_quantity) > 0 THEN 1
                 ELSE 0
-            END), 0) AS has_available
+            END), 0) AS has_available,
+            CASE
+              WHEN MAX(CASE WHEN tt.id IS NOT NULL
+                AND (tt.capacity - tt.reserved_quantity - tt.sold_quantity) > 0
+                AND NOW(3) >= COALESCE(tt.sales_start_at,e.sales_start_at)
+                AND NOW(3) <= COALESCE(tt.sales_end_at,e.sales_end_at)
+                THEN 1 ELSE 0 END)=1 THEN 'on-sale'
+              WHEN MAX(CASE WHEN tt.id IS NOT NULL
+                AND (tt.capacity - tt.reserved_quantity - tt.sold_quantity) > 0
+                AND NOW(3) < COALESCE(tt.sales_start_at,e.sales_start_at)
+                THEN 1 ELSE 0 END)=1 THEN 'coming-soon'
+              WHEN COUNT(tt.id)>0 AND MAX(CASE WHEN
+                (tt.capacity - tt.reserved_quantity - tt.sold_quantity)>0
+                THEN 1 ELSE 0 END)=0 THEN 'sold-out'
+              ELSE 'closed'
+            END AS sale_status
         FROM events e
         LEFT JOIN ticket_types tt ON tt.event_id = e.id AND tt.is_active = TRUE
         ${whereClause}
@@ -111,7 +127,7 @@ export async function findEventById(id: number) {
     const [rows] = await pool.query<EventRow[]>(
         `SELECT ${EVENT_SELECT}
          FROM events e
-         WHERE e.id = ? AND e.status = 'published'
+         WHERE e.id = ? AND e.status IN ('published','ongoing') AND e.visibility = 'visible'
          LIMIT 1`,
         [id]
     );

@@ -1,5 +1,5 @@
-import type { Event, CategorySlug, EventLifecycleStatus } from "@/types/event.types";
-import { computeAvailable, computeSaleStatus, computeSaleStatusFromWindow, computeMinPrice, computeTotalCapacity } from "@/constants/eventconstants";
+import type { Event, CategorySlug, EventLifecycleStatus, TicketSaleStatus } from "@/types/event.types";
+import { computeAvailable, computeMinPrice, computeTotalCapacity } from "@/constants/eventconstants";
 import { formatDisplayDate, formatTimeLabel } from "@/lib/utils";
 import { apiGet } from "./api";
 
@@ -20,6 +20,7 @@ interface ApiEventSummary {
     status: EventLifecycleStatus;
     minPrice: number;
     hasAvailable: boolean;
+    saleStatus: TicketSaleStatus;
 }
 
 interface ApiTicketType {
@@ -34,6 +35,7 @@ interface ApiTicketType {
     maxPerOrder: number;
     salesStartAt: string | null;
     salesEndAt: string | null;
+    saleStatus: TicketSaleStatus;
     isActive: boolean;
 }
 
@@ -54,6 +56,7 @@ interface ApiEventDetail {
     checkinStartAt: string | null;
     checkinEndAt: string | null;
     status: EventLifecycleStatus;
+    saleStatus: TicketSaleStatus;
     ticketTypes: ApiTicketType[];
 }
 
@@ -86,10 +89,7 @@ function mapSummaryToEvent(row: ApiEventSummary): Event {
         checkinStartAt: null,
         checkinEndAt: null,
         status: row.status,
-        saleStatus: computeSaleStatusFromWindow(
-            { status: row.status, salesStartAt: row.salesStartAt, salesEndAt: row.salesEndAt },
-            row.hasAvailable
-        ),
+        saleStatus: row.saleStatus,
         tickets,
         minPrice: row.minPrice,
         totalCapacity: 0,
@@ -109,6 +109,7 @@ function mapDetailToEvent(row: ApiEventDetail): Event {
         maxPerOrder: t.maxPerOrder,
         salesStartAt: t.salesStartAt,
         salesEndAt: t.salesEndAt,
+        saleStatus: t.saleStatus,
         isActive: t.isActive,
     }));
 
@@ -137,7 +138,7 @@ function mapDetailToEvent(row: ApiEventDetail): Event {
         checkinStartAt: row.checkinStartAt,
         checkinEndAt: row.checkinEndAt,
         status: row.status,
-        saleStatus: computeSaleStatus({ status: row.status, salesStartAt: row.salesStartAt, salesEndAt: row.salesEndAt, tickets }),
+        saleStatus: row.saleStatus,
         tickets,
         minPrice: computeMinPrice(tickets),
         totalCapacity: computeTotalCapacity(tickets),

@@ -9,9 +9,9 @@ import {
 
 import {
   clearStoredToken,
-  getMeRequest,
-  getStoredToken,
   loginRequest,
+  logoutRequest,
+  refreshSessionRequest,
   storeToken,
 } from "@/services/auth.service";
 import type { AuthUser, LoginCredentials } from "@/types/auth";
@@ -28,21 +28,20 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [token, setToken] = useState<string | null>(() => getStoredToken());
+  const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
 
     async function restoreSession() {
-      if (!token) {
-        setIsLoading(false);
-        return;
-      }
-
       try {
-        const currentUser = await getMeRequest(token);
-        if (active) setUser(currentUser);
+        const restored = await refreshSessionRequest();
+        storeToken(restored.accessToken);
+        if (active) {
+          setToken(restored.accessToken);
+          setUser(restored.user);
+        }
       } catch {
         clearStoredToken();
         if (active) {
@@ -58,7 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       active = false;
     };
-  }, [token]);
+  }, []);
 
   async function login(credentials: LoginCredentials): Promise<AuthUser> {
     const result = await loginRequest(credentials);
@@ -69,6 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   function logout(): void {
+    void logoutRequest();
     clearStoredToken();
     setToken(null);
     setUser(null);

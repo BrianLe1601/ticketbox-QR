@@ -2,6 +2,8 @@ import { app } from "./app.js";
 import { env } from "./config/env.js";
 import { checkDatabaseConnection, pool } from "./database/pool.js";
 import { startExpireOrdersJob } from "./jobs/expire-orders.job.js";
+import { startAuthSessionCleanupJob } from "./jobs/auth-session-cleanup.job.js";
+import { startEventCancellationEmailJob } from "./jobs/event-cancellation-email.job.js";
 
 async function startServer(): Promise<void> {
   const database = await checkDatabaseConnection();
@@ -16,9 +18,13 @@ async function startServer(): Promise<void> {
   });
 
   const expireOrdersInterval = startExpireOrdersJob();
+  const stopAuthSessionCleanup = startAuthSessionCleanupJob();
+  const stopEventCancellationEmail = startEventCancellationEmailJob();
 
   const shutdown = async (): Promise<void> => {
     clearInterval(expireOrdersInterval);
+    stopAuthSessionCleanup();
+    stopEventCancellationEmail();
     server.close(async () => {
       await pool.end();
       process.exit(0);

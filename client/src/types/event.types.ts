@@ -21,6 +21,7 @@ export interface TicketType {
   maxPerOrder: number;
   salesStartAt: string | null;
   salesEndAt: string | null;
+  saleStatus: TicketSaleStatus;
   isActive: boolean;
 }
 

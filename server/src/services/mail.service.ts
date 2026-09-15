@@ -34,6 +34,14 @@ export async function sendTicketEmail(input: { recipient: string; buyerName: str
     });
 }
 
+export function sendEventCancellationEmail(input:{recipient:string;buyerName:string;orderCode:string;eventName:string;venue:string;startTime:Date;cancellationReason:string}){
+    return createTransporter().sendMail({
+        from:`"${env.MAIL_FROM_NAME.replaceAll('"','')}" <${env.MAIL_USER}>`,to:input.recipient,
+        subject:`Event cancelled: ${input.eventName} - TicketBox QR`,
+        html:`<h2>Important event cancellation notice</h2><p>Hello ${escapeHtml(input.buyerName)},</p><p><b>${escapeHtml(input.eventName)}</b> scheduled at ${escapeHtml(input.venue)} on ${escapeHtml(input.startTime.toLocaleString('en-GB'))} has been cancelled.</p><p><b>Reason:</b> ${escapeHtml(input.cancellationReason)}</p><p>Your order is <b>${escapeHtml(input.orderCode)}</b>. All issued QR tickets are now invalid. If payment was completed, a refund request has been recorded; please contact the organizer with this order code for refund support.</p>`,
+    });
+}
+
 function escapeHtml(value: string) {
     return value.replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[char] ?? char);
 }

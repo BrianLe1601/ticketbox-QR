@@ -17,7 +17,12 @@ export interface LockedTicketTypeRow extends RowDataPacket {
 
 export interface EventForOrderRow extends RowDataPacket {
     id: number;
-    status: 'draft' | 'published' | 'ended' | 'cancelled';
+    status: 'draft' | 'published' | 'ongoing' | 'completed' | 'cancelled';
+    visibility: 'visible' | 'hidden';
+    start_time: Date;
+    end_time: Date;
+    sales_start_at: Date | null;
+    sales_end_at: Date | null;
 }
 
 export interface OrderRow extends RowDataPacket {
@@ -72,7 +77,7 @@ export async function withTransaction<T>(fn: (conn: PoolConnection) => Promise<T
 
 export async function findEventForOrder(conn: PoolConnection, eventId: number) {
     const [rows] = await conn.query<EventForOrderRow[]>(
-        `SELECT id, status FROM events WHERE id = ? LIMIT 1`,
+        `SELECT id, status, visibility, start_time, end_time, sales_start_at, sales_end_at FROM events WHERE id = ? LIMIT 1`,
         [eventId]
     );
     return rows[0] ?? null;

@@ -69,9 +69,13 @@ export async function createOrder(body: CreateOrderBody) {
 
     const orderId = await withTransaction(async (conn) => {
         const event = await findEventForOrder(conn, body.eventId);
-        if (!event || event.status !== 'published') {
+        if (!event || !['published','ongoing'].includes(event.status) || event.visibility !== 'visible') {
             throw AppError.badRequest('Sự kiện không tồn tại hoặc chưa mở bán', 'EVENT_NOT_AVAILABLE');
         }
+        const eventNow=Date.now();
+        if(event.end_time.getTime()<=eventNow)throw AppError.badRequest('Event ticket sales are closed','EVENT_SALES_CLOSED');
+        if(event.sales_start_at&&eventNow<event.sales_start_at.getTime())throw AppError.badRequest('Event ticket sales have not started','EVENT_SALES_NOT_STARTED');
+        if(event.sales_end_at&&eventNow>event.sales_end_at.getTime())throw AppError.badRequest('Event ticket sales are closed','EVENT_SALES_CLOSED');
 
         const ticketTypeIds = body.items.map((i) => i.ticketTypeId);
         const lockedRows = await lockTicketTypes(conn, ticketTypeIds);

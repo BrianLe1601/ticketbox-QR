@@ -5,16 +5,18 @@ export type EventStatus = "draft" | "published" | "ongoing" | "completed" | "can
 export interface PublishReadiness { ready:boolean; missing:string[] }
 export interface AdminEvent {
   id:number; name:string; description:string|null; category:string; venue:string; address:string; city:string;
-  venueCapacity:number|null; coverImageUrl:string|null; startTime:string; endTime:string; salesStartAt:string|null;
-  salesEndAt:string|null; checkinStartAt:string|null; checkinEndAt:string|null; status:EventStatus;
+  venueCapacity:number; coverImageUrl:string|null; coverImagePublicId:string|null; coverImageAlt:string|null; startTime:string; endTime:string; salesStartAt:string;
+  salesEndAt:string; checkinStartAt:string; checkinEndAt:string; status:EventStatus;
+  visibility:"visible"|"hidden"; hiddenAt:string|null; hiddenReason:string|null;
   scheduledPublishAt:string|null; ticketTypeCount:number; validTicketTypeCount:number; allocatedCapacity:number;
-  soldQuantity:number; readiness:PublishReadiness;
+  soldQuantity:number; pendingOrderCount:number; confirmedOrderCount:number; readiness:PublishReadiness;
 }
 export interface EventPayload {
   name:string; description:string|null; category:"music"|"conference"|"food"|"sports"|"art";
-  venue:string; address:string; city:string; venueCapacity:number|null; coverImageUrl:string|null;
-  startTime:string; endTime:string; salesStartAt:string|null; salesEndAt:string|null;
-  checkinStartAt:string|null; checkinEndAt:string|null; scheduledPublishAt:string|null;
+  venue:string; address:string; city:string; venueCapacity:number; coverImageUrl:string|null;
+  coverImagePublicId:string|null; coverImageAlt:string|null;
+  startTime:string; endTime:string; salesStartAt:string; salesEndAt:string;
+  checkinStartAt:string; checkinEndAt:string; scheduledPublishAt:string|null;
 }
 
 const auth=()=>getStoredToken();
@@ -27,3 +29,4 @@ export async function publishAdminEvent(id:number){return (await apiRequest<Admi
 export async function scheduleAdminEvent(id:number,scheduledPublishAt:string|null){return (await apiRequest<AdminEvent>(`/admin/events/${id}/publish-schedule`,{method:"PATCH",body:JSON.stringify({scheduledPublishAt})},auth())).data;}
 export async function cancelAdminEvent(id:number,reason:string){return (await apiRequest<AdminEvent>(`/admin/events/${id}/cancel`,{method:"POST",body:JSON.stringify({reason})},auth())).data;}
 export async function deleteAdminEvent(id:number){await apiRequest<void>(`/admin/events/${id}`,{method:"DELETE"},auth());}
+export async function setAdminEventVisibility(id:number,visible:boolean,reason?:string){return (await apiRequest<AdminEvent>(`/admin/events/${id}/visibility`,{method:"PATCH",body:JSON.stringify(visible?{visible:true}:{visible:false,reason})},auth())).data;}

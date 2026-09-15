@@ -2,8 +2,8 @@ import { Router } from "express";
 import { authenticate } from "../../middlewares/authenticate.js";
 import { authorize } from "../../middlewares/authorize.js";
 import { validate } from "../../middlewares/validate.js";
-import { cancel,create,detail,list,publish,readiness,remove,schedule,update } from "./admin-events.controller.js";
-import { adminEventIdSchema,adminEventListSchema,cancelEventSchema,createAdminEventSchema,schedulePublishSchema,updateAdminEventSchema } from "./admin-events.schema.js";
+import { cancel,create,detail,list,publish,readiness,remove,schedule,update,visibility } from "./admin-events.controller.js";
+import { adminEventIdSchema,adminEventListSchema,cancelEventSchema,createAdminEventSchema,eventVisibilitySchema,schedulePublishSchema,updateAdminEventSchema } from "./admin-events.schema.js";
 
 export const adminEventsRouter=Router();
 adminEventsRouter.use(authenticate,authorize("admin"));
@@ -16,3 +16,4 @@ adminEventsRouter.get("/:id/publish-readiness",validate(adminEventIdSchema,"para
 adminEventsRouter.post("/:id/publish",validate(adminEventIdSchema,"params"),publish);
 adminEventsRouter.patch("/:id/publish-schedule",validate(adminEventIdSchema,"params"),validate(schedulePublishSchema,"body"),schedule);
 adminEventsRouter.post("/:id/cancel",validate(adminEventIdSchema,"params"),validate(cancelEventSchema,"body"),cancel);
+adminEventsRouter.patch("/:id/visibility",validate(adminEventIdSchema,"params"),validate(eventVisibilitySchema,"body"),visibility);
