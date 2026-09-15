@@ -761,3 +761,149 @@ Project hoàn chỉnh mới merge vào main
 ## License
 
 Dự án được thực hiện phục vụ mục đích học tập.
+
+## Staff Scanner / Check-in (Khôi)
+
+Trang `/staff` hiển thị Event đang được phân công cho Staff đã đăng nhập,
+cho phép nhập mã `TKT-…`, dán nội dung QR `ticketbox:<token>` hoặc mở camera.
+Bộ đọc [jsQR](https://github.com/cozmo/jsQR) được tải khi bật camera; không phụ
+thuộc BarcodeDetector của trình duyệt. Camera cần HTTPS hoặc localhost và
+quyền truy cập camera. Máy quét ngoài có thể nhập mã vào ô mã vé rồi gửi Enter.
+Sau mỗi yêu cầu, chọn **Vé tiếp theo** để mở lại scanner; mất mạng không tự gửi lại.
+Camera dừng khi đóng, đổi Event hoặc rời trang, và có thể đóng bằng Escape.
+
+### API và quyền truy cập
+
+| Method | Endpoint | Kết quả |
+|---|---|---|
+| GET | `/api/staff/events` | Event có assignment active của Staff hiện tại |
+| POST | `/api/staff/events/:eventId/checkins` | Kiểm tra và check-in với body `{ "code": "TKT-…" }` |
+| GET | `/api/staff/events/:eventId/checkins` | 20 lần quét mới nhất của chính Staff tại Event được phân công |
+
+Tất cả endpoint yêu cầu Bearer token và role `staff`; Admin không được dùng API
+này để bỏ qua quy trình cổng. ID Staff lấy từ phiên đăng nhập, không nhận từ body.
+POST giới hạn 180 yêu cầu/phút/Staff trên mỗi tiến trình server.
+
+HTTP 200 có envelope `{ success: true, data }` nghĩa là yêu cầu đã được xử lý.
+**Chỉ `data.code === "SUCCESS"` nghĩa là vé được vào cổng.** Các kết quả còn lại:
+`ALREADY_CHECKED_IN`, `WRONG_EVENT`, `CANCELLED`, `UNPAID`, `INVALID`,
+`EVENT_NOT_AVAILABLE`, `STAFF_NOT_ASSIGNED`. Kết quả sai Event/không được phân
+công không trả thông tin người giữ vé. Lỗi xác thực, validation, Event không tồn
+tại hoặc sự cố lưu trữ dùng HTTP lỗi; không được diễn giải là check-in thành công.
+
+### Hợp đồng với Bửu và Tài
+
+- Không thay đổi schema. Sử dụng assignment của Bửu và QR `ticketbox:` cộng token
+  hex 64 ký tự đang được Tài phát hành; tra cứu bằng SHA-256 của token.
+- Check-in khóa Event, kiểm tra/khóa assignment, rồi khóa Order và Ticket.
+  Chỉ Order `confirmed`, Ticket `issued`, Event `published/ongoing` và thời điểm
+  nằm trong cửa sổ check-in mới được vào. Event hidden vẫn có thể phục vụ khách
+  đã mua vé: visibility chỉ điều khiển trang công khai.
+- Đổi trạng thái Ticket và thêm log nằm trong cùng transaction. Nếu lưu log lỗi,
+  thay đổi Ticket rollback. Các kết quả từ chối bình thường được commit cùng log.
+- Log chỉ lưu hash và ký hiệu che mã, không lưu token QR thô. Mã không hợp lệ cũng
+  có log khi request hợp lệ, Event tồn tại và Staff đã xác thực. Yêu cầu không qua
+  xác thực/validation/rate limit không phải lần quét nghiệp vụ và không tạo log.
+- Admin Check-in Logs, Reports và xuất Excel đã được triển khai ở mục bên dưới;
+  Staff vẫn chỉ được xem recent logs của chính mình trong Event được phân công.
+
+### Kiểm thử bàn giao
+
+Tự động: `cd server` rồi `npm test` chạy các test service/repository với mock và
+HTTP route test (auth được mô phỏng, authorization/validation thật). Chạy thêm
+client lint/build và server typecheck/build như mục 12. Trên macOS không có
+PowerShell, chạy trực tiếp các lệnh tương đương trong skill `ticketbox-verify`.
+
+Kiểm thử tích hợp cần MySQL local đã chuẩn bị theo mục 11, backend chạy và dữ liệu
+Event đang mở check-in, Staff được phân công, Order confirmed, Ticket issued:
+
+1. Đăng nhập Staff, chọn Event, nhập mã vé hợp lệ: SUCCESS, Ticket checked_in và một log SUCCESS.
+2. Quét lại cùng vé: ALREADY_CHECKED_IN, thêm log từ chối, thời điểm check-in cũ giữ nguyên.
+3. Hai Staff được phân công cùng gửi một vé đồng thời: đúng một SUCCESS, lần còn lại ALREADY_CHECKED_IN.
+4. Kiểm tra mã giả, vé sai Event, vé hủy, đơn chưa confirmed, ngoài giờ và thu hồi assignment.
+5. Kiểm tra audit log cho từng kết quả; mã QR thô không xuất hiện trong log/API lịch sử.
+6. Quét trong lúc hủy Event: không có vé hợp lệ sau khi giao dịch hủy hoàn tất.
+7. Thử từ chối camera, tắt camera, đổi Event, rời trang, mất mạng và quét lại sau khi xem lịch sử.
+8. Kiểm tra camera trên thiết bị thật, màn hình hẹp và thao tác bàn phím.
+
+Các test mock không thay thế kiểm tra khóa/trigger/concurrency trên MySQL thật
+hoặc thử camera thiết bị thật. Chỉ đánh dấu UAT hoàn thành sau các bước trên.
+
+Kết quả kiểm tra bản triển khai 2026-09-15: client lint/build, server typecheck/build
+và 58 test đều pass; thử tạo QR theo cấu hình phát hành hiện tại rồi giải mã bằng
+jsQR cũng pass. MySQL thật đã được cài và kiểm thử như mục dưới; camera thiết bị
+thật vẫn cần thử trực tiếp.
+
+
+## Admin Check-in Logs và Reports (Khôi)
+
+- `/admin/checkins`: chọn Event, lọc ngày, Staff ID, kết quả; phân trang 20 dòng;
+  giữ cả mã sai không có Ticket. Xuất toàn bộ dữ liệu khớp bộ lọc (tối đa 10.000 dòng),
+  không chỉ trang đang xem. Nếu vượt giới hạn, API yêu cầu thu hẹp bộ lọc.
+- `/admin/reports`: chọn Event, khoảng ngày, xem số đơn xác nhận, vé bán/phát hành,
+  vé đã vào, tổng lần quét/từ chối, tiền thu/hoàn/thu ròng. Không có dữ liệu trong kỳ
+  thì trả số 0; Event không tồn tại trả 404.
+- `GET /api/admin/reports/events?q=...`: tìm tối đa 100 Event theo tên.
+- `GET /api/admin/reports?eventId=...&from=YYYY-MM-DD&to=YYYY-MM-DD`: số liệu Event.
+- `GET /api/admin/checkins?eventId=...&from=...&to=...&staffId=...&result=...&page=1&limit=20`: lịch sử.
+- Thêm `/export` vào hai endpoint reports/checkins để tải `.xlsx`; chỉ bỏ các tham
+  số phân trang khi muốn xuất toàn bộ. Cả hai endpoint đều áp dụng cùng bộ lọc.
+
+Tất cả API trên yêu cầu Admin, `Cache-Control: no-store`. Xuất giới hạn 5 file/phút/
+Admin/tiến trình. Excel có sheet bộ lọc, thời gian xuất và sheet dữ liệu; cột tiền
+là số, chuỗi bắt đầu `=` vẫn là văn bản, không tạo công thức từ dữ liệu người dùng.
+Không xuất QR token hoặc hash bí mật.
+
+### Định nghĩa số liệu
+
+Ngày lọc là ngày Việt Nam (UTC+07), gồm toàn bộ ngày kết thúc. Không truyền ngày
+nghĩa là không giới hạn khoảng thời gian. Mỗi chỉ số dùng thời điểm nghiệp vụ riêng:
+
+| Chỉ số | Nguồn và thời điểm |
+|---|---|
+| Đơn xác nhận / vé bán | Order confirmed, `confirmed_at`, số lượng `total_quantity` |
+| Vé phát hành | Ticket, `issued_at`, gồm vé sau đó đã hủy để giữ lịch sử |
+| Vé đã vào | Số Ticket phân biệt trong log SUCCESS, `checked_at` |
+| Tổng lần quét / từ chối | Check-in Logs, `checked_at`; từ chối là kết quả khác SUCCESS |
+| Đã thu | Payment success, `paid_at` |
+| Đã hoàn | Refund completed, `completed_at`; pending/failed không trừ tiền |
+| Thu ròng | Đã thu trừ đã hoàn trong kỳ; có thể âm |
+
+Tổng hợp Payments, Refunds, Orders và Check-in Logs độc lập để không nhân số tiền
+khi một đơn có nhiều vé/lần quét. Mỗi lần đọc báo cáo hoặc count+danh sách log dùng
+một transaction read-only với snapshot nhất quán. Báo cáo không sửa lịch sử giao dịch.
+Xuất Excel là một snapshot mới tại lúc bấm tải, có thể khác trang vừa xem nếu đang
+có giao dịch mới. Thay đổi bộ lọc trên form chưa ảnh hưởng dữ liệu/export cho đến
+khi bấm **Áp dụng bộ lọc**.
+
+### Môi trường local đã chuẩn bị trên Mac này
+
+- MySQL riêng tại `127.0.0.1:3307`, chỉ lắng nghe localhost.
+- Data: `~/.local/share/ticketbox-mysql/data`; chương trình ở
+  `~/.local/lib/mysql-8.0.35-macos13-x86_64` (bản tương thích macOS 13 Intel).
+- Backend dùng tài khoản `ticketbox_app`; mật khẩu ngẫu nhiên và JWT secret nằm
+  trong `server/.env` được Git bỏ qua. Không dùng instance này cho production.
+- Khởi động MySQL sau khi tắt máy: `~/.local/bin/ticketbox-mysql-start`.
+- Dừng MySQL: `~/.local/bin/ticketbox-mysql-stop`.
+- Chạy `npm run dev` lần lượt trong `server` và `client`. Mở
+  `http://localhost:5173/login` để khớp origin đã cấu hình.
+- Tài khoản demo: `admin@ticketbox.local`, `staff@ticketbox.local`,
+  `qa.staff@ticketbox.local`; mật khẩu local mẫu `ticketbox@123`.
+
+### Bằng chứng kiểm tra 2026-09-15
+
+- Client lint/build và Server typecheck/build pass; 58 test pass (service, routes,
+  transaction, validation, XLSX đọc lại, phân quyền).
+- Schema nạp vào instance MySQL mới; seed và seed:workflows thành công;
+  `db:verify`: 28/28 kiểm tra pass trước khi chạy các lần quét UAT bổ sung.
+- HTTP thật: login Admin/Staff, quyền truy cập, hai request quét cùng
+  `TKT-QA-ONGOING-PAID-2` đồng thời: một SUCCESS, một ALREADY_CHECKED_IN.
+- HTTP thật: INVALID, WRONG_EVENT, STAFF_NOT_ASSIGNED, quét lại vé; log được ghi.
+- Event QA ongoing: tiền thu 100.000 VND, 2 vé bán, 2 vé đã vào; lọc kỳ tương lai
+  trả số 0. API Excel reports/checkins trả file XLSX đọc lại được bằng ExcelJS.
+- Chưa thử camera trên thiết bị thật. Các fixture QA có thời gian tương đối;
+  Event ongoing sẽ đóng cổng sau 3 giờ kể từ lúc seed. Khi cần thay bộ dữ liệu QA,
+  chỉ chạy `seed:workflows` trên database local thử (lệnh thay toàn bộ Category QA).
+
+Không thay đổi schema/API của Event, Order hoặc Assignment; cần Bửu review phần
+mount route Admin và Tài review định nghĩa tiền thu/hoàn khi tích hợp vào develop.

@@ -17,6 +17,10 @@ import { adminTicketTypesRouter } from "./modules/ticket-types/admin-ticket-type
 import { adminUploadsRouter } from "./modules/uploads/admin-uploads.routes.js";
 import { router } from "./routes/index.js";
 
+import { checkinRouter } from "./modules/checkins/checkin.routes.js";
+
+import { adminReportsRouter, adminCheckinsRouter } from "./modules/reports/report.routes.js";
+
 export const app = express();
 
 if (env.NODE_ENV === "production") app.set("trust proxy", 1);
@@ -53,6 +57,9 @@ app.get("/api/health", async (_req, res, next) => {
 });
 
 app.use("/api/auth", authRouter);
+app.use("/api/staff", checkinRouter);
+app.use("/api/admin/reports", adminReportsRouter);
+app.use("/api/admin/checkins", adminCheckinsRouter);
 app.use("/api/categories", categoriesRouter);
 app.use("/api/admin/categories", adminCategoriesRouter);
 app.use("/api/admin/events", adminEventsRouter);
