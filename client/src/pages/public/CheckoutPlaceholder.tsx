@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate, useLocation, Navigate } from "react-router-dom";
 import { ArrowLeft, ShoppingCart, Loader2, MailCheck } from "lucide-react";
 import type { Event } from "@/types/event.types";
@@ -33,6 +33,9 @@ export function CheckoutPlaceholder() {
     const [codeSent, setCodeSent] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    // Giữ nguyên qua mọi lần bấm lại trong cùng một checkout attempt. Nếu response
+    // đầu tiên bị mất, server trả lại đúng order thay vì reserve thêm lần nữa.
+    const idempotencyKeyRef = useRef(crypto.randomUUID());
 
     useEffect(() => {
         if (!id) return;
@@ -80,6 +83,7 @@ export function CheckoutPlaceholder() {
         try {
             const order = await createOrder({
                 eventId: event.id,
+                idempotencyKey: idempotencyKeyRef.current,
                 emailVerificationToken: verificationToken,
                 items: selections,
                 buyer: { name: name.trim(), email: email.trim(), phone: phone.trim() || undefined },

@@ -24,7 +24,7 @@ TicketBox QR hỗ trợ toàn bộ quy trình quản lý vé sự kiện:
 | Thành viên | Phạm vi chính | Module |
 |---|---|---|
 | Bửu | Leader, Platform, CSDL và quản trị | Backend Auth, Login, Admin Event, Admin Ticket Type, Admin Staff, Admin Category |
-| Tài | Quy trình đặt và phát hành vé | Public Event, Order, Payment, Ticket, QR, Email |
+| Tài | Quy trình khách mua vé và quản trị đơn hàng | Public Event, Checkout, Order, Admin Orders, Payment, Ticket, QR, Email |
 | Khôi | Vận hành và báo cáo tại sự kiện | Scanner, Check-in, Admin Check-in Logs, Admin Reports |
 
 Luồng bàn giao chính:
@@ -81,32 +81,37 @@ Khôi xây dựng Scanner, Check-in Logs và Reporting
 
 ## 4. Trạng thái hiện tại
 
-Đã hoàn thành:
+Trạng thái dưới đây được đối chiếu với code ngày 15/09/2026. Quy ước:
 
-- [x] Khởi tạo GitHub repository.
-- [x] Khởi tạo React, TypeScript và Vite.
-- [x] Cài đặt Tailwind CSS và thư viện frontend.
-- [x] Khởi tạo Node.js, Express và TypeScript.
-- [x] Cài đặt thư viện backend.
-- [x] Thiết kế database quan hệ và migration baseline.
-- [x] Tổng hợp toàn bộ database vào một file schema có thể reset và khởi tạo lại.
-- [x] Cấu hình biến môi trường backend.
-- [x] Tạo MySQL connection pool.
-- [x] Kết nối backend với database `ticketboxqr`.
-- [x] Tạo API kiểm tra `/api/health`.
+- `[x]`: đã có trên `main`, không chỉ tồn tại ở nhánh cá nhân.
+- `[ ]`: chưa hoàn tất, chưa nghiệm thu hoặc còn chờ review/merge.
+- Một chức năng chỉ được tick trên README và Trello khi đáp ứng Definition of Done ở mục 16.
 
-Chưa hoàn thành:
+Đã có trên `main`:
 
-- [ ] Chuẩn hóa cấu trúc frontend.
-- [ ] Chuẩn hóa cấu trúc backend.
-- [x] Authentication, refresh session và phân quyền Admin/Staff.
-- [x] Quản lý Event, Ticket Type và Category ở Admin.
-- [ ] Đặt vé, giữ vé và thanh toán.
-- [ ] Phát hành QR và gửi email.
-- [ ] Quản lý Staff và phân công sự kiện.
-- [ ] Quét QR và check-in an toàn.
-- [ ] Dashboard và xuất báo cáo.
-- [ ] Test và triển khai ứng dụng.
+- [x] Repository React 19 + Vite + TypeScript và Node.js + Express + TypeScript.
+- [x] Schema MySQL hợp nhất gồm 13 bảng, constraints, indexes và triggers.
+- [x] Kết nối MySQL, seed tài khoản và `/api/health`.
+- [x] Authentication, refresh-session rotation/revoke và RBAC Admin/Staff.
+- [x] Admin CRUD Categories, Events và Ticket Types.
+- [x] Event lifecycle, publish readiness, visibility và cancellation workflow.
+- [x] Public Home, Event List, Event Detail, search/filter và chọn loại vé.
+- [x] Luồng Checkout/Order/giữ chỗ/Payment mô phỏng/Ticket/QR/Email ở mức tích hợp cơ bản.
+
+Đã có trên nhánh nhưng chưa được xem là nghiệm thu trên `main`:
+
+- [ ] Nhánh `khoi-checkin-reports`: Assigned Events, camera/manual Scanner, atomic Check-in và Recent Logs.
+- [ ] Nhánh `khoi-checkin-reports`: Admin Check-in Logs, Attendance/Revenue Reports, export Excel và test.
+- [ ] Đồng bộ nhánh Khôi với `develop`, review contract liên module và merge bằng Pull Request.
+
+Còn thiếu hoặc cần hoàn thiện:
+
+- [ ] Admin Staff CRUD, activate/deactivate và Event Assignment — Bửu.
+- [ ] Admin Orders: danh sách, lọc, chi tiết Order/Payment/Ticket/Refund — Tài.
+- [ ] Email retry/resend, hoàn thiện hậu mãi và trạng thái refund — Tài.
+- [ ] UAT camera trên thiết bị thật và tích hợp Scanner sau merge — Khôi.
+- [ ] Test tích hợp end-to-end, concurrency, responsive và accessibility — cả nhóm.
+- [ ] Deploy staging, sửa blocker, deploy production và chuẩn bị demo — Bửu điều phối.
 
 ## 5. Cấu trúc repository
 
@@ -570,7 +575,245 @@ Slug danh mục đã được Event sử dụng không được đổi. Danh m�
 
 Lưu ý: một số lệnh test chỉ hoạt động sau khi nhóm bổ sung file kiểm thử.
 
-## 13. Git workflow
+## 13. Kế hoạch triển khai 8 tuần và checklist theo thành viên
+
+Kế hoạch này là nguồn đối chiếu với Trello. Mỗi tuần có đúng ba nhóm việc của Bửu, Tài và Khôi. Không chuyển việc giữa thành viên nếu chưa cập nhật đồng thời README, Trello và người review Pull Request.
+
+### Tuần 1 — Phân tích yêu cầu, kiến trúc và khởi tạo dự án
+
+**Mục tiêu nhóm:** Chốt phạm vi TicketBoxQR, ba luồng Admin/Public/Staff, kiến trúc, CSDL và quy trình cộng tác.
+
+**Bửu — Leader, Platform và CSDL**
+
+- [x] Khởi tạo repo, cấu trúc `client/server/database` và các package nền.
+- [x] Phân tích nghiệp vụ tổng thể và vẽ ERD cho schema 13 bảng.
+- [x] Tạo consolidated schema, MySQL pool, seed và `/api/health`.
+- [x] Viết `AGENTS.md`, README, quy ước branch/PR và hướng dẫn nhóm chạy dự án.
+- Bàn giao: repo chạy được, ERD/schema và tài liệu nền có minh chứng.
+
+**Tài — Phân tích Public Purchase Flow**
+
+- [x] Khởi tạo React/Vite/TypeScript/Tailwind và cấu trúc UI Public.
+- [x] Phân tích hành trình Event List → Detail → Checkout → Payment → Ticket/QR → Email.
+- [x] Liệt kê màn hình, dữ liệu API và trạng thái loading/empty/error cần có.
+- [x] Chốt nguyên tắc khách mua vé không cần tài khoản nhưng phải xác minh email.
+- Bàn giao: Public UI nền và tài liệu luồng mua vé.
+
+**Khôi — Phân tích Scanner và Check-in**
+
+- [x] Phân tích Staff chỉ vận hành Event được phân công.
+- [x] Thiết kế luồng camera QR và nhập mã thủ công.
+- [x] Liệt kê Assigned Events, Scanner, Result và Recent Logs.
+- [x] Chốt các kết quả `SUCCESS`, `INVALID`, `ALREADY_CHECKED_IN`, `WRONG_EVENT`, `CANCELLED`, `UNPAID`, `EVENT_NOT_AVAILABLE`, `STAFF_NOT_ASSIGNED`.
+- Bàn giao: luồng vận hành cổng, giao diện mẫu và ma trận trường hợp check-in.
+
+### Tuần 2 — Authentication, RBAC và khung giao diện
+
+**Mục tiêu nhóm:** Người dùng đi vào đúng khu vực theo vai trò; ba giao diện Admin/Public/Staff có nền tảng dùng chung.
+
+**Bửu — Auth và Admin foundation**
+
+- [x] Hoàn thiện login, refresh, logout và `/me`.
+- [x] Hash mật khẩu; hash/rotate/revoke refresh session trong `auth_sessions`.
+- [x] Xây middleware authenticate/authorize và ProtectedRoute cho Admin/Staff.
+- [x] Hoàn thiện Login, AdminLayout, Admin Dashboard và seed tài khoản.
+- Bàn giao: xác thực và RBAC hoạt động từ frontend đến backend.
+
+**Tài — Public UI foundation**
+
+- [x] Hoàn thiện PublicLayout, routing, API service và type dùng chung.
+- [x] Xây Home, Event cards, Event List và Event Detail.
+- [x] Bổ sung search, filter Category và lựa chọn Ticket Type.
+- [x] Hoàn thiện loading, empty, error và responsive cơ bản.
+- Bàn giao: khách duyệt được giao diện Public và xem dữ liệu Event.
+
+**Khôi — Staff UI foundation**
+
+- [x] Hoàn thiện StaffLayout, StaffHome và route chỉ dành cho role Staff.
+- [ ] Tích hợp Scanner UI thực tế từ nhánh Khôi vào `develop`.
+- [ ] Hoàn thiện quyền camera, trạng thái xử lý và Check-in Result.
+- [ ] Review Auth contract với Bửu và QR payload contract với Tài.
+- Bàn giao: Staff shell trên `main`; Scanner UI sẵn sàng sau PR được review.
+
+### Tuần 3 — Admin Event catalogue và Public Event integration
+
+**Mục tiêu nhóm:** Admin tạo được Category → Event → Ticket Type → Publish; khách chỉ thấy Event đủ điều kiện bán; contract QR/Check-in được khóa ổn định.
+
+**Bửu — Categories, Events và Ticket Types**
+
+- [x] CRUD Category và quy tắc active/inactive, slug, không xóa Category đang được dùng.
+- [x] CRUD Event, upload ảnh, lịch bán/check-in, visibility và publish readiness.
+- [x] CRUD Ticket Type, capacity, giá, sales window và pause sales.
+- [x] Áp dụng lifecycle Event và bảo vệ last-active-tier.
+- [x] Hoàn thiện cancellation transaction, refund/email-log queue và workflow verification.
+- Bàn giao: Admin quản lý đầy đủ chuỗi Category → Event → Ticket Type → Publish.
+
+**Tài — Public Event với API thật**
+
+- [x] Tích hợp Event List/Detail và Category API.
+- [x] Search/filter và hiển thị sale state do backend trả về.
+- [x] Hiển thị giá, lịch bán, tồn kho và Ticket Type hợp lệ.
+- [ ] Nghiệm thu pagination/sort, responsive, accessibility và các lỗi API.
+- Bàn giao: khách xem và chọn đúng Event/Ticket Type đủ điều kiện.
+
+**Khôi — Contract QR/Check-in và prototype Scanner**
+
+- [x] Chốt payload `ticketbox:<raw-token>` và tra cứu bằng SHA-256 hash.
+- [x] Chốt result code, dữ liệu log và nguyên tắc không lộ raw QR token.
+- [ ] Đồng bộ prototype camera/manual Scanner với `develop` mới nhất.
+- [ ] Hoàn thiện test matrix cho assignment, Event window, Ticket và duplicate scan.
+- Bàn giao: contract ổn định để tuần 4–6 triển khai; không nhận CRUD Admin Staff.
+
+### Tuần 4 — Staff Assignment và Checkout/Order
+
+**Mục tiêu nhóm:** Admin phân công được Staff; khách tạo Order và giữ vé an toàn; Staff nhìn thấy Event được giao.
+
+**Bửu — Admin Staff và Event Assignment**
+
+- [ ] Xây Admin Staff list/create/update/activate/deactivate; không hard-delete tài khoản có lịch sử.
+- [ ] Xây assign/revoke Staff cho Event và giữ lịch sử trong `event_staff`.
+- [ ] Chặn Staff inactive, Event terminal và lịch phân công chồng lấn.
+- [x] Review transaction/row lock, inventory và Order expiry của luồng Checkout.
+- [ ] Hoàn thiện Admin Staff UI, API, validation, authorization và test.
+- Bàn giao: Admin quản lý Staff và phân công Event; Khôi dùng API Assigned Events ổn định.
+
+**Tài — Checkout, Order và Payment nền**
+
+- [x] Hoàn thiện form người mua, xác minh email và chọn số lượng vé.
+- [x] Tạo Order/Order Items, backend tự tính tiền và sinh lookup token.
+- [x] Giữ vé bằng transaction, row lock và `expires_at`; job hết hạn nhả tồn kho.
+- [x] Xử lý free/simulated payment và chuyển reservation sang sold.
+- [ ] Xây Admin Orders list/filter/detail cơ bản.
+- Bàn giao: luồng Checkout → pending Order → Payment hoạt động và không oversell.
+
+**Khôi — Assigned Events và Scanner foundation**
+
+- [ ] Tích hợp API lấy Event được phân công theo Staff đăng nhập.
+- [ ] Hoàn thiện UI chọn Event và hiển thị check-in window.
+- [ ] Tích hợp camera QR và ô nhập mã thủ công với Event context.
+- [ ] Dừng camera khi đổi Event/rời trang; xử lý từ chối quyền camera.
+- Bàn giao: Staff chọn được Event hợp lệ và Scanner sẵn sàng gọi Check-in API.
+
+### Tuần 5 — Phát hành vé, QR, Email và Scanner integration
+
+**Mục tiêu nhóm:** Sau thanh toán khách nhận được QR; Scanner gửi đúng một yêu cầu cho mỗi mã và trả kết quả rõ ràng.
+
+**Bửu — Tích hợp lifecycle và review bảo mật**
+
+- [x] Hoàn thiện Event cancellation: đóng bán, nhả hold, hủy pending và vô hiệu QR.
+- [x] Tạo Refund/Email Log có audit cho confirmed Order khi Event bị hủy.
+- [ ] Review Admin Staff/Assignment và hợp đồng Assigned Events trước khi merge.
+- [ ] Review idempotency, QR/lookup hash, masking và quyền truy cập liên module.
+- [ ] Review/merge PR của Tài và Khôi vào `develop` sau khi kiểm tra.
+- Bàn giao: các luồng Event–Order–Ticket–Assignment không phá invariant CSDL.
+
+**Tài — Ticket, QR, Email và Admin Orders**
+
+- [x] Xác nhận Payment và phát hành đúng số Ticket theo quantity.
+- [x] Sinh `ticket_code`, raw QR token dùng một lần và chỉ lưu hash.
+- [x] Tạo QR, gửi email vé và ghi `email_logs`.
+- [x] Hiển thị Order Result và tra cứu đơn bằng lookup token.
+- [ ] Hoàn thiện Admin Orders: list/filter/detail Payment, Ticket và trạng thái email.
+- Bàn giao: khách nhận/tra cứu được vé; Admin theo dõi được đơn hàng.
+
+**Khôi — Scanner kết nối Check-in API**
+
+- [ ] Gửi camera/manual code đến đúng Event context và Staff từ access token.
+- [ ] Khóa tạm Scanner khi xử lý để một mã chỉ tạo một request.
+- [ ] Hiển thị đầy đủ result code/message và nút “vé tiếp theo”.
+- [ ] Hoàn thiện recent logs, xử lý mất mạng và không tự retry check-in.
+- [ ] Đồng bộ nhánh, chạy test và tạo PR vào `develop`.
+- Bàn giao: Scanner dùng QR thật, không gửi request lặp và không lộ token.
+
+### Tuần 6 — Atomic Check-in, Admin Orders và Reports
+
+**Mục tiêu nhóm:** Hoàn chỉnh vận hành sau bán vé: Staff check-in an toàn, Admin theo dõi đơn và xem báo cáo chính xác.
+
+**Bửu — Admin integration và security review**
+
+- [ ] Hoàn tất/ổn định Admin Staff và Event Assignment trên `develop`.
+- [ ] Review authorization, lock order, rate limit, masked log và audit history của Check-in.
+- [ ] Review Event cancellation, refund/email jobs và xử lý partial failure.
+- [ ] Tích hợp menu Admin Staff, Orders, Check-in Logs và Reports không còn placeholder.
+- [ ] Chạy schema/seed/workflow verification sau khi tích hợp.
+- Bàn giao: các module Admin và shared database chạy thống nhất.
+
+**Tài — Admin Orders và hậu mãi**
+
+- [ ] Hoàn thiện Admin Orders list/search/filter/detail và phân trang.
+- [ ] Hiển thị Payment, Ticket, email delivery và lookup/resend an toàn.
+- [ ] Hiển thị trạng thái Event cancellation và Refund; không tự xác nhận hoàn tiền thật.
+- [ ] Hoàn thiện email retry/resend và dữ liệu doanh thu cung cấp cho Reports.
+- [ ] Bổ sung test và bằng chứng đối chiếu Order–Payment–Ticket–Refund.
+- Bàn giao: Admin quản trị được toàn bộ vòng đời đơn hàng sau mua.
+
+**Khôi — Atomic Check-in, Logs và Attendance Reporting**
+
+- [ ] Kiểm tra Staff active/assigned, Event status/window, Ticket và confirmed Order.
+- [ ] Atomic update `issued → checked_in`, bảo đảm tối đa một `SUCCESS`.
+- [ ] Ghi `checkin_logs` cho SUCCESS và mọi kết quả từ chối nghiệp vụ.
+- [ ] Hoàn thiện Admin Check-in Logs, Attendance/Revenue Reports và bộ lọc.
+- [ ] Xuất Excel an toàn và test concurrency/report aggregation.
+- Bàn giao: Check-in chống trùng; logs và số lượt tham dự khớp dữ liệu nguồn.
+
+### Tuần 7 — QA/UAT và deploy staging
+
+**Mục tiêu nhóm:** Nghiệm thu ba luồng end-to-end trên staging, sửa toàn bộ blocker trước release.
+
+**Bửu — Platform QA và staging**
+
+- [ ] QA Auth/RBAC, Categories, Events, Ticket Types, Staff và Assignment.
+- [ ] Clean-install schema, seed, `db:verify`, server typecheck/build/test.
+- [ ] Audit env/secrets, jobs, rate limit, logging và backup/restore.
+- [ ] Deploy staging; lập danh sách lỗi có owner, mức độ và deadline.
+- Bàn giao: staging hoạt động và không còn blocker Platform/Admin.
+
+**Tài — Commerce QA**
+
+- [ ] Test Event → Checkout → Payment → Ticket/QR → Email → Order lookup.
+- [ ] Test sold out, expiry, idempotency, concurrency và không oversell.
+- [ ] QA Admin Orders, resend, cancellation/refund display và số liệu doanh thu.
+- [ ] Hoàn thiện responsive/accessibility và bằng chứng desktop/mobile.
+- Bàn giao: luồng khách và Admin Orders ổn định trên staging.
+
+**Khôi — Operations QA**
+
+- [ ] Test camera/manual code trên máy tính và thiết bị thật.
+- [ ] Test đủ INVALID, DUPLICATE, WRONG_EVENT, CANCELLED, UNPAID, ngoài window và chưa assigned.
+- [ ] Đối chiếu Logs/Reports/Excel với dữ liệu Order, Ticket và Check-in.
+- [ ] QA bàn phím, camera cleanup, mất mạng và tốc độ quét liên tục.
+- Bàn giao: Scanner và Reports được UAT, có ảnh/video/test evidence.
+
+### Tuần 8 — Release, deploy production và demo
+
+**Mục tiêu nhóm:** Hoàn tất project, triển khai bản cuối và trình diễn ba luồng liền mạch.
+
+**Bửu — Release và điều phối**
+
+- [ ] Chốt UAT, review PR và merge `develop → main`.
+- [ ] Deploy frontend, backend và MySQL production theo cấu hình an toàn.
+- [ ] Kiểm tra health check, smoke test, backup/restore và rollback plan.
+- [ ] Gắn version release; cập nhật README, API, ERD, hướng dẫn cài đặt và dữ liệu demo.
+- [ ] Tổng hợp báo cáo, slide, đóng góp thành viên và kịch bản dự phòng.
+- Bàn giao: URL production hoạt động, release có thể cài lại và demo được.
+
+**Tài — Demo Public Purchase và Admin Orders**
+
+- [ ] Chuẩn bị Event/Ticket Type và dữ liệu mua vé demo.
+- [ ] Demo search/filter → Detail → Checkout → Payment → QR/Email.
+- [ ] Demo Order lookup, resend và Admin Orders.
+- [ ] Chuẩn bị trường hợp free/paid, sold out, expired và lỗi thanh toán.
+- Bàn giao: luồng Commerce end-to-end chạy trên production.
+
+**Khôi — Demo Scanner, Check-in và Reports**
+
+- [ ] Chuẩn bị QR hợp lệ/lỗi và nhập mã thủ công dự phòng.
+- [ ] Demo Staff login → Assigned Events → Scanner → Result → Recent Logs.
+- [ ] Demo chống quét trùng, sai Event, chưa assigned và ngoài window.
+- [ ] Demo Attendance Report, bộ lọc và export Excel.
+- Bàn giao: luồng vận hành cổng và báo cáo chạy trên production.
+
+## 14. Git workflow
 
 Không làm tính năng trực tiếp trên `main`.
 
@@ -597,10 +840,14 @@ git switch -c feature/ten-chuc-nang
 Commit và push:
 
 ```powershell
-git add .
+git status
+git add README.md client/src server/src database/migrations/001_initial_schema.sql
+git diff --cached
 git commit -m "feat(scope): short description"
 git push -u origin feature/ten-chuc-nang
 ```
+
+Chỉ đưa đúng file thuộc task vào staging; thay danh sách đường dẫn ở ví dụ trên theo thay đổi thực tế.
 
 Sau đó tạo Pull Request:
 
@@ -619,7 +866,7 @@ docs(scope): cập nhật tài liệu
 chore(scope): cập nhật cấu hình
 ```
 
-## 14. Quy tắc chung
+## 15. Quy tắc chung
 
 - Không commit `.env`, mật khẩu hoặc token.
 - Không commit `node_modules`, `dist` hoặc file log.
@@ -632,7 +879,7 @@ chore(scope): cập nhật cấu hình
 - Staff chỉ được check-in Event đã được phân công.
 - Mọi Pull Request phải được ít nhất một thành viên khác kiểm tra.
 
-## 15. Definition of Done
+## 16. Definition of Done
 
 Một task chỉ được xem là hoàn thành khi:
 
@@ -644,119 +891,6 @@ Một task chỉ được xem là hoàn thành khi:
 - Nghiệp vụ quan trọng có test.
 - Có hướng dẫn kiểm thử trong Pull Request.
 - Chạy được sau khi merge vào `develop`.
-
-# Quy trình GitHub của nhóm
-
-## 1. Các nhánh sử dụng
-
-```text
-main        # Bản ổn định để demo
-develop     # Nơi tập hợp code của nhóm
-buu         # Nhánh của Bửu
-tai         # Nhánh của Tài
-khoi        # Nhánh của Khôi
-```
-
-Mỗi người chỉ code và push lên nhánh của mình.
-
-## 2. Lần đầu lấy project
-
-```powershell
-git clone https://github.com/BrianLe1601/ticketbox-QR.git
-cd ticketbox-QR
-git switch ten-cua-ban
-```
-
-Ví dụ:
-
-```powershell
-git switch tai
-```
-
-Nếu nhánh chưa tồn tại:
-
-```powershell
-git switch -c tai
-git push -u origin tai
-```
-
-## 3. Trước khi bắt đầu code
-
-Lấy code mới nhất từ `develop`:
-
-```powershell
-git switch develop
-git pull origin develop
-git switch ten-cua-ban
-git merge develop
-```
-
-Ví dụ với Tài:
-
-```powershell
-git switch develop
-git pull origin develop
-git switch tai
-git merge develop
-```
-
-## 4. Sau khi code
-
-```powershell
-git status
-git add .
-git commit -m "Mô tả phần đã làm"
-git push
-```
-
-Ví dụ:
-
-```powershell
-git add .
-git commit -m "Hoàn thành giao diện đặt vé"
-git push
-```
-
-Code sẽ được push lên nhánh cá nhân, không phải `main`.
-
-## 5. Khi hoàn thành chức năng
-
-Trên GitHub, tạo Pull Request:
-
-```text
-buu/tai/khoi → develop
-```
-
-Leader kiểm tra và merge vào `develop`.
-
-Khi toàn bộ project chạy ổn định, Leader tạo Pull Request:
-
-```text
-develop → main
-```
-
-## 6. Luồng cần nhớ
-
-```text
-Code trên nhánh cá nhân
-        ↓
-Push lên nhánh cá nhân
-        ↓
-Pull Request vào develop
-        ↓
-Leader kiểm tra và merge
-        ↓
-Project hoàn chỉnh mới merge vào main
-```
-
-## 7. Lưu ý
-
-- Không code hoặc push trực tiếp lên `main`.
-- Luôn pull `develop` trước khi bắt đầu.
-- Không commit `.env`, `node_modules` hoặc mật khẩu.
-- Trước khi merge phải chạy thử project.
-- Nếu gặp conflict, báo nhóm cùng xử lý, không tự xóa code.
-
 
 ## License
 
