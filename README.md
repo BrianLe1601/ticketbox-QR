@@ -81,9 +81,10 @@ Khôi xây dựng Scanner, Check-in Logs và Reporting
 
 ## 4. Trạng thái hiện tại
 
-Trạng thái dưới đây được đối chiếu với code ngày 15/09/2026. Quy ước:
+Trạng thái dưới đây được đối chiếu với code ngày 19/09/2026. Quy ước:
 
 - `[x]`: đã có trên `main`, không chỉ tồn tại ở nhánh cá nhân.
+- `[~]`: đã triển khai và kiểm chứng trên nhánh sở hữu, còn chờ review/merge.
 - `[ ]`: chưa hoàn tất, chưa nghiệm thu hoặc còn chờ review/merge.
 - Một chức năng chỉ được tick trên README và Trello khi đáp ứng Definition of Done ở mục 16.
 
@@ -98,10 +99,10 @@ Trạng thái dưới đây được đối chiếu với code ngày 15/09/2026.
 - [x] Public Home, Event List, Event Detail, search/filter và chọn loại vé.
 - [x] Luồng Checkout/Order/giữ chỗ/Payment mô phỏng/Ticket/QR/Email ở mức tích hợp cơ bản.
 
-Đã có trên nhánh nhưng chưa được xem là nghiệm thu trên `main`:
+Đã triển khai và kiểm chứng trên nhánh nhưng chưa được xem là nghiệm thu trên `main`:
 
-- [ ] Nhánh `khoi-checkin-reports`: Assigned Events, camera/manual Scanner, atomic Check-in và Recent Logs.
-- [ ] Nhánh `khoi-checkin-reports`: Admin Check-in Logs, Attendance/Revenue Reports, export Excel và test.
+- [~] Nhánh `khoi-checkin-reports`: Assigned Events, camera/manual Scanner, atomic Check-in và Recent Logs.
+- [~] Nhánh `khoi-checkin-reports`: Admin Check-in Logs, Attendance/Revenue Reports, export Excel và test.
 - [ ] Đồng bộ nhánh Khôi với `develop`, review contract liên module và merge bằng Pull Request.
 
 Còn thiếu hoặc cần hoàn thiện:
@@ -631,7 +632,7 @@ Kế hoạch này là nguồn đối chiếu với Trello. Mỗi tuần có đú
 
 - [x] Hoàn thiện StaffLayout, StaffHome và route chỉ dành cho role Staff.
 - [ ] Tích hợp Scanner UI thực tế từ nhánh Khôi vào `develop`.
-- [ ] Hoàn thiện quyền camera, trạng thái xử lý và Check-in Result.
+- [~] Hoàn thiện quyền camera, trạng thái xử lý và Check-in Result; vẫn cần UAT trên thiết bị thật.
 - [ ] Review Auth contract với Bửu và QR payload contract với Tài.
 - Bàn giao: Staff shell trên `main`; Scanner UI sẵn sàng sau PR được review.
 
@@ -661,7 +662,7 @@ Kế hoạch này là nguồn đối chiếu với Trello. Mỗi tuần có đú
 - [x] Chốt payload `ticketbox:<raw-token>` và tra cứu bằng SHA-256 hash.
 - [x] Chốt result code, dữ liệu log và nguyên tắc không lộ raw QR token.
 - [ ] Đồng bộ prototype camera/manual Scanner với `develop` mới nhất.
-- [ ] Hoàn thiện test matrix cho assignment, Event window, Ticket và duplicate scan.
+- [~] Hoàn thiện test matrix cho assignment, Event window, Ticket và `ALREADY_CHECKED_IN`.
 - Bàn giao: contract ổn định để tuần 4–6 triển khai; không nhận CRUD Admin Staff.
 
 ### Tuần 4 — Staff Assignment và Checkout/Order
@@ -688,10 +689,10 @@ Kế hoạch này là nguồn đối chiếu với Trello. Mỗi tuần có đú
 
 **Khôi — Assigned Events và Scanner foundation**
 
-- [ ] Tích hợp API lấy Event được phân công theo Staff đăng nhập.
-- [ ] Hoàn thiện UI chọn Event và hiển thị check-in window.
-- [ ] Tích hợp camera QR và ô nhập mã thủ công với Event context.
-- [ ] Dừng camera khi đổi Event/rời trang; xử lý từ chối quyền camera.
+- [~] Tích hợp API lấy Event được phân công theo Staff đăng nhập.
+- [~] Hoàn thiện UI chọn Event và hiển thị check-in window.
+- [~] Tích hợp camera QR và ô nhập mã thủ công với Event context.
+- [~] Dừng camera khi đổi Event/rời trang; xử lý từ chối quyền camera.
 - Bàn giao: Staff chọn được Event hợp lệ và Scanner sẵn sàng gọi Check-in API.
 
 ### Tuần 5 — Phát hành vé, QR, Email và Scanner integration
@@ -718,10 +719,10 @@ Kế hoạch này là nguồn đối chiếu với Trello. Mỗi tuần có đú
 
 **Khôi — Scanner kết nối Check-in API**
 
-- [ ] Gửi camera/manual code đến đúng Event context và Staff từ access token.
-- [ ] Khóa tạm Scanner khi xử lý để một mã chỉ tạo một request.
-- [ ] Hiển thị đầy đủ result code/message và nút “vé tiếp theo”.
-- [ ] Hoàn thiện recent logs, xử lý mất mạng và không tự retry check-in.
+- [~] Gửi camera/manual code đến đúng Event context và Staff từ access token.
+- [~] Khóa tạm Scanner khi xử lý để một mã chỉ tạo một request.
+- [~] Hiển thị đầy đủ result code/message và nút “vé tiếp theo”.
+- [~] Hoàn thiện recent logs, xử lý mất mạng và không tự retry check-in.
 - [ ] Đồng bộ nhánh, chạy test và tạo PR vào `develop`.
 - Bàn giao: Scanner dùng QR thật, không gửi request lặp và không lộ token.
 
@@ -749,11 +750,11 @@ Kế hoạch này là nguồn đối chiếu với Trello. Mỗi tuần có đú
 
 **Khôi — Atomic Check-in, Logs và Attendance Reporting**
 
-- [ ] Kiểm tra Staff active/assigned, Event status/window, Ticket và confirmed Order.
-- [ ] Atomic update `issued → checked_in`, bảo đảm tối đa một `SUCCESS`.
-- [ ] Ghi `checkin_logs` cho SUCCESS và mọi kết quả từ chối nghiệp vụ.
-- [ ] Hoàn thiện Admin Check-in Logs, Attendance/Revenue Reports và bộ lọc.
-- [ ] Xuất Excel an toàn và test concurrency/report aggregation.
+- [~] Kiểm tra Staff active/assigned, Event status/window, Ticket và confirmed Order.
+- [~] Atomic update `issued → checked_in`, bảo đảm tối đa một `SUCCESS`.
+- [~] Ghi `checkin_logs` cho SUCCESS và mọi kết quả từ chối nghiệp vụ.
+- [~] Hoàn thiện Admin Check-in Logs, Attendance/Revenue Reports và bộ lọc.
+- [~] Xuất Excel an toàn và test concurrency/report aggregation.
 - Bàn giao: Check-in chống trùng; logs và số lượt tham dự khớp dữ liệu nguồn.
 
 ### Tuần 7 — QA/UAT và deploy staging
@@ -963,10 +964,11 @@ Event đang mở check-in, Staff được phân công, Order confirmed, Ticket i
 Các test mock không thay thế kiểm tra khóa/trigger/concurrency trên MySQL thật
 hoặc thử camera thiết bị thật. Chỉ đánh dấu UAT hoàn thành sau các bước trên.
 
-Kết quả kiểm tra bản triển khai 2026-09-15: client lint/build, server typecheck/build
-và 58 test đều pass; thử tạo QR theo cấu hình phát hành hiện tại rồi giải mã bằng
-jsQR cũng pass. MySQL thật đã được cài và kiểm thử như mục dưới; camera thiết bị
-thật vẫn cần thử trực tiếp.
+Kết quả kiểm tra bản triển khai 2026-09-19: client lint/build, server typecheck/build
+và toàn bộ 67 test đều pass (trong đó 58 test Check-in/Reports); `npm run seed`, `npm run seed:workflows` và
+`npm run db:verify` pass 28/28. Trên MySQL local, hai lời gọi `checkIn` đồng thời
+với `TKT-QA-ONGOING-PAID-2` trả đúng một `SUCCESS` và một `ALREADY_CHECKED_IN`,
+với hai audit log tương ứng. Camera thiết bị thật vẫn cần thử trực tiếp.
 
 
 ## Admin Check-in Logs và Reports (Khôi)
@@ -1024,15 +1026,14 @@ khi bấm **Áp dụng bộ lọc**.
 - Tài khoản demo: `admin@ticketbox.local`, `staff@ticketbox.local`,
   `qa.staff@ticketbox.local`; mật khẩu local mẫu `ticketbox@123`.
 
-### Bằng chứng kiểm tra 2026-09-15
+### Bằng chứng kiểm tra 2026-09-19
 
-- Client lint/build và Server typecheck/build pass; 58 test pass (service, routes,
-  transaction, validation, XLSX đọc lại, phân quyền).
+- Client lint/build và Server typecheck/build pass; toàn bộ 67 test pass, gồm 58 test
+  Check-in/Reports (service, routes, transaction, validation, XLSX đọc lại, phân quyền).
 - Schema nạp vào instance MySQL mới; seed và seed:workflows thành công;
   `db:verify`: 28/28 kiểm tra pass trước khi chạy các lần quét UAT bổ sung.
-- HTTP thật: login Admin/Staff, quyền truy cập, hai request quét cùng
-  `TKT-QA-ONGOING-PAID-2` đồng thời: một SUCCESS, một ALREADY_CHECKED_IN.
-- HTTP thật: INVALID, WRONG_EVENT, STAFF_NOT_ASSIGNED, quét lại vé; log được ghi.
+- MySQL thật: hai lời gọi Check-in cùng `TKT-QA-ONGOING-PAID-2` đồng thời trả
+  một SUCCESS, một ALREADY_CHECKED_IN; mỗi kết quả có audit log.
 - Event QA ongoing: tiền thu 100.000 VND, 2 vé bán, 2 vé đã vào; lọc kỳ tương lai
   trả số 0. API Excel reports/checkins trả file XLSX đọc lại được bằng ExcelJS.
 - Chưa thử camera trên thiết bị thật. Các fixture QA có thời gian tương đối;
