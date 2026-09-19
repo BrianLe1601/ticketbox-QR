@@ -3,6 +3,7 @@ import { apiGet, apiPost } from "./api";
 
 export interface CreateOrderPayload {
     eventId: string;
+    idempotencyKey: string;
     emailVerificationToken: string;
     items: TicketSelection[];
     buyer: BuyerInfo;
@@ -14,7 +15,7 @@ export async function createOrder(payload: CreateOrderPayload): Promise<CreateOr
         emailVerificationToken: payload.emailVerificationToken,
         items: payload.items.map((i) => ({ ticketTypeId: i.ticketTypeId, quantity: i.quantity })),
         buyer: payload.buyer,
-    });
+    }, { "Idempotency-Key": payload.idempotencyKey });
     return data;
 }
 

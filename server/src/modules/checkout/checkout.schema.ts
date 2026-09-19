@@ -15,7 +15,24 @@ export const createOrderBodySchema = z.object({
             .refine((email) => email.endsWith('@gmail.com'), 'Vui lòng sử dụng địa chỉ Gmail'),
         phone: z.string().trim().max(20, 'Số điện thoại quá dài').optional(),
     }),
+}).superRefine((body, ctx) => {
+    const seen = new Set<number>();
+    body.items.forEach((item, index) => {
+        if (seen.has(item.ticketTypeId)) {
+            ctx.addIssue({
+                code: 'custom',
+                path: ['items', index, 'ticketTypeId'],
+                message: 'Mỗi loại vé chỉ được xuất hiện một lần',
+            });
+        }
+        seen.add(item.ticketTypeId);
+    });
 });
+
+export const idempotencyKeySchema = z.string()
+    .min(16, 'Idempotency-Key phải có ít nhất 16 ký tự')
+    .max(100, 'Idempotency-Key không được quá 100 ký tự')
+    .regex(/^[A-Za-z0-9._:-]+$/, 'Idempotency-Key chứa ký tự không hợp lệ');
 
 export const orderIdParamSchema = z.object({
     id: z.coerce.number().int().positive(),
