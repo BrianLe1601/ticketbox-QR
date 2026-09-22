@@ -35,6 +35,8 @@ const AdminPlaceholderPage = lazy(() => import("@/pages/admin/AdminPlaceholderPa
 const StaffLayout = lazy(() => import("@/layouts/StaffLayout").then((module) => ({ default: module.StaffLayout })));
 const StaffHomePage = lazy(() => import("@/pages/staff/StaffHomePage").then((module) => ({ default: module.StaffHomePage })));
 
+const AdminOperationsPage = lazy(() => import("@/pages/admin/AdminOperationsPage").then((module) => ({ default: module.AdminOperationsPage })));
+
 export function AppRoutes() {
     return (
         <Suspense fallback={<div className="route-loading" role="status">Loading module...</div>}><Routes>
@@ -60,8 +62,8 @@ export function AppRoutes() {
                     <Route path="orders" element={<AdminPlaceholderPage />} />
 >>>>>>> acc8e0fadc9a168c80a9ee9b76a3044b32ca4d5c
                     <Route path="staff" element={<AdminPlaceholderPage />} />
-                    <Route path="checkins" element={<AdminPlaceholderPage />} />
-                    <Route path="reports" element={<AdminPlaceholderPage />} />
+                    <Route path="checkins" element={<AdminOperationsPage key="checkins" kind="checkins" />} />
+                    <Route path="reports" element={<AdminOperationsPage key="reports" kind="reports" />} />
                 </Route>
             </Route>
 
