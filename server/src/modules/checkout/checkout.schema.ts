@@ -11,8 +11,7 @@ export const createOrderBodySchema = z.object({
     items: z.array(orderItemInputSchema).min(1, 'Cần chọn ít nhất 1 vé'),
     buyer: z.object({
         name: z.string().trim().min(1, 'Vui lòng nhập họ tên'),
-        email: z.string().trim().toLowerCase().email('Email không hợp lệ')
-            .refine((email) => email.endsWith('@gmail.com'), 'Vui lòng sử dụng địa chỉ Gmail'),
+        email: z.string().trim().toLowerCase().email('Email không hợp lệ'),
         phone: z.string().trim().max(20, 'Số điện thoại quá dài').optional(),
     }),
 }).superRefine((body, ctx) => {
@@ -42,10 +41,9 @@ export const orderLookupQuerySchema = z.object({
     token: z.string().min(1, 'Thiếu token tra cứu đơn hàng'),
 });
 
-const gmailSchema = z.string().trim().toLowerCase().email('Email không hợp lệ')
-    .refine((email) => email.endsWith('@gmail.com'), 'Vui lòng sử dụng địa chỉ Gmail');
-export const requestEmailVerificationBodySchema = z.object({ email: gmailSchema });
-export const confirmEmailVerificationBodySchema = z.object({ email: gmailSchema, code: z.string().regex(/^\d{6}$/, 'Mã xác minh gồm 6 chữ số') });
+const gmailSchema = z.string().trim().toLowerCase().email('Email không hợp lệ');
+export const requestEmailVerificationBodySchema = z.object({ email: gmailSchema, recaptchaToken: z.string().min(1).max(4096) });
+export const confirmEmailVerificationBodySchema = z.object({ email: gmailSchema, otp: z.string().regex(/^\d{6}$/, 'Mã xác minh gồm 6 chữ số') });
 
 export const payOrderBodySchema = z.object({
     token: z.string().min(1, 'Thiếu token thanh toán'),

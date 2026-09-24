@@ -3,8 +3,12 @@ import { eventsRouter } from '../modules/events/events.routes.js';
 import { checkoutRouter } from '../modules/checkout/checkout.routes.js';
 import { adminOrdersRouter } from '../modules/orders/admin-orders.routes.js';
 
+import { ticketsRouter } from '../modules/tickets/ticket-retrieval.routes.js';
+
 export const router = Router();
 
 router.use('/events', eventsRouter);
 router.use('/checkout', checkoutRouter);
+router.use('/', checkoutRouter);
+router.use('/tickets', ticketsRouter);
 router.use('/admin/orders', adminOrdersRouter);

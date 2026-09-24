@@ -14,6 +14,9 @@ export const orderIdParamSchema = z.object({
     id: z.coerce.number().int().positive(),
 });
 
+export const retryEmailParamSchema = z.object({ id: z.coerce.number().int().positive(), logId: z.coerce.number().int().positive() });
+export type RetryEmailParam = z.infer<typeof retryEmailParamSchema>;
+
 export const cancelOrderBodySchema = z.object({
     reason: z.string().trim().max(255).optional(),
 });

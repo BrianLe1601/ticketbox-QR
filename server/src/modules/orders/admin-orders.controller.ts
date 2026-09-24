@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
-import { listOrders, getOrderDetail, cancelOrder, resendTicketEmail } from './admin-orders.service.js';
+import { getOrderStats, listOrders, getOrderDetail, cancelOrder, resendTicketEmail, retryOrderEmail } from './admin-orders.service.js';
 import { sendSuccess, sendPaginated } from '../../utils/response.js';
-import type { ListOrdersQuery, AdminOrderIdParam, CancelOrderBody } from './admin-orders.schema.js';
+import type { ListOrdersQuery, AdminOrderIdParam, CancelOrderBody, RetryEmailParam } from './admin-orders.schema.js';
 
 export async function getOrders(req: Request, res: Response, next: NextFunction) {
     try {
@@ -30,6 +30,16 @@ export async function postCancelOrder(req: Request, res: Response, next: NextFun
 export async function postResendEmail(req: Request, res: Response, next: NextFunction) {
     try {
         const { id } = req.params as unknown as AdminOrderIdParam;
-        sendSuccess(res, await resendTicketEmail(id));
+        sendSuccess(res, await resendTicketEmail(id), 202);
     } catch (err) { next(err); }
+}
+export async function getStats(_req: Request, res: Response, next: NextFunction) {
+    try { sendSuccess(res, await getOrderStats()); } catch (error) { next(error); }
+}
+
+export async function postRetryEmail(req: Request, res: Response, next: NextFunction) {
+    try {
+        const { id, logId } = req.params as unknown as RetryEmailParam;
+        sendSuccess(res, await retryOrderEmail(id, logId), 202);
+    } catch (error) { next(error); }
 }

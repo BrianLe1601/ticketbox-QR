@@ -5,6 +5,13 @@ import { idempotencyKeySchema } from './checkout.schema.js';
 import type { CreateOrderBody, OrderIdParam, OrderLookupQuery, PayOrderBody } from './checkout.schema.js';
 import type { RequestEmailVerificationBody, ConfirmEmailVerificationBody } from './checkout.schema.js';
 import { requestEmailVerification, confirmEmailVerification } from '../../services/email-verification.service.js';
+import { z } from 'zod';
+import type { RequestHandler } from 'express';
+export const validateCheckoutSession: RequestHandler = (req, _res, next) => {
+    const result = z.string().uuid().safeParse(req.get('X-Checkout-Session'));
+    if (!result.success) return next(AppError.badRequest('Phiên checkout không hợp lệ', 'INVALID_CHECKOUT_SESSION'));
+    next();
+};
 import { AppError } from '../../utils/app-error.js';
 
 export async function postOrder(req: Request, res: Response, next: NextFunction) {
@@ -18,7 +25,7 @@ export async function postOrder(req: Request, res: Response, next: NextFunction)
         if (!parsedIdempotencyKey.success) {
             throw AppError.badRequest(parsedIdempotencyKey.error.issues[0]?.message, 'INVALID_IDEMPOTENCY_KEY');
         }
-        const order = await createOrder(body, parsedIdempotencyKey.data);
+        const order = await createOrder(body, parsedIdempotencyKey.data, req.get('X-Checkout-Session') ?? '');
         sendSuccess(res, order, 201);
     } catch (err) {
         next(err);
@@ -47,12 +54,12 @@ export async function postPayment(req: Request, res: Response, next: NextFunctio
 }
 
 export async function postEmailVerification(req: Request, res: Response, next: NextFunction) {
-    try { sendSuccess(res, await requestEmailVerification((req.body as RequestEmailVerificationBody).email)); } catch (err) { next(err); }
+    try { sendSuccess(res, await requestEmailVerification((req.body as RequestEmailVerificationBody).email, req.body.recaptchaToken, req.ip ?? req.socket.remoteAddress ?? 'unknown', req.get('X-Checkout-Session')!)); } catch (err) { next(err); }
 }
 
 export async function postEmailVerificationConfirm(req: Request, res: Response, next: NextFunction) {
     try {
         const body = req.body as ConfirmEmailVerificationBody;
-        sendSuccess(res, confirmEmailVerification(body.email, body.code));
+        sendSuccess(res, confirmEmailVerification(body.email, body.otp, req.get('X-Checkout-Session')!));
     } catch (err) { next(err); }
 }

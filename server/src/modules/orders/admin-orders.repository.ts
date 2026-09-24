@@ -69,16 +69,19 @@ export interface AdminPaymentRow extends RowDataPacket {
 }
 
 export interface AdminEmailLogRow extends RowDataPacket {
+    attempt_count: number; next_attempt_at: Date | null;
     id: number;
     recipient: string;
     email_type: 'ticket_issued' | 'ticket_resent' | 'order_cancelled';
-    status: 'pending' | 'sent' | 'failed';
+    status: 'pending' | 'processing' | 'sent' | 'failed';
     error_message: string | null;
     sent_at: Date | null;
     created_at: Date;
 }
 
 export interface ResendTicketRow extends RowDataPacket {
+    qr_token_hash: string; qr_token_encrypted: string | null;
+    event_name: string; start_time: Date; end_time: Date; venue: string;
     id: number;
     order_item_id: number;
     ticket_code: string;
@@ -171,36 +174,25 @@ export async function findOrderPayments(orderId: number) {
 
 export async function findOrderEmailLogs(orderId: number) {
     const [rows] = await pool.query<AdminEmailLogRow[]>(
-        `SELECT id, recipient, email_type, status, error_message, sent_at, created_at
+        `SELECT id, recipient, email_type, status, error_message, attempt_count, next_attempt_at, sent_at, created_at
          FROM email_logs WHERE order_id = ? ORDER BY id DESC`,
         [orderId]
     );
     return rows;
 }
 
-export async function findTicketsForResend(orderId: number) {
-    const [rows] = await pool.query<ResendTicketRow[]>(
-        `SELECT t.id, t.order_item_id, t.ticket_code, oi.ticket_type_name, t.holder_name, t.holder_email
+export async function findTicketsForResend(orderId: number, conn?: PoolConnection, includeCancelled = false) {
+    const [rows] = await (conn ?? pool).query<ResendTicketRow[]>(
+        `SELECT t.id, t.order_item_id, t.ticket_code, t.qr_token_hash, t.qr_token_encrypted, tt.name AS ticket_type_name, t.holder_name, t.holder_email, e.name AS event_name, e.start_time, e.end_time, e.venue
          FROM tickets t
          JOIN order_items oi ON oi.id = t.order_item_id
-         WHERE oi.order_id = ? AND t.status != 'cancelled'
+         JOIN ticket_types tt ON tt.id = oi.ticket_type_id
+         JOIN events e ON e.id = tt.event_id
+         WHERE oi.order_id = ? ${includeCancelled ? '' : "AND t.status = 'issued'"}
          ORDER BY t.id ASC`,
         [orderId]
     );
     return rows;
-}
-
-export async function insertResendEmailLog(orderId: number, recipient: string) {
-    const [result] = await pool.query<ResultSetHeader>(
-        `INSERT INTO email_logs (order_id, recipient, email_type, status)
-         VALUES (?, ?, 'ticket_resent', 'pending')`,
-        [orderId, recipient]
-    );
-    return result.insertId;
-}
-
-export async function rotateTicketQrToken(conn: PoolConnection, ticketId: number, newHash: string) {
-    await conn.query(`UPDATE tickets SET qr_token_hash = ? WHERE id = ?`, [newHash, ticketId]);
 }
 
 /** Hủy order đang pending_payment: trả reserved_quantity, chuyển sang cancelled. */
@@ -248,4 +240,13 @@ export async function cancelConfirmedOrder(
         }
     }
     await conn.query(`UPDATE orders SET status = 'cancelled', cancelled_at = NOW(3) WHERE id = ?`, [orderId]);
+}
+export async function findOrderStats() {
+    const [rows] = await pool.query<RowDataPacket[]>(`
+        SELECT COALESCE(SUM(status = 'pending_payment'), 0) AS pending,
+               COALESCE(SUM(status = 'confirmed' AND confirmed_at >= CURRENT_DATE()
+                   AND confirmed_at < CURRENT_DATE() + INTERVAL 1 DAY), 0) AS paidToday,
+               COALESCE(SUM(status = 'expired'), 0) AS expired
+        FROM orders`);
+    return { pending: Number(rows[0]?.pending ?? 0), paidToday: Number(rows[0]?.paidToday ?? 0), expired: Number(rows[0]?.expired ?? 0) };
 }

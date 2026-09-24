@@ -1,14 +1,12 @@
-import crypto from 'node:crypto';
 import { AppError } from '../../utils/app-error.js';
-import { withTransaction, findOrderByIdForUpdate, finishEmailLog } from '../checkout/checkout.repository.js';
+import { withTransaction, findOrderByIdForUpdate } from '../checkout/checkout.repository.js';
 import {
-    findOrdersList, findOrderDetail, findOrderItems, findOrderTickets,
-    findOrderPayments, findOrderEmailLogs, findTicketsForResend,
-    insertResendEmailLog, rotateTicketQrToken, cancelPendingOrder, cancelConfirmedOrder,
+    findOrderStats, findOrdersList, findOrderDetail, findOrderItems, findOrderTickets,
+    findOrderPayments, findOrderEmailLogs,
+    cancelPendingOrder, cancelConfirmedOrder,
 } from './admin-orders.repository.js';
 import type { ListOrdersQuery, CancelOrderBody } from './admin-orders.schema.js';
-import { createTicketQrDataUrl } from '../../services/qr.service.js';
-import { sendTicketEmail } from '../../services/mail.service.js';
+import { enqueueTicketEmail } from '../tickets/ticket-email.repository.js';
 
 export async function listOrders(query: ListOrdersQuery) {
     const { rows, total } = await findOrdersList(query);
@@ -95,6 +93,8 @@ export async function getOrderDetail(orderId: number) {
             emailType: e.email_type,
             status: e.status,
             errorMessage: e.error_message,
+            attemptCount: e.attempt_count,
+            nextAttemptAt: e.next_attempt_at,
             sentAt: e.sent_at,
             createdAt: e.created_at,
         })),
@@ -121,50 +121,18 @@ export async function cancelOrder(orderId: number, adminUserId: number, body: Ca
     return getOrderDetail(orderId);
 }
 
-/** Xoay vòng QR token của các vé chưa hủy rồi gửi lại email — QR trong email cũ sẽ mất hiệu lực. */
+/** Queue delivery of the original QR; never rotate credentials. */
 export async function resendTicketEmail(orderId: number) {
     const order = await findOrderDetail(orderId);
     if (!order) throw AppError.notFound('Không tìm thấy đơn hàng');
-    if (order.status !== 'confirmed') {
-        throw AppError.badRequest('Chỉ gửi lại vé cho đơn hàng đã thanh toán', 'ORDER_NOT_CONFIRMED');
-    }
-
-    const ticketRows = await findTicketsForResend(orderId);
-    if (ticketRows.length === 0) {
-        throw AppError.badRequest('Đơn hàng không còn vé hợp lệ để gửi lại', 'NO_ACTIVE_TICKETS');
-    }
-
-    const tickets = await withTransaction(async (conn) => {
-        const result: { ticketCode: string; ticketTypeName: string; qrDataUrl: string }[] = [];
-        for (const row of ticketRows) {
-            const rawToken = crypto.randomBytes(32).toString('hex');
-            const hash = crypto.createHash('sha256').update(rawToken).digest('hex');
-            await rotateTicketQrToken(conn, row.id, hash);
-            result.push({
-                ticketCode: row.ticket_code,
-                ticketTypeName: row.ticket_type_name,
-                qrDataUrl: await createTicketQrDataUrl(rawToken),
-            });
-        }
-        return result;
-    });
-
-    const emailLogId = await insertResendEmailLog(orderId, order.buyer_email);
-    try {
-        const info = await sendTicketEmail({
-            recipient: order.buyer_email,
-            buyerName: order.buyer_name,
-            orderCode: order.order_code,
-            tickets,
-        });
-        await finishEmailLog(emailLogId, true, info.messageId);
-        return {
-            orderId, orderCode: order.order_code, buyerEmail: order.buyer_email,
-            ticketCount: tickets.length, emailSent: true,
-        };
-    } catch (error) {
-        const message = error instanceof Error ? error.message : 'Gmail từ chối nhận thư';
-        await finishEmailLog(emailLogId, false, undefined, message);
-        throw AppError.badRequest(`Không gửi được email: ${message}`, 'EMAIL_SEND_FAILED');
-    }
+    const queued = await enqueueTicketEmail(orderId, order.buyer_email, 'ticket_resent');
+    return { orderId, ...queued, message: 'Đã xếp lịch gửi lại vé.' };
 }
+
+export async function retryOrderEmail(orderId: number, logId: number) {
+    const order = await findOrderDetail(orderId);
+    if (!order) throw AppError.notFound('Không tìm thấy đơn hàng');
+    const queued = await enqueueTicketEmail(orderId, order.buyer_email, 'ticket_resent', logId);
+    return { orderId, ...queued, message: 'Đã xếp lịch thử gửi lại email.' };
+}
+export async function getOrderStats() { return findOrderStats(); }

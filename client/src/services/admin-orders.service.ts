@@ -4,7 +4,7 @@ import { getStoredToken } from "@/services/auth.service";
 export type AdminOrderStatus = "pending_payment" | "confirmed" | "expired" | "cancelled";
 export type TicketRowStatus = "issued" | "checked_in" | "cancelled";
 export type PaymentRowStatus = "pending" | "success" | "failed" | "cancelled";
-export type EmailLogStatus = "pending" | "sent" | "failed";
+export type EmailLogStatus = "pending" | "processing" | "sent" | "failed";
 
 export interface AdminOrderListItem {
     id: number;
@@ -59,6 +59,8 @@ export interface AdminOrderEmailLog {
     emailType: "ticket_issued" | "ticket_resent" | "order_cancelled";
     status: EmailLogStatus;
     errorMessage: string | null;
+    attemptCount: number;
+    nextAttemptAt: string | null;
     sentAt: string | null;
     createdAt: string;
 }
@@ -89,10 +91,10 @@ export interface AdminOrderDetail {
 
 export interface ResendEmailResult {
     orderId: number;
-    orderCode: string;
-    buyerEmail: string;
-    ticketCount: number;
-    emailSent: boolean;
+    jobId: number;
+    queued: true;
+    status: "pending" | "processing";
+    message: string;
 }
 
 export interface ListOrdersFilters {
@@ -134,4 +136,12 @@ export async function resendAdminOrderEmail(id: number) {
     return (await apiRequest<ResendEmailResult>(`/admin/orders/${id}/resend-email`, {
         method: "POST",
     }, auth())).data;
+}
+export interface OrderStats { pending: number; paidToday: number; expired: number }
+export async function getAdminOrderStats() {
+    return (await apiRequest<OrderStats>('/admin/orders/stats', {}, getStoredToken())).data;
+}
+
+export async function retryAdminOrderEmail(id: number, logId: number) {
+    return (await apiRequest<ResendEmailResult>(`/admin/orders/${id}/email-logs/${logId}/retry`, { method: "POST" }, auth())).data;
 }
