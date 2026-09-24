@@ -8,11 +8,15 @@ import { confirmEmailVerification, createOrder, requestEmailVerification } from 
 import { ApiRequestError } from "@/services/api";
 import { formatPrice } from "@/lib/utils";
 
+import { useRecaptcha } from "@/hooks/useRecaptcha";
+import { useEmailCooldown } from "@/hooks/useEmailCooldown";
+
 interface LocationState {
     selections?: TicketSelection[];
 }
 
 export function CheckoutPlaceholder() {
+    const captcha = useRecaptcha();
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const location = useLocation();
@@ -21,6 +25,8 @@ export function CheckoutPlaceholder() {
         [location.state],
     );
 
+    const { remaining, start } = useEmailCooldown();
+    const checkoutSession = useRef(crypto.randomUUID());
     const [event, setEvent] = useState<Event | null | undefined>(undefined);
     const [notFoundId, setNotFoundId] = useState<string | null>(null);
     const [name, setName] = useState("");
@@ -76,8 +82,8 @@ export function CheckoutPlaceholder() {
 
     async function handleSubmit(e: FormEvent) {
         e.preventDefault();
-        if (!event || totalQuantity === 0 || submitting) return;
-        if (!verificationToken) { setError("Vui lòng xác minh Gmail trước khi tiếp tục"); return; }
+        if (!event || totalQuantity === 0 || submitting || !captcha.ready) return;
+        if (!verificationToken) { setError("Vui lòng xác minh email trước khi tiếp tục"); return; }
         setSubmitting(true);
         setError(null);
         try {
@@ -85,6 +91,7 @@ export function CheckoutPlaceholder() {
                 eventId: event.id,
                 idempotencyKey: idempotencyKeyRef.current,
                 emailVerificationToken: verificationToken,
+                checkoutSession: checkoutSession.current,
                 items: selections,
                 buyer: { name: name.trim(), email: email.trim(), phone: phone.trim() || undefined },
             });
@@ -99,22 +106,23 @@ export function CheckoutPlaceholder() {
     }
 
     async function handleSendCode() {
-        if (sendingCode) return;
+        if (sendingCode || remaining || !captcha.ready) return;
         setSendingCode(true); setError(null); setVerificationToken("");
         try {
-            await requestEmailVerification(email.trim());
+            await requestEmailVerification(email.trim(), await captcha.getToken("checkout_email"), checkoutSession.current);
+            start(60);
             setCodeSent(true);
-        } catch (err) { setError(err instanceof ApiRequestError ? err.message : "Không gửi được mã xác minh"); }
-        finally { setSendingCode(false); }
+            setSendingCode(false);
+        } catch (err) { if (err instanceof ApiRequestError && err.code === "RATE_LIMITED") start(err.retryAfterSeconds ?? 60); setError(err instanceof Error ? err.message : "Không gửi được mã xác minh"); setSendingCode(false); }
     }
 
     async function handleVerifyCode() {
         if (verifyingCode) return;
         setVerifyingCode(true); setError(null);
         try {
-            const result = await confirmEmailVerification(email.trim(), verificationCode.trim());
+            const result = await confirmEmailVerification(email.trim(), verificationCode.trim(), checkoutSession.current);
             setVerificationToken(result.verificationToken);
-        } catch (err) { setError(err instanceof ApiRequestError ? err.message : "Không xác minh được Gmail"); }
+        } catch (err) { setError(err instanceof ApiRequestError ? err.message : "Không xác minh được email"); }
         finally { setVerifyingCode(false); }
     }
 
@@ -136,28 +144,30 @@ export function CheckoutPlaceholder() {
                 <form onSubmit={handleSubmit} className="sm:col-span-3 space-y-4">
                     <div>
                         <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Họ và tên</label>
-                        <input required value={name} onChange={(e) => setName(e.target.value)} placeholder="Nguyễn Văn A" className="w-full px-3.5 py-2.5 rounded-xl bg-card border border-white/[0.08] text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all" />
+                        <input aria-label="Họ và tên" required value={name} onChange={(e) => setName(e.target.value)} placeholder="Nguyễn Văn A" className="w-full px-3.5 py-2.5 rounded-xl bg-card border border-white/[0.08] text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all" />
                     </div>
                     <div>
                         <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Email nhận vé</label>
                         <div className="flex gap-2">
-                            <input required type="email" value={email} disabled={Boolean(verificationToken)} onChange={(e) => { setEmail(e.target.value); setCodeSent(false); setVerificationToken(""); }} placeholder="ban@gmail.com" className="min-w-0 flex-1 px-3.5 py-2.5 rounded-xl bg-card border border-white/[0.08] text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 disabled:opacity-70" />
-                            <button type="button" onClick={handleSendCode} disabled={sendingCode || Boolean(verificationToken) || !email} className="px-3 rounded-xl border border-primary/30 text-primary text-xs font-bold disabled:opacity-50">{sendingCode ? "Đang gửi..." : "Gửi mã"}</button>
+                            <input aria-label="Email nhận vé" required type="email" value={email} disabled={Boolean(verificationToken) || sendingCode || verifyingCode} onChange={(e) => { setEmail(e.target.value); setCodeSent(false); setVerificationToken(""); }} placeholder="ban@gmail.com" className="min-w-0 flex-1 px-3.5 py-2.5 rounded-xl bg-card border border-white/[0.08] text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 disabled:opacity-70" />
+                            <button type="button" onClick={handleSendCode} disabled={!captcha.ready || sendingCode || remaining > 0 || Boolean(verificationToken) || !email} className="px-3 rounded-xl border border-primary/30 text-primary text-xs font-bold disabled:opacity-50">{sendingCode ? "Đang gửi..." : remaining > 0 ? `Gửi lại sau ${remaining}s` : "Gửi mã"}</button>
                         </div>
+                        {!captcha.ready && !captcha.error && <p role="status" className="mt-2 text-xs">Đang tải xác minh reCAPTCHA...</p>}
+                        {captcha.error && <div className="mt-2 text-xs"><p role="alert">{captcha.error}</p><button type="button" onClick={captcha.retry} className="underline hover:text-primary focus-visible:outline-2">Thử tải lại xác minh</button></div>}
                         {codeSent && !verificationToken && <div className="flex gap-2 mt-2">
-                            <input value={verificationCode} onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric" placeholder="Nhập mã 6 số" className="min-w-0 flex-1 px-3.5 py-2.5 rounded-xl bg-card border border-white/[0.08] text-sm text-foreground" />
+                            <input aria-label="Mã xác minh" autoComplete="one-time-code" value={verificationCode} onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric" placeholder="Nhập mã 6 số" className="min-w-0 flex-1 px-3.5 py-2.5 rounded-xl bg-card border border-white/[0.08] text-sm text-foreground" />
                             <button type="button" onClick={handleVerifyCode} disabled={verifyingCode || verificationCode.length !== 6} className="px-3 rounded-xl bg-primary text-white text-xs font-bold disabled:opacity-50">{verifyingCode ? "Đang kiểm tra..." : "Xác minh"}</button>
                         </div>}
-                        {verificationToken && <p className="mt-2 text-xs text-emerald-400 flex items-center gap-1"><MailCheck size={13} /> Gmail đã được xác minh</p>}
+                        {verificationToken && <p className="mt-2 text-xs text-emerald-400 flex items-center gap-1"><MailCheck size={13} /> email đã được xác minh</p>}
                     </div>
                     <div>
                         <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Số điện thoại <span className="text-muted-foreground/60 font-normal">(không bắt buộc)</span></label>
-                        <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="09xxxxxxxx" className="w-full px-3.5 py-2.5 rounded-xl bg-card border border-white/[0.08] text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all" />
+                        <input aria-label="Số điện thoại" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="09xxxxxxxx" className="w-full px-3.5 py-2.5 rounded-xl bg-card border border-white/[0.08] text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all" />
                     </div>
 
-                    {error && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>}
+                    {error && <p role="alert" className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>}
 
-                    <button type="submit" disabled={submitting || !verificationToken} className="w-full py-3.5 rounded-xl bg-primary text-white font-bold text-sm flex items-center justify-center gap-2 hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed shadow-lg shadow-primary/30 transition-all">
+                    <button type="submit" disabled={!captcha.ready || submitting || !verificationToken} className="w-full py-3.5 rounded-xl bg-primary text-white font-bold text-sm flex items-center justify-center gap-2 hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed shadow-lg shadow-primary/30 transition-all">
                         {submitting && <Loader2 size={15} className="animate-spin" />}
                         {submitting ? "Đang giữ vé..." : "Tiếp tục"}
                     </button>

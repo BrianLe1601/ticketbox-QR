@@ -4,15 +4,17 @@ import {
     withTransaction, findEventForOrder, lockTicketTypes, incrementReserved,
     insertOrder, insertOrderItem, findOrderByIdForUpdate, findOrderByIdReadOnly,
     findOrderItemsByOrderId, expireOrder, findExpiredPendingOrderIds, insertSuccessfulPayment,
-    issueTicket, confirmOrderAndInventory, insertEmailLog, finishEmailLog,
+    issueTicket, confirmOrderAndInventory, insertEmailLog,
     findOrderEventId, lockEventRow, findOrderByIdempotencyKeyForUpdate,
     findOrderItemsByOrderIdForUpdate, findOrderByIdempotencyKeyReadOnly,
 } from './checkout.repository.js';
 import type { CreateOrderBody } from './checkout.schema.js';
 import { createTicketQrDataUrl } from '../../services/qr.service.js';
-import { sendTicketEmail } from '../../services/mail.service.js';
+import { encryptQrToken } from '../../services/qr-encryption.service.js';
 import { assertEmailVerified, consumeEmailVerification } from '../../services/email-verification.service.js';
 import { env } from '../../config/env.js';
+
+import { findTicketsForResend } from '../orders/admin-orders.repository.js';
 
 const HOLD_MINUTES = 10;
 
@@ -86,7 +88,7 @@ function mapOrderResponse(
     };
 }
 
-export async function createOrder(body: CreateOrderBody, idempotencyKey: string) {
+export async function createOrder(body: CreateOrderBody, idempotencyKey: string, checkoutSession = '') {
     const { raw: lookupTokenRaw, hash: lookupTokenHash } = generateLookupToken(idempotencyKey);
     const expiresAt = new Date(Date.now() + HOLD_MINUTES * 60_000);
     // Tránh khóa Event của request rồi mới khóa một Order thuộc Event khác.
@@ -108,7 +110,7 @@ export async function createOrder(body: CreateOrderBody, idempotencyKey: string)
             return { orderId: existingOrder.id, created: false };
         }
 
-        assertEmailVerified(body.buyer.email, body.emailVerificationToken);
+        assertEmailVerified(body.buyer.email, body.emailVerificationToken, checkoutSession);
         if (!event || !['published','ongoing'].includes(event.status) || event.visibility !== 'visible') {
             throw AppError.badRequest('Sự kiện không tồn tại hoặc chưa mở bán', 'EVENT_NOT_AVAILABLE');
         }
@@ -291,13 +293,15 @@ export async function payOrder(orderId: number, token: string) {
                     orderItemId: item.id,
                     ticketCode,
                     qrTokenHash: crypto.createHash('sha256').update(rawToken).digest('hex'),
+                    qrTokenEncrypted: encryptQrToken(rawToken, ticketCode),
                     holderName: order.buyer_name,
                     holderEmail: order.buyer_email,
                 });
                 tickets.push({ ticketCode, ticketTypeName: item.ticket_type_name, rawToken });
             }
         }
-        return { kind: 'issued' as const, order, tickets };
+        const emailLogId = await insertEmailLog(order.id, order.buyer_email, conn);
+        return { kind: 'issued' as const, order, tickets, emailLogId };
     });
 
     if (paymentOutcome.kind === 'expired') {
@@ -305,38 +309,25 @@ export async function payOrder(orderId: number, token: string) {
     }
     const issued = paymentOutcome;
 
+    const mailRows = await findTicketsForResend(issued.order.id, undefined, true);
     const tickets = await Promise.all(issued.tickets.map(async (ticket) => ({
+        eventName: mailRows.find(row => row.ticket_code === ticket.ticketCode)!.event_name,
+        startTime: mailRows.find(row => row.ticket_code === ticket.ticketCode)!.start_time,
+        endTime: mailRows.find(row => row.ticket_code === ticket.ticketCode)!.end_time,
+        venue: mailRows.find(row => row.ticket_code === ticket.ticketCode)!.venue,
         ticketCode: ticket.ticketCode,
         ticketTypeName: ticket.ticketTypeName,
         qrDataUrl: await createTicketQrDataUrl(ticket.rawToken),
     })));
 
-    let emailSent = false;
-    let emailMessage = 'Vé đã được tạo nhưng chưa gửi được email';
-    const emailLogId = await insertEmailLog(issued.order.id, issued.order.buyer_email);
-    try {
-        const info = await sendTicketEmail({
-            recipient: issued.order.buyer_email,
-            buyerName: issued.order.buyer_name,
-            orderCode: issued.order.order_code,
-            tickets,
-        });
-        emailSent = true;
-        emailMessage = `Đã gửi ${tickets.length} vé đến ${issued.order.buyer_email}`;
-        await finishEmailLog(emailLogId, true, info.messageId);
-    } catch (error) {
-        const message = error instanceof Error ? error.message : 'Gmail từ chối nhận thư';
-        emailMessage = message;
-        await finishEmailLog(emailLogId, false, undefined, message);
-    }
 
     return {
         orderId: issued.order.id,
         orderCode: issued.order.order_code,
         status: 'confirmed' as const,
         buyerEmail: issued.order.buyer_email,
-        emailSent,
-        emailMessage,
+        emailSent: false,
+        emailMessage: 'Vé đã được tạo. Email đang được gửi đến địa chỉ của bạn.',
         tickets,
     };
 }
