@@ -10,14 +10,35 @@
 
 | Owner | Primary responsibility | Owned API/modules |
 |---|---|---|
-| Bửu | Leader, platform, database, backend authentication, login, Admin Events, Admin Ticket Types, Admin Staff, Admin Categories | `auth`, `categories`, admin `events`, admin `ticket-types`, admin `staff`, shared platform/database |
-| Tài | Public Event experience, Order, Payment, QR, Email | public `events`, `orders`, `payments`, `tickets`, QR and mail delivery |
+| Bửu | Leader, platform, database, backend authentication, login, Admin Events, Admin Ticket Types, Admin Staff, Admin Categories; Admin Dashboard and planned realtime Admin notifications | `auth`, `categories`, admin `events`, admin `ticket-types`, `admin-staff`, shared platform/database |
+| Tài | Public Event experience, Checkout, Order, Payment, QR, initial ticket Email and Admin Orders | public `events`, `checkout`, QR and initial mail delivery, admin Orders |
 | Khôi | Scanner, Check-in, Admin Check-in Logs, Admin Reports | `checkins`, scanner/staff gate UI, admin check-in logs and reports |
 
 - The owner of a module designs and implements that module's API, tests, migrations, frontend service and UI integration.
 - Shared contracts (`events`, `ticket_types`, `orders`, API response types, auth middleware, migrations) require review by the affected downstream owner.
 - Do not duplicate another owner's business rule in UI-only code. Put canonical decisions in the owning backend service and expose a stable code/message to consumers.
 - Cross-module delivery order is: migration -> repository -> service -> controller -> route -> client service -> UI -> tests/docs.
+
+## Agreed product scope and task boundaries
+
+- Guests buy by email without an account. The Public Header has no Login/Register entry points; `/login` remains for Admin and Staff. The team removed Ticket Retrieval and customer ticket-email resend from scope. Do not add retrieval/resend routes, UI or a new QR recovery contract without a new team decision.
+- Scope Bửu's Admin Staff work to Staff account administration and Event assignment. Tài owns Checkout/OTP, initial ticket delivery and Admin Orders; Khôi owns scanner/check-in. Preserve the existing `ticketbox:<raw-token>` QR contract and hash-only ticket lookup until Tài and Khôi review any proposed change.
+- Tài owns the planned OTP reCAPTCHA v3 verification, IP/email/action rate limit, HTTP 429 and resend countdown. These remain planned until implemented and tested. The cancellation-notification retry job is a separate existing workflow, not a customer ticket resend feature.
+- Bửu owns general realtime Admin notifications; keep notification-center work in a later task until event source, recipients, delivery and authorization are specified. Event lifecycle status push is already a separate, public-data-only WebSocket transport and must not be presented as a completed Admin notification center.
+- Edit only files needed for the current task; do not perform broad refactors or overwrite another owner's work. A shared schema, API contract, or business-workflow change requires affected-owner review before implementation.
+- Before changing a shared contract, trace its effect on Public/User, Admin, Staff, Event, Ticket, Payment, Email and Check-in; keep schema edits in the existing database workflow and validate affected routes and tests.
+- Do not commit, push, merge, create a pull request, or change Trello on an agent's own initiative. Run relevant checks and report changed files and unverified behavior; never mark a feature complete from documentation alone.
+
+### Personal Staff accounts and Event assignment (target Admin workflow)
+
+- Default to one `users(role='staff')` account per person, not one shared login per Event. Reuse the same account across non-overlapping Events through `event_staff`; multiple Staff accounts may be assigned to one Event. Do not invent a group/membership table or a one-account-per-Event rule.
+- Google sign-in may create an inactive, pending Staff profile; Admin alone approves/rejects it, edits the profile, activates/deactivates it and manages assignments. Staff cannot self-approve, self-assign, change Event permissions, or access Admin functions. Authentication alone never grants check-in access; Khôi's backend must still check active Staff, active assignment and Event check-in window.
+- Staff onboarding uses Google sign-in, not an open Staff password-registration form. The backend verifies the Google ID token against the configured web client ID, uses Google's stable `sub` as the account identity, and requires a verified email. Never infer identity solely from an email match or link a Google login to an existing local Admin/Staff account automatically.
+- A first Google login creates a `staff` record with approval `pending` and `is_active = FALSE`; it must not issue a TicketBox access/refresh session. Only an Admin can approve, reject, deactivate or reactivate. Approval does not auto-assign an Event. Password login remains for existing local Admin and seeded development accounts; Google-only Staff have no local password.
+- Google client IDs are environment configuration, not Staff credentials. Never trust a frontend-supplied role, email, score or approval status. Keep Google token verification and role/approval decisions on the backend. Do not add Google access tokens or raw ID tokens to application logs.
+- When a Staff member leaves, revoke every active `event_staff` row before setting `users.is_active = FALSE` (required by the trigger); invalidate their sessions and retain their account, assignments and `checkin_logs` for audit. Reactivation and reassignment may reuse the same account; never delete/recreate it merely because an Event or employment period ends.
+- Assignment must reject inactive Staff, terminal Events, Events whose `end_time` has passed, duplicate active Staff/Event pairs and overlapping Event schedules for the same Staff account. Preserve `assigned_by`, `assigned_at` and `revoked_at`; revoke then create a new row instead of rewriting assignment identity. Event schedule changes require resolving active assignments first.
+- `checkin_logs.staff_id` must identify the person operating the gate. Shared credentials defeat individual accountability and are not the default; any emergency exception needs explicit approval, a limited scope and credential rotation. Do not change Tài's QR or Khôi's check-in contract to implement Admin Staff.
 
 ## Commands before handoff
 - Client: `npm run lint` and `npm run build` from `client`.
@@ -27,7 +48,7 @@
 
 ## Daily Git workflow
 
-Use `develop` as the integration branch and `main` only for reviewed releases. Each person works on their own branch (`buu`, `tai`, or `khoi`) or a short-lived branch prefixed with their name.
+Use `develop` as the integration branch and `main` only for reviewed releases. Work on the existing owner branch (currently `buu-events`, `tai`, or `khoi-checkin-reports`) or a short-lived owner-prefixed branch. Verify the actual branch name before switching; never invent a branch.
 
 Before coding:
 
@@ -35,7 +56,7 @@ Before coding:
 git status
 git switch develop
 git pull --ff-only origin develop
-git switch <buu|tai|khoi>
+git switch <existing-owner-branch>
 git merge develop
 ```
 
@@ -63,6 +84,8 @@ git push origin <branch-name>
 - Validate all request params/query/body with Zod. Return stable application error codes with safe messages.
 - Use ESM imports ending in `.js` in server TypeScript. Use `import type` for type-only imports.
 - Keep secrets in server environment variables. Never place secrets in `client`, examples, logs, or Git.
+- Never hardcode or log an API key, reCAPTCHA secret, OTP, password or authentication token; the frontend may contain only a public reCAPTCHA site key.
+- Never put an Order lookup token or QR credential in a URL, access log, analytics event or error message. The current GET lookup query and Morgan `:url` logging need an owner-reviewed fix before staging.
 - Database changes must be coordinated by Bửu and merged into the single schema file only after reviewing every affected module.
 
 ## Database schema workflow
@@ -132,8 +155,11 @@ users -> auth_sessions
 
 ## Event and ticket invariants
 - Lifecycle: `draft -> published -> ongoing -> completed`; `published` and `ongoing` may transition to `cancelled`.
+- Time-based lifecycle is server-owned: persist `published -> ongoing` at `start_time` and `ongoing -> completed` at `end_time` with the idempotent Event lifecycle transaction. Run it at startup, every second in the lifecycle job and after Event fixture seeds. Only after commit, publish the changed Event ids/statuses through `/ws/events`; Admin/Public clients must refetch REST data rather than trust or write the WebSocket payload. Keep one shared client socket, heartbeat/reconnect cleanup and the 60-second polling fallback. The in-process broadcaster is single-instance only; a multi-instance deployment requires a shared broker before claiming cross-instance realtime delivery.
+- Public APIs may retain visible completed Events as read-only history, but must always derive `saleStatus='closed'`; cancelled Events remain hidden and terminal.
 - Draft without orders may be permanently deleted. Draft is not cancelled.
 - Publishing and showing a published/ongoing Event require at least one active, valid Ticket Type.
+- `checkin_start_at` must be on the same Vietnam calendar date as `events.start_time` and at least 30 minutes before Event start; `checkin_end_at` must be after check-in start and no later than Event end. Enforce this in Admin UI, backend service validation and the schema constraint—never rely on the browser alone.
 - A visible published/ongoing Event must never lose its final active valid Ticket Type. Hide the Event or activate a replacement tier first.
 - Hiding controls public visibility only; it does not erase orders or automatically mutate Ticket Type intent.
 - Ticket capacity must not exceed venue capacity. It cannot fall below reserved + sold inventory.
@@ -152,6 +178,19 @@ users -> auth_sessions
 - Prefer `transform` and `opacity` for animations. Avoid continuous full-screen blur/filter, layout-thrashing animation, or overlapping timers.
 - Respect `prefers-reduced-motion`. Keep route transitions bounded and cancel timers/listeners during cleanup.
 
+### Admin summary-card filtering contract
+
+- Use Admin Staff as the interaction reference for Admin summary metrics: every card that names a list segment and shows a count must act as a filter, not as decoration. Clicking it updates the existing list in place without route navigation or a full-page reload; clicking the total card restores the complete base scope.
+- Implement metric filters with local state for an already-loaded complete dataset, or URL query state when the filter must be shareable/back-button aware. Do not navigate away merely to filter. A server-paginated page must receive aggregate counts from the API for the same base scope; never calculate a claimed global total from only the current page.
+- Counts and rows must use one canonical predicate. Selecting a card must produce the exact segment represented by its label/count. Reset incompatible text search, page number and subfilters on selection unless the UI explicitly displays that filters are combined; preserve only stable parent scope such as the currently selected Event.
+- Render interactive cards as semantic `<button type="button">` elements where possible. Provide visible hover, focus and selected states, `aria-pressed`, an action-oriented Vietnamese `aria-label`, keyboard activation and a disabled/loading state. Color alone must not identify the active filter.
+- Keep the selected metric visibly active and synchronize any duplicated status tabs/dropdowns with the same state. Search, sort, refresh, mutations and WebSocket refetches must not silently desynchronize the selected card, count and visible rows. Show a contextual empty state such as “Không có sự kiện đã hủy”, not a generic load failure.
+- Category segments are `all`, `active` and `inactive`: **Tổng danh mục**, **Đang hoạt động**, **Đã vô hiệu hóa**. “Sự kiện liên kết” is informational unless its click behavior and exact predicate are explicitly designed.
+- Event segments follow the persisted lifecycle exactly: `all`, `draft`, `published`, `ongoing`, `completed`, `cancelled`. Labels are **Tổng sự kiện**, **Bản nháp**, **Đã công bố**, **Đang diễn ra**, **Đã kết thúc**, **Đã hủy**. Do not merge statuses into a card if the user needs to inspect them separately; do not infer state from dates on the client when the API already supplies effective status.
+- Ticket Type segments describe Ticket Type state/inventory: **Tổng hạng vé**, **Đang bán/đang hoạt động**, **Tạm dừng**, **Hết vé**, and optionally **Có vé đang giữ**. `draft`, `published`, `ongoing`, `completed`, `cancelled` belong to the parent Event, not to a Ticket Type. If the Hạng vé screen needs those labels, use them only to filter the Event browser/sidebar, then filter tiers within the selected Event by tier predicates such as `isActive`, `availableQuantity`, `reservedQuantity` and `soldQuantity`.
+- Reuse the current Admin design tokens, spacing, status colors, responsive grid and compact confirmation-dialog pattern. On narrow screens, allow horizontal metric-card scrolling or a compact grid without hiding filters or causing page-level horizontal overflow.
+- Before declaring an Admin filter complete, test each card against seeded mixed-status data; test search combined/reset behavior, zero-result segments, mutation/refetch count updates, keyboard activation, mobile layout and server pagination where present.
+
 ## API contract and review boundaries
 
 - Use resource routes under `/api`; Admin routes require `authenticate` and `authorize("admin")`.
@@ -169,6 +208,7 @@ users -> auth_sessions
 - Relevant tests pass; client lint/build and server typecheck/build pass.
 - Database work additionally requires `npm run seed:workflows` and `npm run db:verify` against a disposable local database.
 - README/API notes and manual test evidence are updated when setup or contracts change.
+- Trello completion and README `[x]` require reviewed, merged code plus relevant automated and manual evidence. An uncommitted working tree, passing mock tests, or a Trello description alone is insufficient. Keep owner/week cards and the shared remaining-work list in sync without duplicating ownership.
 - The branch contains only task-related changes and is ready for another member to pull and run.
 
 ## Project skills

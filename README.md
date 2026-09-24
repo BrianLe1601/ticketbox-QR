@@ -10,7 +10,7 @@ TicketBox QR hỗ trợ toàn bộ quy trình quản lý vé sự kiện:
 
 - Admin tạo và quản lý sự kiện.
 - Tạo nhiều loại vé, giá bán và số lượng khác nhau.
-- Khách đăng ký hoặc đặt vé trực tuyến.
+- Khách đặt vé bằng email, không cần tài khoản khách hàng.
 - Giữ vé tạm thời trong thời gian thanh toán.
 - Phát hành mã QR riêng cho từng vé.
 - Gửi vé qua email.
@@ -46,7 +46,7 @@ Khôi xây dựng Scanner, Check-in Logs và Reporting
 - Vite
 - Tailwind CSS
 - React Router DOM
-- Axios
+- Fetch API (`client/src/services/api.ts`)
 - React Hook Form
 - Zod
 - Lucide React
@@ -81,7 +81,7 @@ Khôi xây dựng Scanner, Check-in Logs và Reporting
 
 ## 4. Trạng thái hiện tại
 
-Trạng thái dưới đây được đối chiếu với code ngày 15/09/2026. Quy ước:
+Đối chiếu ngày 22/09/2026: `main` và nhánh làm việc `buu-events` cùng bắt đầu ở commit `fd510c4`. Các thay đổi Google Staff/Admin Staff hiện là **working tree chưa commit**, không có trên `main`. Quy ước:
 
 - `[x]`: đã có trên `main`, không chỉ tồn tại ở nhánh cá nhân.
 - `[ ]`: chưa hoàn tất, chưa nghiệm thu hoặc còn chờ review/merge.
@@ -90,182 +90,73 @@ Trạng thái dưới đây được đối chiếu với code ngày 15/09/2026.
 Đã có trên `main`:
 
 - [x] Repository React 19 + Vite + TypeScript và Node.js + Express + TypeScript.
-- [x] Schema MySQL hợp nhất gồm 13 bảng, constraints, indexes và triggers.
+- [x] Schema MySQL hợp nhất gồm 13 bảng, constraints, indexes và triggers (chưa tính cột Google Staff đang sửa ở working tree).
 - [x] Kết nối MySQL, seed tài khoản và `/api/health`.
 - [x] Authentication, refresh-session rotation/revoke và RBAC Admin/Staff.
 - [x] Admin CRUD Categories, Events và Ticket Types.
-- [x] Event lifecycle, publish readiness, visibility và cancellation workflow.
+- [x] Event lifecycle, publish readiness, visibility, cancellation và đồng bộ trạng thái qua WebSocket sau khi transaction commit.
 - [x] Public Home, Event List, Event Detail, search/filter và chọn loại vé.
 - [x] Luồng Checkout/Order/giữ chỗ/Payment mô phỏng/Ticket/QR/Email ở mức tích hợp cơ bản.
+- [x] Assigned Events, camera/manual Scanner, atomic Check-in, Recent Logs, Admin Check-in Logs, Reports và xuất Excel của Khôi đã có trên `main`.
 
-Đã có trên nhánh nhưng chưa được xem là nghiệm thu trên `main`:
+Đã có code ở working tree nhưng chưa được xem là nghiệm thu trên `main`:
 
-- [ ] Nhánh `khoi-checkin-reports`: Assigned Events, camera/manual Scanner, atomic Check-in và Recent Logs.
-- [ ] Nhánh `khoi-checkin-reports`: Admin Check-in Logs, Attendance/Revenue Reports, export Excel và test.
-- [ ] Đồng bộ nhánh Khôi với `develop`, review contract liên module và merge bằng Pull Request.
+- [ ] Google Staff sign-in, duyệt/vô hiệu hóa, Event Assignment UI/API/schema/test của Bửu: cần review, commit/merge và UAT Google thật; database local đã có các cột Google Staff, nhưng chưa kiểm chứng clean-install từ SQL mới.
+- [ ] Điểm vào Login/Register của khách đã được bỏ khỏi Public Header trong working tree; `/login` vẫn dành cho Admin/Staff.
 
 Còn thiếu hoặc cần hoàn thiện:
 
-- [ ] Admin Staff CRUD, activate/deactivate và Event Assignment — Bửu.
 - [ ] Admin Orders: danh sách, lọc, chi tiết Order/Payment/Ticket/Refund — Tài.
-- [ ] Email retry/resend, hoàn thiện hậu mãi và trạng thái refund — Tài.
-- [ ] UAT camera trên thiết bị thật và tích hợp Scanner sau merge — Khôi.
+- [ ] Chống spam OTP: reCAPTCHA v3, giới hạn theo IP/email/action, HTTP 429 và countdown — Tài.
+- [ ] Làm rõ xử lý khi email phát vé lần đầu thất bại; **không** xây tính năng khách tìm lại vé hay gửi lại email vé — Tài.
+- [ ] Nối dữ liệu thật cho Admin Dashboard; xây notification center realtime cho Admin theo thiết kế được duyệt — Bửu. Scheduled publish và WebSocket trạng thái Event đã có, nhưng chưa phải notification center.
+- [ ] Lọc Event đã completed/cancelled trong màn Staff; UAT camera trên thiết bị thật — Khôi.
 - [ ] Test tích hợp end-to-end, concurrency, responsive và accessibility — cả nhóm.
 - [ ] Deploy staging, sửa blocker, deploy production và chuẩn bị demo — Bửu điều phối.
 
-## 5. Cấu trúc repository
+Khách mua vé bằng email và không tạo tài khoản. Nhóm đã **loại Ticket Retrieval và customer ticket-email resend khỏi phạm vi đồ án**. Mã QR gốc chỉ được gửi ở lần phát hành; hãy kiểm tra email nhận vé trong demo. Retry email thông báo hủy Event là workflow hệ thống đã có, không phải tính năng resend vé.
+
+## 5. Cấu trúc repository hiện có
 
 ```text
 ticketbox-QR/
-├── client/                         # Frontend React
-├── server/                         # Backend Node.js và Express
-├── database/
-│   ├── migrations/
-│   │   └── 001_initial_schema.sql # Toàn bộ database, chạy một lần khi reset
-│   └── seeds/                     # Dữ liệu mẫu để phát triển và kiểm thử
-├── .gitignore
-└── README.md
+├── AGENTS.md                       # Quy tắc phát triển/ownership
+├── README.md                       # Mục tiêu, workflow, trạng thái và cách chạy
+├── client/                         # React + Vite + TypeScript
+├── server/                         # Express + TypeScript
+├── database/migrations/
+│   └── 001_initial_schema.sql      # Clean-install schema 13 bảng; DROP/CREATE
+└── scripts/verify.ps1              # Kiểm tra client và server trên Windows/PowerShell
 ```
 
-## 6. Cấu trúc frontend cần hoàn thiện
+Các thư mục `database/seeds`, `client/src/hooks`, `client/src/schemas` và module backend `orders`, `payments`, `tickets`, `staff` riêng **chưa tồn tại** trong repository hiện tại. Seed thực tế nằm ở `server/src/database`.
 
-```text
-client/
-├── public/                         # Favicon và file tĩnh công khai
-├── src/
-│   ├── assets/                    # Logo, hình sự kiện và hình minh họa
-│   ├── components/
-│   │   ├── common/                # Button, Input, Modal, Loading, Pagination
-│   │   ├── events/                # EventCard, EventForm, TicketTypeForm
-│   │   ├── orders/                # Cart, OrderSummary, PaymentStatus
-│   │   ├── tickets/               # TicketCard, QRCodeView
-│   │   ├── checkin/               # QRScanner, CheckinResult
-│   │   └── dashboard/             # StatisticCard, bảng và biểu đồ
-│   ├── layouts/
-│   │   ├── PublicLayout.tsx       # Layout dành cho khách
-│   │   ├── AdminLayout.tsx        # Layout quản trị
-│   │   └── StaffLayout.tsx        # Layout nhân viên check-in
-│   ├── pages/
-│   │   ├── public/                # Trang sự kiện, chi tiết và checkout
-│   │   ├── auth/                  # Login và đổi mật khẩu
-│   │   ├── admin/                 # Event, vé, đơn hàng, nhân viên, dashboard
-│   │   └── staff/                 # Danh sách sự kiện và màn hình quét QR
-│   ├── routes/
-│   │   ├── AppRoutes.tsx          # Khai báo toàn bộ route
-│   │   └── ProtectedRoute.tsx     # Kiểm tra đăng nhập và quyền truy cập
-│   ├── services/
-│   │   ├── api.ts                 # Axios instance và xử lý token
-│   │   ├── auth.service.ts
-│   │   ├── event.service.ts
-│   │   ├── order.service.ts
-│   │   ├── ticket.service.ts
-│   │   └── checkin.service.ts
-│   ├── hooks/                     # Custom hook dùng lại
-│   ├── context/                   # Trạng thái đăng nhập và giỏ vé
-│   ├── schemas/                   # Zod schema cho biểu mẫu
-│   ├── types/                     # Kiểu dữ liệu TypeScript
-│   ├── utils/                     # Hàm định dạng ngày, tiền và lỗi
-│   ├── App.tsx                    # Component gốc
-│   ├── main.tsx                   # Điểm khởi động React
-│   └── index.css                  # Tailwind và CSS toàn cục
-├── .env.example
-├── package.json
-└── vite.config.ts
-```
+## 6. Cấu trúc frontend hiện có
 
-### Chức năng các nhóm thư mục frontend
+- `client/src/pages/public`: Home, Event List/Detail, Checkout và Order Payment/Result.
+- `client/src/pages/auth`: Login Admin/Staff; Google Staff login đang ở working tree.
+- `client/src/pages/admin`: Dashboard, Categories, Events, Ticket Types, Staff đang ở working tree, Check-in Logs/Reports; Orders vẫn là placeholder.
+- `client/src/pages/staff` và `client/src/components/checkin`: Assigned Events, camera/manual Scanner, Result và Recent Logs.
+- `client/src/components/layout/Header.tsx`: Public Header; không có nút Login/Register sau thay đổi hiện tại.
+- `client/src/layouts`, `routes`, `services`, `context`, `types`, `styles`: layout, route protection, giao tiếp API, auth state, kiểu dữ liệu và giao diện. `event-realtime.service.ts` giữ một WebSocket dùng chung, tự reconnect và yêu cầu trang gọi lại REST khi trạng thái Event đổi.
 
-| Thư mục | Chức năng |
-|---|---|
-| `components` | Component nhỏ có thể tái sử dụng ở nhiều trang |
-| `layouts` | Khung giao diện chung cho Public, Admin và Staff |
-| `pages` | Các màn hình hoàn chỉnh tương ứng với URL |
-| `routes` | Điều hướng và bảo vệ trang theo vai trò |
-| `services` | Gọi API backend bằng Axios |
-| `hooks` | Logic React dùng lại giữa nhiều component |
-| `context` | Trạng thái dùng chung như tài khoản và giỏ vé |
-| `schemas` | Kiểm tra dữ liệu form bằng Zod |
-| `types` | Interface và type TypeScript |
-| `utils` | Các hàm hỗ trợ không phụ thuộc giao diện |
+Client hiện dùng `fetch` trong `client/src/services/api.ts`; không mô tả là Axios. Trang khách không có tài khoản, nên không có route đăng ký/đăng nhập khách. Route `/login` được giữ cho Admin/Staff.
 
-## 7. Cấu trúc backend cần hoàn thiện
+## 7. Cấu trúc backend hiện có
 
-```text
-server/
-├── src/
-│   ├── config/
-│   │   └── env.ts                 # Đọc và kiểm tra biến môi trường
-│   ├── database/
-│   │   └── pool.ts                # MySQL connection pool
-│   ├── middlewares/
-│   │   ├── authenticate.ts        # Xác thực JWT
-│   │   ├── authorize.ts           # Kiểm tra ADMIN hoặc STAFF
-│   │   ├── validate.ts            # Kiểm tra request bằng Zod
-│   │   ├── error-handler.ts       # Xử lý lỗi tập trung
-│   │   └── not-found.ts           # Xử lý endpoint không tồn tại
-│   ├── modules/
-│   │   ├── auth/                  # Đăng nhập và tài khoản
-│   │   ├── events/                # Quản lý sự kiện
-│   │   ├── ticket-types/          # Quản lý loại vé
-│   │   ├── orders/                # Đặt vé và giữ chỗ
-│   │   ├── payments/              # Lịch sử và xác nhận thanh toán
-│   │   ├── tickets/               # Phát hành vé và QR
-│   │   ├── staff/                 # Nhân viên và phân công
-│   │   ├── checkins/              # Quét và check-in
-│   │   └── reports/               # Dashboard và báo cáo
-│   ├── services/
-│   │   ├── mail.service.ts        # Gửi email
-│   │   └── qr.service.ts          # Tạo ảnh QR
-│   ├── jobs/
-│   │   ├── expire-orders.job.ts   # Hủy đơn giữ chỗ quá hạn
-│   │   └── retry-emails.job.ts    # Gửi lại email thất bại
-│   ├── utils/
-│   │   ├── app-error.ts           # Lớp lỗi dùng chung
-│   │   ├── response.ts            # Chuẩn hóa API response
-│   │   └── token.ts               # Hỗ trợ JWT và QR token
-│   ├── app.ts                     # Cấu hình Express và mount routes
-│   └── server.ts                  # Kết nối DB và khởi động server
-├── tests/                          # Integration test và API test
-├── .env.example
-├── package.json
-└── tsconfig.json
-```
+- `server/src/config/env.ts`, `database/pool.ts`: biến môi trường và MySQL pool.
+- `server/src/modules/auth`: password login, refresh session và Google Staff identity trong working tree.
+- `server/src/modules/categories`, `events`, `ticket-types`: danh mục, Event công khai/quản trị và loại vé.
+- `server/src/modules/admin-staff`: duyệt/quản lý Staff và Event assignment trong working tree.
+- `server/src/modules/checkout`: xác minh email, giữ chỗ, Order, simulated Payment, phát hành Ticket/QR và email đầu tiên.
+- `server/src/modules/checkins`: Staff Assigned Events, check-in và Recent Logs.
+- `server/src/modules/reports`: Admin Check-in Logs, Reports và export Excel.
+- `server/src/services`: OTP email, gửi mail và sinh QR.
+- `server/src/jobs`: Order expiry, auth-session cleanup, email thông báo hủy Event, scheduled publish và Event lifecycle mỗi giây.
+- `server/src/realtime/event-status.gateway.ts`: WebSocket `/ws/events`, heartbeat `ping/pong` và broadcast trạng thái Event sau commit; không truyền dữ liệu vé/đơn hàng hoặc secret.
+- `server/src/database`: seed tài khoản, dữ liệu QA và workflow verifier; `server/tests`: test hiện có.
 
-Mỗi module nghiệp vụ nên có cấu trúc:
-
-```text
-modules/events/
-├── event.routes.ts                # Khai báo endpoint và middleware
-├── event.controller.ts            # Nhận request và trả response
-├── event.service.ts               # Xử lý nghiệp vụ
-├── event.repository.ts            # Truy vấn MySQL
-├── event.schema.ts                # Validation bằng Zod
-└── event.types.ts                 # Kiểu TypeScript
-```
-
-### Quy tắc phân tầng backend
-
-```text
-Route
-  ↓
-Middleware
-  ↓
-Controller
-  ↓
-Service
-  ↓
-Repository
-  ↓
-MySQL
-```
-
-- `route`: khai báo URL và middleware.
-- `controller`: nhận request, gọi service và trả response.
-- `service`: xử lý nghiệp vụ và transaction.
-- `repository`: chỉ thực hiện truy vấn database.
-- `schema`: kiểm tra dữ liệu đầu vào.
-- `types`: định nghĩa kiểu dữ liệu.
-
+Backend theo Route → validation/auth middleware → Controller → Service → Repository → MySQL. Transaction và SQL nằm ở repository; service điều phối nghiệp vụ. Các chức năng chưa triển khai được ghi ở mục 4 và các task tuần 4–8.
 ## 8. Database
 
 Database `ticketboxqr` có các bảng nghiệp vụ cốt lõi sau:
@@ -317,6 +208,34 @@ Ticket
 5. Admin phân công Staff.
 6. Admin theo dõi đơn hàng và báo cáo.
 
+### Đồng bộ trạng thái Event real-time
+
+1. Backend chạy lifecycle job mỗi giây và khóa các Event tới mốc thời gian trong cùng transaction: `published -> ongoing`, sau đó `ongoing -> completed`.
+2. Chỉ sau khi transaction commit, server phát thông điệp `event.lifecycle.updated` tại `ws://<api-host>/ws/events`. Công bố/hủy thủ công và scheduled publish cũng phát cùng loại thông điệp.
+3. Client giữ một kết nối WebSocket dùng chung cho các trang Admin/Public. Payload chỉ có `eventId`, trạng thái và thời điểm thông báo; khi nhận được, trang gọi lại REST API để lấy dữ liệu chuẩn thay vì tự sửa trạng thái từ payload.
+4. Kết nối có heartbeat 30 giây, tự reconnect với backoff và polling dự phòng 60 giây. Nếu deploy nhiều Node instance, cần thêm broker dùng chung (ví dụ Redis Pub/Sub); broadcaster hiện tại chỉ đồng bộ client nối vào cùng một process.
+
+### Mô hình tài khoản Staff cá nhân qua Google (phần việc Bửu)
+
+**Mỗi nhân viên có một tài khoản Staff cá nhân dùng lâu dài.** Admin không tạo lại tài khoản khi đổi Event hay đợt làm việc: cùng một Staff có thể được gán nhiều Event không trùng lịch; một Event có thể có nhiều Staff. `checkin_logs.staff_id` vì thế truy được tài khoản người thực hiện. Tài khoản dùng chung theo Event không phải mô hình mặc định, vì không xác định được cá nhân quét vé và không thể thu hồi riêng quyền của một người.
+
+**Flow cấp và quản lý tài khoản:**
+
+1. Nhân viên mở `/login` và đăng nhập Google. Backend kiểm tra Google ID token, email đã xác minh và `sub` ổn định. Google không quyết định quyền TicketBox: tài khoản Google mới được ghi vào `users` với role `staff`, trạng thái `pending`, `is_active = FALSE`, **không nhận access/refresh token TicketBox**. Nếu email đã thuộc một tài khoản khác, không tự liên kết.
+2. Admin mở `/admin/staff`, xem danh sách chờ duyệt và đối chiếu danh tính ngoài hệ thống. Admin duyệt hoặc từ chối. Sau khi duyệt, tài khoản active nhưng vẫn chưa có quyền check-in Event nào cho đến khi được phân công. Staff dùng Google để đăng nhập lại; mật khẩu do Google quản lý. Đăng nhập mật khẩu cũ của Admin và tài khoản seed development vẫn được giữ.
+3. Khi nhân viên nghỉ việc, Admin thu hồi tất cả phân công đang active, vô hiệu hóa tài khoản và thu hồi phiên đăng nhập; giữ tài khoản cùng lịch sử assignment/check-in để kiểm toán. Nếu nhân viên quay lại, Admin có thể kích hoạt và gán lại chính tài khoản cũ thay vì xóa/tạo mới.
+
+**Flow gán nhân viên cho Event:**
+
+1. Admin chọn Staff đang active và một hoặc nhiều Event còn ở trạng thái `draft`, `published` hoặc `ongoing`, đồng thời chưa qua `end_time`. Màn gán không hiển thị Event đã kết thúc/completed/cancelled; backend vẫn kiểm tra lại điều kiện này trong transaction.
+2. Backend từ chối phân công trùng Staff–Event đang active hoặc Event có thời gian tổ chức chồng lấn với Event khác mà Staff đó đang nhận; khi hợp lệ, lưu từng phân công trong `event_staff` cùng Admin thực hiện và thời điểm gán.
+3. Staff đăng nhập và chỉ thấy Event được phân công còn hiệu lực, chọn đúng Event trước khi quét QR/nhập mã. Quyền check-in vẫn phải được backend kiểm tra theo trạng thái Staff, assignment và cửa sổ check-in; đăng nhập thành công không tự cấp quyền vào mọi Event.
+4. Admin gỡ phân công bằng `is_active = FALSE` và `revoked_at`, không xóa hàng lịch sử. Khi đổi lịch Event, cần xử lý các phân công active trước rồi mới gán lại theo lịch mới. Staff không thể tự gán Event; chỉ Admin xem lịch sử tổng thể.
+
+Working tree `buu-events` có API Google login và Admin Staff UI/API cho duyệt/từ chối, kích hoạt/vô hiệu hóa, sửa tên, gán/gỡ Event và xem lịch sử phân công. Schema thêm `google_sub`, `staff_approval_status` và metadata duyệt; `password_hash` nullable chỉ để hỗ trợ tài khoản Google không có mật khẩu TicketBox. Database local đã có các cột này, nhưng **chưa kiểm chứng clean-install từ SQL mới, chưa test Google thật và chưa merge**. Các trigger chặn Staff inactive, Event đã đóng và lịch chồng lấn; thu hồi phân công xảy ra trước khi vô hiệu hóa.
+
+API Bửu dùng cho flow này: `POST /api/auth/google`; `GET /api/admin/staff`; `PATCH /api/admin/staff/:staffId`; `PATCH /api/admin/staff/:staffId/status`; `POST /api/admin/staff/:staffId/assignments`; `DELETE /api/admin/staff/:staffId/assignments/:assignmentId`. Các API `/api/admin/staff` chỉ dành cho Admin; request Google `pending` trả HTTP 202, không kèm phiên ứng dụng.
+
 ### Luồng đặt vé
 
 1. Khách xem danh sách Event.
@@ -328,6 +247,13 @@ Ticket
 7. Backend tạo từng Ticket và QR token riêng.
 8. Vé được gửi đến email khách hàng.
 9. Nếu hết hạn, Order bị hủy và số vé được nhả ra.
+
+Phần việc tiếp theo của **Tài**:
+
+- Public Header đã gỡ điểm vào Đăng nhập/Đăng ký trong working tree; route `/login` và RBAC Admin/Staff vẫn giữ nguyên.
+- Bảo vệ gửi OTP bằng reCAPTCHA v3: frontend chỉ lấy token `send_otp`; backend xác minh token, action, hostname và điểm số với secret từ environment. Giới hạn riêng theo IP, email chuẩn hóa và action; gửi lại trước 60 giây trả HTTP 429 kèm thời gian chờ, frontend khóa nút và đồng bộ countdown. Giữ quy tắc OTP hết hạn, giới hạn nhập sai, dùng một lần, hash và không ghi mã vào log.
+- Hoàn thiện Admin Orders, hiển thị Payment/Ticket/Refund/email delivery; kiểm thử lỗi gửi email tại **lần phát hành đầu** và thể hiện trạng thái rõ ràng. Không xây Ticket Retrieval hoặc chức năng khách yêu cầu gửi lại email vé.
+- QR dùng payload `ticketbox:<raw-token>`; database chỉ lưu hash. Không thay đổi payload hoặc tự tạo API hoàn nguyên token. Khách phải lưu email/QR lúc được phát hành; trước demo phải thử thành công email đầu tiên.
 
 ### Luồng check-in
 
@@ -416,7 +342,7 @@ FLUSH PRIVILEGES;
 
 Không đưa mật khẩu trên vào Git và không dùng tài khoản MySQL `root` để chạy backend.
 
-Schema hoàn chỉnh bao gồm Users/Auth Sessions, Categories, Events, Event Staff, Ticket Types, Orders, Order Items, Tickets, Payments, Refunds, Check-in Logs, Email Logs, indexes, constraints, triggers và reporting views.
+Schema gồm Users/Auth Sessions, Categories, Events, Event Staff, Ticket Types, Orders, Order Items, Tickets, Payments, Refunds, Check-in Logs, Email Logs, indexes, constraints và triggers. Báo cáo hiện truy vấn trực tiếp từ bảng nghiệp vụ, không có reporting view trong SQL.
 
 ### Chạy backend
 
@@ -436,6 +362,7 @@ DB_NAME=ticketboxqr
 DB_USER=ticketbox_app
 DB_PASSWORD=your_password
 JWT_SECRET=replace_with_a_random_secret_of_at_least_32_characters
+GOOGLE_CLIENT_ID=your_google_web_client_id.apps.googleusercontent.com
 SEED_ADMIN_NAME=Admin
 SEED_ADMIN_EMAIL=admin@ticketbox.local
 SEED_STAFF_NAME=Staff
@@ -445,13 +372,19 @@ SEED_DEFAULT_PASSWORD=ticketbox@123
 
 `DB_PASSWORD` phải trùng với mật khẩu `ticketbox_app` vừa tạo. Đặt `NODE_ENV=development` để cho phép seed.
 
+Để bật Staff Google sign-in, tạo OAuth Web Client ID trong Google Cloud, cấu hình origin của client (local: `http://localhost:5173`), đặt cùng Client ID trong `server/.env` (`GOOGLE_CLIENT_ID`) và `client/.env.local` (`VITE_GOOGLE_CLIENT_ID`). Khởi động lại Vite và server sau khi sửa `.env`. Client ID không phải secret; backend vẫn phải xác minh ID token trước khi tạo hồ sơ hoặc phiên TicketBox. Nếu database chưa có cột mới, API trả `STAFF_SCHEMA_UPGRADE_REQUIRED`; sau khi có schema mà chưa cấu hình Client ID, API trả `GOOGLE_NOT_CONFIGURED`. Admin vẫn đăng nhập bằng mật khẩu. Không commit `.env` hay dùng một Google Client ID chưa cấu hình origin cho môi trường triển khai.
+
+WebSocket trạng thái Event mặc định được suy ra từ `VITE_API_BASE_URL`, vì vậy local không cần thêm biến môi trường. Chỉ đặt `VITE_EVENT_WS_URL=wss://your-api.example/ws/events` khi reverse proxy hoặc deployment dùng host riêng; trang HTTPS phải dùng `wss://`.
+
+`database/migrations/001_initial_schema.sql` là script **DROP/CREATE toàn bộ database**. Database local đã có các cột Google/approval, nhưng clean-install lại từ SQL hiện tại chưa được nghiệm thu. Không chạy script này trên database đang có dữ liệu cần giữ; cần backup và kế hoạch migrate tăng dần trước khi dùng với dữ liệu thật.
+
 Tạo hoặc cập nhật hai tài khoản test từ các biến `SEED_*`:
 
 ```powershell
 npm run seed
 ```
 
-Seed có thể chạy lại an toàn: email đã tồn tại sẽ được cập nhật tên, role, mật khẩu và kích hoạt lại. Seed bị chặn khi `NODE_ENV=production`.
+Seed có thể chạy lại với **tài khoản demo local**: email đã tồn tại sẽ được cập nhật tên, role, mật khẩu và kích hoạt lại. Không đặt `SEED_*_EMAIL` trùng email Google Staff hay tài khoản người thật; seed không dùng cho production.
 
 Tài khoản mặc định từ `.env.example`:
 
@@ -483,6 +416,8 @@ Copy-Item .env.example .env.local
 npm run dev
 ```
 
+Trên macOS/Linux, dùng `cp .env.example .env.local` thay `Copy-Item`. Backend tương tự: `cp .env.example .env`. Mỗi thành viên tự điền biến môi trường local; không chia sẻ `.env` qua Git. Khi đã có `package-lock.json`, ưu tiên `npm ci` ở cả `server` và `client` để cài đúng phiên bản đã khóa; `npm install` chỉ dùng khi cần cập nhật dependency/lockfile.
+
 Frontend:
 
 ```text
@@ -508,6 +443,8 @@ npm run build
 npm test
 ```
 
+Trên Windows PowerShell, từ root có thể chạy `./scripts/verify.ps1 -Scope all` (hoặc `client`/`server`). Trên macOS/Linux dùng các lệnh `npm run` ở trên trong từng thư mục; không cần chạy PowerShell. Cả hai nền tảng cần MySQL tương thích schema, Node/npm, `.env` riêng và cùng API/Google Client ID cấu hình đúng origin. Test tự động không thay thế UAT Google, email thật, camera và staging.
+
 ### Database workflow và dữ liệu kiểm thử tích hợp
 
 Sau khi chạy lại schema và `npm run seed`, tạo bộ dữ liệu QA riêng biệt:
@@ -519,6 +456,18 @@ npm run db:verify
 ```
 
 `seed:workflows` chỉ quản lý dữ liệu thuộc Category `qa-workflow`, không xóa Event của Admin ở Category khác. Có thể chạy lại để thay thế bộ fixture cũ. Lệnh bị chặn hoàn toàn khi `NODE_ENV=production`.
+
+#### Dữ liệu mẫu cho giao diện Admin
+
+Sau khi đã có tài khoản Admin từ `npm run seed`, chạy một lệnh sau trong thư mục `server`:
+
+```powershell
+npm run seed:admin-demo
+```
+
+Lệnh tạo **18 bản ghi demo chính**: 4 Categories, 8 Events và 6 Staff; đồng thời tạo 10 Ticket Types và 6 assignment để các màn Admin có dữ liệu liên kết. Các tình huống gồm Category active/inactive; Event draft thiếu dữ liệu, draft sẵn sàng, scheduled, published đang bán/sắp bán, hidden + paused, ongoing, completed và cancelled; Ticket miễn phí/trả phí/sales window riêng; Staff Google pending/rejected/approved active/approved inactive và Staff local active/inactive; assignment đang hoạt động và đã thu hồi.
+
+Seed này có thể chạy lại: nó chỉ thay các Event có slug `demo-admin-*`, reset các tài khoản `demo.staff.*@ticketbox.local` và cập nhật bốn Category `[DEMO]`. Nó không đụng Event/Staff thông thường. Lệnh bị chặn khi `NODE_ENV=production`. Hai Staff local demo dùng cùng password hash với Admin seed; các hồ sơ Google dùng định danh giả chỉ để kiểm tra màn Admin, không dùng để đăng nhập Google thật.
 
 | Event fixture | Trạng thái | Dữ liệu liên quan | Mục đích kiểm thử |
 |---|---|---|---|
@@ -547,18 +496,21 @@ Event -> Orders theo id tăng dần -> Ticket Types theo id tăng dần -> Ticke
 - Checkout: khóa Event và Ticket Types, kiểm tra tồn kho rồi tăng `reserved_quantity` trong một transaction.
 - Hết hạn Order: khóa Event và Order, giảm reservation rồi chuyển Order sang `expired`.
 - Thanh toán: khóa Event và Order, chuyển reserved sang sold, xác nhận Order, ghi Payment và phát hành Ticket trong một transaction.
-- Check-in: khóa Ticket, kiểm tra Event/Staff assignment/cửa sổ check-in, đổi Ticket sang `checked_in` và ghi log trong một transaction.
+- Check-in: khóa Event và kiểm tra assignment, sau đó khóa Order/Ticket, đổi Ticket sang `checked_in` và ghi log trong một transaction.
 - Cancel Event: khóa Event cùng toàn bộ Order, đóng bán, nhả giữ chỗ, hủy pending Order/Payment, vô hiệu QR, tạo Refund và queue Email Log trong một transaction. Gửi email/hoàn tiền qua provider được xử lý ngoài transaction.
+- Lifecycle theo thời gian: server đồng bộ `published -> ongoing` khi đến `start_time` và `ongoing -> completed` khi qua `end_time` lúc khởi động, mỗi 10 giây và ngay sau seed demo/workflow. Admin/Public làm mới nền mỗi 10 giây; API vẫn suy ra trạng thái hiệu lực theo thời gian tại lúc trả dữ liệu để hai giao diện không lệch nhau.
 
 ### Quy tắc dữ liệu không được phá vỡ
 
 - Category có Event không được xóa; hãy inactive Category.
 - Event public phải có ít nhất một active Ticket Type hợp lệ.
+- Thời gian bắt đầu check-in phải cùng ngày bắt đầu Event theo giờ Việt Nam và sớm ít nhất 30 phút; thời gian kết thúc check-in phải sau thời gian bắt đầu check-in và không vượt quá lúc Event kết thúc.
 - Tổng capacity các tier không vượt venue capacity.
 - Giá vé không đổi sau khi đã reserved/sold; mở tier mới nếu cần giá mới.
 - Order Item là snapshot tên tier, đơn giá và số lượng tại lúc mua, không phải dữ liệu dư thừa.
 - Order/Payment/Ticket/Refund/Email/Check-in là lịch sử kiểm toán, không hard-delete sau giao dịch.
 - Public API là nguồn quyết định trạng thái `coming-soon`, `on-sale`, `sold-out`, `closed`; UI không tự suy đoán.
+- Event completed có thể còn hiển thị ở Public như lịch sử nhưng luôn `closed`; Event cancelled vẫn bị ẩn và không tự chuyển sang completed.
 
 ## Admin Categories API
 
@@ -616,7 +568,7 @@ Kế hoạch này là nguồn đối chiếu với Trello. Mỗi tuần có đú
 - [x] Hoàn thiện login, refresh, logout và `/me`.
 - [x] Hash mật khẩu; hash/rotate/revoke refresh session trong `auth_sessions`.
 - [x] Xây middleware authenticate/authorize và ProtectedRoute cho Admin/Staff.
-- [x] Hoàn thiện Login, AdminLayout, Admin Dashboard và seed tài khoản.
+- [x] Hoàn thiện Login, AdminLayout, khung Admin Dashboard và seed tài khoản; số liệu thật của Dashboard còn thiếu.
 - Bàn giao: xác thực và RBAC hoạt động từ frontend đến backend.
 
 **Tài — Public UI foundation**
@@ -630,10 +582,9 @@ Kế hoạch này là nguồn đối chiếu với Trello. Mỗi tuần có đú
 **Khôi — Staff UI foundation**
 
 - [x] Hoàn thiện StaffLayout, StaffHome và route chỉ dành cho role Staff.
-- [ ] Tích hợp Scanner UI thực tế từ nhánh Khôi vào `develop`.
-- [ ] Hoàn thiện quyền camera, trạng thái xử lý và Check-in Result.
-- [ ] Review Auth contract với Bửu và QR payload contract với Tài.
-- Bàn giao: Staff shell trên `main`; Scanner UI sẵn sàng sau PR được review.
+- [x] Scanner UI, quyền camera, trạng thái xử lý và Check-in Result đã tích hợp vào `main`.
+- [x] Dùng Auth contract và payload QR hiện hành.
+- Bàn giao: Staff shell và Scanner nền trên `main`; UAT thiết bị thật ở tuần 7.
 
 ### Tuần 3 — Admin Event catalogue và Public Event integration
 
@@ -646,6 +597,7 @@ Kế hoạch này là nguồn đối chiếu với Trello. Mỗi tuần có đú
 - [x] CRUD Ticket Type, capacity, giá, sales window và pause sales.
 - [x] Áp dụng lifecycle Event và bảo vệ last-active-tier.
 - [x] Hoàn thiện cancellation transaction, refund/email-log queue và workflow verification.
+- [ ] Scheduled publish: UI hiện hứa tự động nhưng server chưa có job; trước nghiệm thu phải triển khai job có test hoặc bỏ lựa chọn/mô tả tự động.
 - Bàn giao: Admin quản lý đầy đủ chuỗi Category → Event → Ticket Type → Publish.
 
 **Tài — Public Event với API thật**
@@ -660,8 +612,8 @@ Kế hoạch này là nguồn đối chiếu với Trello. Mỗi tuần có đú
 
 - [x] Chốt payload `ticketbox:<raw-token>` và tra cứu bằng SHA-256 hash.
 - [x] Chốt result code, dữ liệu log và nguyên tắc không lộ raw QR token.
-- [ ] Đồng bộ prototype camera/manual Scanner với `develop` mới nhất.
-- [ ] Hoàn thiện test matrix cho assignment, Event window, Ticket và duplicate scan.
+- [x] Prototype camera/manual Scanner đã có trên `main`.
+- [x] Test matrix service/route hiện có cho assignment, Event window, Ticket và duplicate scan; UAT thiết bị thật ở tuần 7.
 - Bàn giao: contract ổn định để tuần 4–6 triển khai; không nhận CRUD Admin Staff.
 
 ### Tuần 4 — Staff Assignment và Checkout/Order
@@ -670,11 +622,12 @@ Kế hoạch này là nguồn đối chiếu với Trello. Mỗi tuần có đú
 
 **Bửu — Admin Staff và Event Assignment**
 
-- [ ] Xây Admin Staff list/create/update/activate/deactivate; không hard-delete tài khoản có lịch sử.
-- [ ] Xây assign/revoke Staff cho Event và giữ lịch sử trong `event_staff`.
-- [ ] Chặn Staff inactive, Event terminal và lịch phân công chồng lấn.
+- [ ] Nghiệm thu Google sign-in → pending → Admin duyệt/từ chối → gán Event theo mục 9 trên database thử nghiệm và Google thật.
+- [ ] Nghiệm thu Admin Staff list/update/activate/deactivate; không hard-delete tài khoản có lịch sử.
+- [ ] Assign/revoke và lịch sử `event_staff` đã có code trong working tree; cần review/merge và UAT.
+- [ ] Chặn Staff inactive, Event terminal và lịch chồng lấn đã có code/trigger; cần clean-install và UAT.
 - [x] Review transaction/row lock, inventory và Order expiry của luồng Checkout.
-- [ ] Hoàn thiện Admin Staff UI, API, validation, authorization và test.
+- [ ] Admin Staff UI/API/validation/authorization/test đã có trong working tree; chưa được nghiệm thu trên `main`.
 - Bàn giao: Admin quản lý Staff và phân công Event; Khôi dùng API Assigned Events ổn định.
 
 **Tài — Checkout, Order và Payment nền**
@@ -684,14 +637,14 @@ Kế hoạch này là nguồn đối chiếu với Trello. Mỗi tuần có đú
 - [x] Giữ vé bằng transaction, row lock và `expires_at`; job hết hạn nhả tồn kho.
 - [x] Xử lý free/simulated payment và chuyển reservation sang sold.
 - [ ] Xây Admin Orders list/filter/detail cơ bản.
+- [ ] Chống spam gửi OTP: reCAPTCHA v3 xác minh backend, rate limit IP/email/action, HTTP 429 và countdown đồng bộ từ backend.
 - Bàn giao: luồng Checkout → pending Order → Payment hoạt động và không oversell.
 
 **Khôi — Assigned Events và Scanner foundation**
 
-- [ ] Tích hợp API lấy Event được phân công theo Staff đăng nhập.
-- [ ] Hoàn thiện UI chọn Event và hiển thị check-in window.
-- [ ] Tích hợp camera QR và ô nhập mã thủ công với Event context.
-- [ ] Dừng camera khi đổi Event/rời trang; xử lý từ chối quyền camera.
+- [x] API Assigned Events, UI chọn Event và check-in window đã có trên `main`.
+- [x] Camera QR/nhập mã thủ công theo Event context đã có trên `main`.
+- [x] Camera cleanup và lỗi quyền truy cập có code; UAT thiết bị thật ở tuần 7.
 - Bàn giao: Staff chọn được Event hợp lệ và Scanner sẵn sàng gọi Check-in API.
 
 ### Tuần 5 — Phát hành vé, QR, Email và Scanner integration
@@ -714,15 +667,14 @@ Kế hoạch này là nguồn đối chiếu với Trello. Mỗi tuần có đú
 - [x] Tạo QR, gửi email vé và ghi `email_logs`.
 - [x] Hiển thị Order Result và tra cứu đơn bằng lookup token.
 - [ ] Hoàn thiện Admin Orders: list/filter/detail Payment, Ticket và trạng thái email.
-- Bàn giao: khách nhận/tra cứu được vé; Admin theo dõi được đơn hàng.
+- Bàn giao: khách nhận QR lúc phát hành và xem trạng thái Order bằng lookup token; Admin Orders end-to-end còn thiếu.
 
 **Khôi — Scanner kết nối Check-in API**
 
-- [ ] Gửi camera/manual code đến đúng Event context và Staff từ access token.
-- [ ] Khóa tạm Scanner khi xử lý để một mã chỉ tạo một request.
-- [ ] Hiển thị đầy đủ result code/message và nút “vé tiếp theo”.
-- [ ] Hoàn thiện recent logs, xử lý mất mạng và không tự retry check-in.
-- [ ] Đồng bộ nhánh, chạy test và tạo PR vào `develop`.
+- [x] Camera/manual gửi đúng Event context với Staff lấy từ access token.
+- [x] Scanner khóa lúc xử lý, hiển thị result code và nút “vé tiếp theo”.
+- [x] Recent Logs và trạng thái mất mạng không tự retry đã có trên `main`.
+- [x] Code đã tích hợp vào `develop`/`main`; UAT thiết bị thật ở tuần 7.
 - Bàn giao: Scanner dùng QR thật, không gửi request lặp và không lộ token.
 
 ### Tuần 6 — Atomic Check-in, Admin Orders và Reports
@@ -735,26 +687,27 @@ Kế hoạch này là nguồn đối chiếu với Trello. Mỗi tuần có đú
 - [ ] Review authorization, lock order, rate limit, masked log và audit history của Check-in.
 - [ ] Review Event cancellation, refund/email jobs và xử lý partial failure.
 - [ ] Tích hợp menu Admin Staff, Orders, Check-in Logs và Reports không còn placeholder.
+- [ ] Nối số liệu thật và quick actions của Admin Dashboard; hiện đang là `00`/nút chưa nối chức năng.
 - [ ] Chạy schema/seed/workflow verification sau khi tích hợp.
 - Bàn giao: các module Admin và shared database chạy thống nhất.
 
 **Tài — Admin Orders và hậu mãi**
 
 - [ ] Hoàn thiện Admin Orders list/search/filter/detail và phân trang.
-- [ ] Hiển thị Payment, Ticket, email delivery và lookup/resend an toàn.
+- [ ] Hiển thị Payment, Ticket, email delivery và lookup token an toàn; không xây customer ticket resend.
 - [ ] Hiển thị trạng thái Event cancellation và Refund; không tự xác nhận hoàn tiền thật.
-- [ ] Hoàn thiện email retry/resend và dữ liệu doanh thu cung cấp cho Reports.
+- [ ] Làm rõ lỗi gửi email tại lần phát hành đầu và đối chiếu dữ liệu doanh thu cho Reports; không xây customer ticket-email resend.
 - [ ] Bổ sung test và bằng chứng đối chiếu Order–Payment–Ticket–Refund.
 - Bàn giao: Admin quản trị được toàn bộ vòng đời đơn hàng sau mua.
 
 **Khôi — Atomic Check-in, Logs và Attendance Reporting**
 
-- [ ] Kiểm tra Staff active/assigned, Event status/window, Ticket và confirmed Order.
-- [ ] Atomic update `issued → checked_in`, bảo đảm tối đa một `SUCCESS`.
-- [ ] Ghi `checkin_logs` cho SUCCESS và mọi kết quả từ chối nghiệp vụ.
-- [ ] Hoàn thiện Admin Check-in Logs, Attendance/Revenue Reports và bộ lọc.
-- [ ] Xuất Excel an toàn và test concurrency/report aggregation.
-- Bàn giao: Check-in chống trùng; logs và số lượt tham dự khớp dữ liệu nguồn.
+- [x] Kiểm tra Staff active/assigned, Event status/window, Ticket và confirmed Order.
+- [x] Atomic update `issued → checked_in`, bảo đảm tối đa một `SUCCESS`.
+- [x] Ghi `checkin_logs` cho SUCCESS và mọi kết quả từ chối nghiệp vụ.
+- [x] Hoàn thiện Admin Check-in Logs, Attendance/Revenue Reports và bộ lọc.
+- [x] Xuất Excel an toàn và test concurrency/report aggregation.
+- Bàn giao: phần core Check-in/Reports đã có trên `main` và test; UAT camera, staging và đối chiếu trên thiết bị thật vẫn ở tuần 7.
 
 ### Tuần 7 — QA/UAT và deploy staging
 
@@ -763,8 +716,11 @@ Kế hoạch này là nguồn đối chiếu với Trello. Mỗi tuần có đú
 **Bửu — Platform QA và staging**
 
 - [ ] QA Auth/RBAC, Categories, Events, Ticket Types, Staff và Assignment.
+- [ ] Kiểm tra Google Staff thật: pending không có session, Admin duyệt/gán Event, vô hiệu hóa/thu hồi phiên, tài khoản email trùng; lưu bằng chứng.
+- [ ] Thiết kế rồi bổ sung notification center realtime cho Admin (nguồn sự kiện, người nhận, quyền xem và cách nhận). WebSocket trạng thái Event đã có nhưng chỉ là tín hiệu refetch dữ liệu công khai, không thay thế notification center.
 - [ ] Clean-install schema, seed, `db:verify`, server typecheck/build/test.
 - [ ] Audit env/secrets, jobs, rate limit, logging và backup/restore.
+- [ ] UAT scheduled publish/WebSocket Event trên môi trường thật và nối số liệu thật Admin Dashboard.
 - [ ] Deploy staging; lập danh sách lỗi có owner, mức độ và deadline.
 - Bàn giao: staging hoạt động và không còn blocker Platform/Admin.
 
@@ -772,7 +728,8 @@ Kế hoạch này là nguồn đối chiếu với Trello. Mỗi tuần có đú
 
 - [ ] Test Event → Checkout → Payment → Ticket/QR → Email → Order lookup.
 - [ ] Test sold out, expiry, idempotency, concurrency và không oversell.
-- [ ] QA Admin Orders, resend, cancellation/refund display và số liệu doanh thu.
+- [ ] Hoàn thiện OTP reCAPTCHA/429/countdown và tránh đưa Order lookup token vào URL/access log trước staging.
+- [ ] QA Admin Orders, email phát vé lần đầu, cancellation/refund display và số liệu doanh thu.
 - [ ] Hoàn thiện responsive/accessibility và bằng chứng desktop/mobile.
 - Bàn giao: luồng khách và Admin Orders ổn định trên staging.
 
@@ -782,6 +739,8 @@ Kế hoạch này là nguồn đối chiếu với Trello. Mỗi tuần có đú
 - [ ] Test đủ INVALID, DUPLICATE, WRONG_EVENT, CANCELLED, UNPAID, ngoài window và chưa assigned.
 - [ ] Đối chiếu Logs/Reports/Excel với dữ liệu Order, Ticket và Check-in.
 - [ ] QA bàn phím, camera cleanup, mất mạng và tốc độ quét liên tục.
+- [ ] Lọc Event completed/cancelled khỏi danh sách Staff hoặc hiển thị rõ là đã đóng; kiểm tra không thể check-in Event terminal.
+- [ ] Nếu báo cáo cần phân biệt QR/manual, thống nhất với Bửu trước khi thêm `checkin_method` vào schema/log; đây là cải thiện, không phải tiêu chí thành công hiện tại.
 - Bàn giao: Scanner và Reports được UAT, có ảnh/video/test evidence.
 
 ### Tuần 8 — Release, deploy production và demo
@@ -801,7 +760,7 @@ Kế hoạch này là nguồn đối chiếu với Trello. Mỗi tuần có đú
 
 - [ ] Chuẩn bị Event/Ticket Type và dữ liệu mua vé demo.
 - [ ] Demo search/filter → Detail → Checkout → Payment → QR/Email.
-- [ ] Demo Order lookup, resend và Admin Orders.
+- [ ] Demo Order lookup và Admin Orders; không có chức năng gửi lại vé.
 - [ ] Chuẩn bị trường hợp free/paid, sold out, expired và lỗi thanh toán.
 - Bàn giao: luồng Commerce end-to-end chạy trên production.
 
@@ -813,59 +772,27 @@ Kế hoạch này là nguồn đối chiếu với Trello. Mỗi tuần có đú
 - [ ] Demo Attendance Report, bộ lọc và export Excel.
 - Bàn giao: luồng vận hành cổng và báo cáo chạy trên production.
 
-## 14. Git workflow
+## 14. Git workflow đa nền tảng
 
-Không làm tính năng trực tiếp trên `main`.
+Branch tích hợp là `develop`; `main` dành cho bản đã review. Mỗi thành viên kiểm tra tên branch thật trước khi switch. Branch hiện dùng: `buu-events`, `tai`, `khoi-checkin-reports`. Trước khi kéo/merge, chạy `git status` và xử lý thay đổi chưa commit của mình; không dùng `git add .` trên working tree lẫn nhiều task.
 
 ```text
-main
-└── develop
-    ├── feature/auth-rbac
-    ├── feature/event-management
-    ├── feature/order-checkout
-    ├── feature/ticket-qr
-    ├── feature/staff-management
-    ├── feature/qr-checkin
-    └── feature/reporting
+owner branch → review/PR → develop → review/release → main
 ```
 
-Bắt đầu task:
+Các lệnh Git/NPM sau chạy được trong PowerShell (Windows) hoặc Terminal (macOS) từ root repository:
 
-```powershell
-git switch develop
-git pull origin develop
-git switch -c feature/ten-chuc-nang
-```
-
-Commit và push:
-
-```powershell
+```sh
 git status
-git add README.md client/src server/src database/migrations/001_initial_schema.sql
-git diff --cached
-git commit -m "feat(scope): short description"
-git push -u origin feature/ten-chuc-nang
+git fetch origin
+git switch <ten-nhanh-cua-ban>
+git merge origin/develop
+git diff --check
 ```
 
-Chỉ đưa đúng file thuộc task vào staging; thay danh sách đường dẫn ở ví dụ trên theo thay đổi thực tế.
+Chỉ stage đúng file thuộc task, xem `git diff --cached` rồi tự commit/push theo phân công nhóm. Khi gặp conflict liên module, trao đổi owner và kiểm tra lại test trước khi merge. Code chỉ ở local hoặc nhánh cá nhân chưa được ghi là hoàn thành trên `main`.
 
-Sau đó tạo Pull Request:
-
-```text
-feature/ten-chuc-nang → develop
-```
-
-Quy ước commit:
-
-```text
-feat(scope): thêm chức năng
-fix(scope): sửa lỗi
-refactor(scope): cải tiến cấu trúc
-test(scope): thêm kiểm thử
-docs(scope): cập nhật tài liệu
-chore(scope): cập nhật cấu hình
-```
-
+Trên Windows dùng PowerShell `Copy-Item` và `./scripts/verify.ps1`; trên macOS/Linux dùng `cp` và trực tiếp `npm run lint`, `npm run build`, `npm run typecheck`, `npm test` trong thư mục tương ứng. MySQL có thể chạy bằng MySQL Workbench, Homebrew hoặc service cài trên Windows; mỗi người đặt `DB_HOST`, `DB_PORT` và credential theo máy mình.
 ## 15. Quy tắc chung
 
 - Không commit `.env`, mật khẩu hoặc token.
@@ -945,8 +872,8 @@ tại hoặc sự cố lưu trữ dùng HTTP lỗi; không được diễn giả
 
 Tự động: `cd server` rồi `npm test` chạy các test service/repository với mock và
 HTTP route test (auth được mô phỏng, authorization/validation thật). Chạy thêm
-client lint/build và server typecheck/build như mục 12. Trên macOS không có
-PowerShell, chạy trực tiếp các lệnh tương đương trong skill `ticketbox-verify`.
+client lint/build và server typecheck/build như mục 12. Trên macOS/Linux,
+chạy trực tiếp các lệnh `npm run` tương ứng trong `client` và `server`.
 
 Kiểm thử tích hợp cần MySQL local đã chuẩn bị theo mục 11, backend chạy và dữ liệu
 Event đang mở check-in, Staff được phân công, Order confirmed, Ticket issued:
@@ -963,10 +890,9 @@ Event đang mở check-in, Staff được phân công, Order confirmed, Ticket i
 Các test mock không thay thế kiểm tra khóa/trigger/concurrency trên MySQL thật
 hoặc thử camera thiết bị thật. Chỉ đánh dấu UAT hoàn thành sau các bước trên.
 
-Kết quả kiểm tra bản triển khai 2026-09-15: client lint/build, server typecheck/build
-và 58 test đều pass; thử tạo QR theo cấu hình phát hành hiện tại rồi giải mã bằng
-jsQR cũng pass. MySQL thật đã được cài và kiểm thử như mục dưới; camera thiết bị
-thật vẫn cần thử trực tiếp.
+Lịch sử kiểm tra ngày 15/09/2026 có thử giải mã QR bằng jsQR và UAT MySQL cho
+Check-in/Reports. Lần kiểm tra working tree mới nhất ghi ở cuối README; camera
+trên thiết bị thật vẫn cần nghiệm thu.
 
 
 ## Admin Check-in Logs và Reports (Khôi)
@@ -1010,34 +936,13 @@ Xuất Excel là một snapshot mới tại lúc bấm tải, có thể khác tr
 có giao dịch mới. Thay đổi bộ lọc trên form chưa ảnh hưởng dữ liệu/export cho đến
 khi bấm **Áp dụng bộ lọc**.
 
-### Môi trường local đã chuẩn bị trên Mac này
+### Môi trường Windows và macOS
 
-- MySQL riêng tại `127.0.0.1:3307`, chỉ lắng nghe localhost.
-- Data: `~/.local/share/ticketbox-mysql/data`; chương trình ở
-  `~/.local/lib/mysql-8.0.35-macos13-x86_64` (bản tương thích macOS 13 Intel).
-- Backend dùng tài khoản `ticketbox_app`; mật khẩu ngẫu nhiên và JWT secret nằm
-  trong `server/.env` được Git bỏ qua. Không dùng instance này cho production.
-- Khởi động MySQL sau khi tắt máy: `~/.local/bin/ticketbox-mysql-start`.
-- Dừng MySQL: `~/.local/bin/ticketbox-mysql-stop`.
-- Chạy `npm run dev` lần lượt trong `server` và `client`. Mở
-  `http://localhost:5173/login` để khớp origin đã cấu hình.
-- Tài khoản demo: `admin@ticketbox.local`, `staff@ticketbox.local`,
-  `qa.staff@ticketbox.local`; mật khẩu local mẫu `ticketbox@123`.
+- Khởi động MySQL theo cách đã cài trên từng máy; cấu hình `DB_HOST`/`DB_PORT` trong `server/.env` cho đúng. Không dùng đường dẫn cài đặt hoặc port riêng của một thành viên làm mặc định của cả nhóm.
+- Windows PowerShell: `Copy-Item server/.env.example server/.env`, `Copy-Item client/.env.example client/.env.local`; macOS/Linux Terminal: `cp server/.env.example server/.env`, `cp client/.env.example client/.env.local`. Chạy các lệnh này từ root nếu file chưa tồn tại; không ghi đè cấu hình hiện có.
+- Cài dependencies bằng `npm ci` ở từng thư mục. Chạy `npm run dev` trong hai terminal riêng từ `server` và `client`. Vite mặc định `http://localhost:5173`, API `http://localhost:3000`; giữ `CLIENT_URL` và Google OAuth origin khớp URL dùng thực tế.
+- Windows có thể chạy `./scripts/verify.ps1 -Scope all`. macOS/Linux chạy lệnh npm của mục 12. Chỉ chạy SQL clean-install và seed trên database thử nghiệm có thể xóa, tuyệt đối không trên dữ liệu cần giữ.
 
-### Bằng chứng kiểm tra 2026-09-15
+### Bằng chứng và giới hạn nghiệm thu
 
-- Client lint/build và Server typecheck/build pass; 58 test pass (service, routes,
-  transaction, validation, XLSX đọc lại, phân quyền).
-- Schema nạp vào instance MySQL mới; seed và seed:workflows thành công;
-  `db:verify`: 28/28 kiểm tra pass trước khi chạy các lần quét UAT bổ sung.
-- HTTP thật: login Admin/Staff, quyền truy cập, hai request quét cùng
-  `TKT-QA-ONGOING-PAID-2` đồng thời: một SUCCESS, một ALREADY_CHECKED_IN.
-- HTTP thật: INVALID, WRONG_EVENT, STAFF_NOT_ASSIGNED, quét lại vé; log được ghi.
-- Event QA ongoing: tiền thu 100.000 VND, 2 vé bán, 2 vé đã vào; lọc kỳ tương lai
-  trả số 0. API Excel reports/checkins trả file XLSX đọc lại được bằng ExcelJS.
-- Chưa thử camera trên thiết bị thật. Các fixture QA có thời gian tương đối;
-  Event ongoing sẽ đóng cổng sau 3 giờ kể từ lúc seed. Khi cần thay bộ dữ liệu QA,
-  chỉ chạy `seed:workflows` trên database local thử (lệnh thay toàn bộ Category QA).
-
-Không thay đổi schema/API của Event, Order hoặc Assignment; cần Bửu review phần
-mount route Admin và Tài review định nghĩa tiền thu/hoàn khi tích hợp vào develop.
+Lần kiểm tra working tree 24/09/2026: client lint/build, server typecheck/build và **112/112 test** pass; test Checkout dùng MySQL cho idempotency, reserve/expiry và chống oversell. Lifecycle test kiểm tra transition theo thời gian, chạy lại idempotent, rollback khi cập nhật dở dang và WebSocket thực nhận thông điệp sau commit. Trước đây Khôi đã ghi nhận UAT MySQL local cho Check-in/Reports; bằng chứng tự động không thay thế UAT camera trên thiết bị thật hoặc Google Staff login thật. Cần chạy lại clean-install schema mới trên database thử nghiệm và chụp bằng chứng trước khi nghiệm thu phần Google Staff.

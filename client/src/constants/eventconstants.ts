@@ -1,5 +1,9 @@
 import type { CategorySlug, Event, TicketType, TicketSaleStatus, SortKey, SelectOption } from "@/types/event.types";
 
+// WebSocket pushes lifecycle changes immediately. This slower timer is only a
+// resilience fallback for proxies or networks that block/drop WebSocket traffic.
+export const EVENT_LIFECYCLE_FALLBACK_REFRESH_MS = 60_000;
+
 export const CATEGORY_LABELS: Record<string, string> = {
     music: "Âm nhạc",
     conference: "Hội nghị",

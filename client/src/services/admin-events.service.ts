@@ -9,7 +9,7 @@ export interface AdminEvent {
   salesEndAt:string; checkinStartAt:string; checkinEndAt:string; status:EventStatus;
   visibility:"visible"|"hidden"; hiddenAt:string|null; hiddenReason:string|null;
   scheduledPublishAt:string|null; ticketTypeCount:number; validTicketTypeCount:number; allocatedCapacity:number;
-  soldQuantity:number; pendingOrderCount:number; confirmedOrderCount:number; readiness:PublishReadiness;
+  soldQuantity:number; pendingOrderCount:number; confirmedOrderCount:number; activeStaffCount:number; readiness:PublishReadiness;
 }
 export interface EventPayload {
   name:string; description:string|null; category:string;

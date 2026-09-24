@@ -17,14 +17,14 @@ export function EventCoverUploader({ value, onChange, eventName }: Props) {
 
   async function selectFile(file?: File) {
     if (!file) return;
-    if (!ALLOWED_TYPES.includes(file.type)) { setError("Use a JPG, PNG, or WebP image."); return; }
-    if (file.size > MAX_SIZE) { setError("The cover image must be 8 MB or smaller."); return; }
+    if (!ALLOWED_TYPES.includes(file.type)) { setError("Chỉ chấp nhận ảnh JPG, PNG hoặc WebP."); return; }
+    if (file.size > MAX_SIZE) { setError("Ảnh bìa phải có dung lượng tối đa 8 MB."); return; }
     setError(""); setUploading(true); setProgress(0);
     try {
       const uploaded = await uploadEventCover(file, setProgress);
-      onChange({ url: uploaded.url, publicId: uploaded.publicId, alt: value.alt || `${eventName || "Event"} cover` });
+      onChange({ url: uploaded.url, publicId: uploaded.publicId, alt: value.alt || `Ảnh bìa ${eventName || "sự kiện"}` });
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Unable to upload the image.");
+      setError(reason instanceof Error ? reason.message : "Không thể tải ảnh lên.");
     } finally { setUploading(false); }
   }
 
@@ -35,15 +35,15 @@ export function EventCoverUploader({ value, onChange, eventName }: Props) {
   return <div className="event-cover-field">
     <div className={`event-cover-dropzone ${dragging ? "dragging" : ""} ${value.url ? "has-image" : ""}`}
       onDragOver={(event) => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={drop}>
-      {value.url ? <img src={value.url} alt={value.alt || "Event cover preview"} /> : <div className="event-cover-empty"><ImagePlus size={30}/><strong>Upload event cover</strong><span>Drag an image here or choose a file</span><small>JPG, PNG, WebP · max 8 MB · recommended 16:9</small></div>}
-      {uploading && <div className="event-cover-progress"><LoaderCircle className="spin" size={24}/><strong>Uploading {progress}%</strong><span><i style={{ width: `${progress}%` }}/></span></div>}
+      {value.url ? <img src={value.url} alt={value.alt || "Xem trước ảnh bìa sự kiện"} /> : <div className="event-cover-empty"><ImagePlus size={30}/><strong>Tải ảnh bìa sự kiện</strong><span>Kéo ảnh vào đây hoặc chọn tệp</span><small>JPG, PNG, WebP · tối đa 8 MB · khuyến nghị 16:9</small></div>}
+      {uploading && <div className="event-cover-progress"><LoaderCircle className="spin" size={24}/><strong>Đang tải {progress}%</strong><span><i style={{ width: `${progress}%` }}/></span></div>}
     </div>
     <div className="event-cover-actions">
       <input ref={inputRef} hidden type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { void selectFile(event.target.files?.[0]); event.currentTarget.value = ""; }}/>
-      <button type="button" onClick={() => inputRef.current?.click()} disabled={uploading}>{value.url ? <RefreshCw size={15}/> : <UploadCloud size={15}/>} {value.url ? "Replace image" : "Choose image"}</button>
-      {value.url && <button type="button" className="danger" onClick={() => onChange({ url: "", publicId: "", alt: "" })} disabled={uploading}><Trash2 size={15}/> Remove</button>}
+      <button type="button" onClick={() => inputRef.current?.click()} disabled={uploading}>{value.url ? <RefreshCw size={15}/> : <UploadCloud size={15}/>} {value.url ? "Thay ảnh" : "Chọn ảnh"}</button>
+      {value.url && <button type="button" className="danger" onClick={() => onChange({ url: "", publicId: "", alt: "" })} disabled={uploading}><Trash2 size={15}/> Xóa ảnh</button>}
     </div>
-    {value.url && <label>Image description (accessibility)<input maxLength={255} value={value.alt} onChange={(event) => onChange({ ...value, alt: event.target.value })} placeholder={`${eventName || "Event"} cover`} /></label>}
+    {value.url && <label>Mô tả ảnh (hỗ trợ khả năng truy cập)<input maxLength={255} value={value.alt} onChange={(event) => onChange({ ...value, alt: event.target.value })} placeholder={`Ảnh bìa ${eventName || "sự kiện"}`} /></label>}
     {error && <p className="event-cover-error">{error}</p>}
   </div>;
 }

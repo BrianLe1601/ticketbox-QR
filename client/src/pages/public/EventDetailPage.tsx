@@ -6,6 +6,8 @@ import { fetchEventById } from "@/services/event.service";
 import { CITY_LABELS } from "@/constants/eventconstants";
 import { EventHeader } from "@/components/event/EventHeader";
 import { TicketSelector } from "@/components/event/TicketSelector";
+import { EVENT_LIFECYCLE_FALLBACK_REFRESH_MS } from "@/constants/eventconstants";
+import { subscribeToEventLifecycleUpdates } from "@/services/event-realtime.service";
 
 export function EventDetailPage() {
     const { id } = useParams<{ id: string }>();
@@ -15,12 +17,30 @@ export function EventDetailPage() {
     useEffect(() => {
         if (!id) return;
         let cancelled = false;
-        fetchEventById(id).then((result) => {
+        const refresh = async () => {
+            const result = await fetchEventById(id);
             if (cancelled) return;
             if (!result) setNotFoundId(id);
-            else setEvent(result);
+            else {
+                setNotFoundId(null);
+                setEvent(result);
+            }
+        };
+        void refresh();
+        const unsubscribeRealtime = subscribeToEventLifecycleUpdates((message) => {
+            if (message.type === "event.lifecycle.reconnected" || message.changes.some((change) => String(change.eventId) === id)) {
+                void refresh();
+            }
         });
-        return () => { cancelled = true; };
+        const refreshTimer = window.setInterval(
+            () => void refresh(),
+            EVENT_LIFECYCLE_FALLBACK_REFRESH_MS,
+        );
+        return () => {
+            cancelled = true;
+            unsubscribeRealtime();
+            window.clearInterval(refreshTimer);
+        };
     }, [id]);
 
     if (!id || notFoundId === id || event === null) return <Navigate to="/events" replace />;

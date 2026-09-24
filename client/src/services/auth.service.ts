@@ -51,6 +51,22 @@ export async function loginRequest(
   return (payload as AuthResponse).data;
 }
 
+export type GoogleLoginResult =
+  | { status: "pending" }
+  | { status: "approved"; accessToken: string; user: LoginResult["user"] };
+
+export async function googleLoginRequest(idToken: string): Promise<GoogleLoginResult> {
+  const response = await fetch(`${API_BASE_URL}/auth/google`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ idToken }),
+    credentials: "include",
+  });
+  const payload = await readJson(response);
+  if (!response.ok) throw new Error(getErrorMessage(payload));
+  return (payload as { data: GoogleLoginResult }).data;
+}
+
 export async function getMeRequest(token: string) {
   const response = await fetch(`${API_BASE_URL}/auth/me`, {
     headers: { Authorization: `Bearer ${token}` },
