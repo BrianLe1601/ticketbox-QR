@@ -5,6 +5,7 @@ import type { LoginInput } from "./auth.schema.js";
 import {
   getCurrentUser,
   login,
+  loginWithGoogle,
   logoutSession,
   refreshSession,
 } from "./auth.service.js";
@@ -28,6 +29,37 @@ export async function loginController(
       success: true,
       message: "Đăng nhập thành công",
       data: {accessToken:result.accessToken,user:result.user},
+    });
+  } catch (error: unknown) {
+    next(error);
+  }
+}
+
+export async function googleLoginController(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    assertTrustedOrigin(req);
+    const result = await loginWithGoogle(req.body.idToken as string, metadata(req));
+    if (result.status === "pending") {
+      res.status(202).json({
+        success: true,
+        message: "Yêu cầu tham gia Staff đang chờ Admin duyệt",
+        data: { status: "pending" },
+      });
+      return;
+    }
+    res.cookie(REFRESH_COOKIE, result.session.refreshToken, cookieOptions);
+    res.status(200).json({
+      success: true,
+      message: "Đăng nhập Staff thành công",
+      data: {
+        status: "approved",
+        accessToken: result.session.accessToken,
+        user: result.session.user,
+      },
     });
   } catch (error: unknown) {
     next(error);

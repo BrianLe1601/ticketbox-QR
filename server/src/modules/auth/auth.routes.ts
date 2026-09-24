@@ -2,14 +2,16 @@ import { Router } from "express";
 import rateLimit from "express-rate-limit";
 
 import { authenticate } from "../../middlewares/authenticate.js";
+import { requireStaffSchema } from "../../middlewares/require-staff-schema.js";
 import { validateBody } from "../../middlewares/validate.js";
 import {
   getMeController,
+  googleLoginController,
   loginController,
   logoutController,
   refreshController,
 } from "./auth.controller.js";
-import { loginSchema } from "./auth.schema.js";
+import { googleLoginSchema, loginSchema } from "./auth.schema.js";
 
 export const authRouter = Router();
 
@@ -29,6 +31,14 @@ authRouter.post(
   loginLimiter,
   validateBody(loginSchema),
   loginController,
+);
+
+authRouter.post(
+  "/google",
+  loginLimiter,
+  requireStaffSchema,
+  validateBody(googleLoginSchema),
+  googleLoginController,
 );
 
 authRouter.get("/me", authenticate, getMeController);

@@ -43,11 +43,6 @@ export function Header() {
 
                     <div className="flex-1 flex justify-center"><NavSearch /></div>
 
-                    <div className="hidden md:flex items-center gap-3 shrink-0">
-                        <button onClick={() => navigate("/login")} className="text-sm text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-lg hover:bg-white/5">Đăng nhập</button>
-                        <button className="text-sm bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors font-semibold shadow-lg shadow-primary/25">Đăng ký</button>
-                    </div>
-
                     <button className="md:hidden ml-auto p-2 rounded-lg hover:bg-white/5 text-muted-foreground transition-colors" onClick={() => setMenuOpen(!menuOpen)}>
                         {menuOpen ? <X size={20} /> : <Menu size={20} />}
                     </button>
@@ -68,10 +63,7 @@ export function Header() {
                                 {label}
                             </button>
                         ))}
-                        <div className="pt-3 border-t border-white/[0.07] flex gap-3">
-                            <button onClick={() => { navigate("/login"); setMenuOpen(false); }} className="flex-1 text-sm text-muted-foreground border border-white/10 rounded-lg px-4 py-2 hover:bg-white/5 transition-colors">Đăng nhập</button>
-                            <button className="flex-1 text-sm bg-primary text-white rounded-lg px-4 py-2 font-semibold">Đăng ký</button>
-                        </div>
+
                     </div>
                 </div>
             )}

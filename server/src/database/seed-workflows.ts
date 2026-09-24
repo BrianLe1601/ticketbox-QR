@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import type { PoolConnection, ResultSetHeader, RowDataPacket } from "mysql2/promise";
 
 import { env } from "../config/env.js";
+import { syncEventLifecycleStatuses } from "../modules/events/event-lifecycle.service.js";
 import { pool } from "./pool.js";
 
 const QA_CATEGORY_SLUG = "qa-workflow";
@@ -439,9 +440,11 @@ async function seedWorkflows() {
     );
 
     await connection.commit();
+    const lifecycle = await syncEventLifecycleStatuses();
     console.log("[seed:workflows] 9 Event scenarios created in category qa-workflow");
     console.log("[seed:workflows] QA Staff uses the same local password as the seeded Admin");
     console.log(`[seed:workflows] Draft without tier id: ${draftNeedsTicket}`);
+    console.log(`[seed:workflows] Lifecycle sync — started: ${lifecycle.started}; completed: ${lifecycle.completed}`);
   } catch (error) {
     await connection.rollback();
     throw error;

@@ -23,17 +23,33 @@ CREATE TABLE users (
     id              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     full_name       VARCHAR(100) NOT NULL,
     email           VARCHAR(150) NOT NULL,
-    password_hash   VARCHAR(255) NOT NULL,
+    password_hash   VARCHAR(255) NULL,
+    google_sub      VARCHAR(255) CHARACTER SET ascii COLLATE ascii_bin NULL,
     role            ENUM('admin', 'staff') NOT NULL,
     is_active       BOOLEAN NOT NULL DEFAULT TRUE,
+    staff_approval_status ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'approved',
+    staff_reviewed_by BIGINT UNSIGNED NULL,
+    staff_reviewed_at DATETIME(3) NULL,
     created_at      DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     updated_at      DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
                                   ON UPDATE CURRENT_TIMESTAMP(3),
 
     CONSTRAINT pk_users PRIMARY KEY (id),
     CONSTRAINT uq_users_email UNIQUE (email),
+    CONSTRAINT uq_users_google_sub UNIQUE (google_sub),
+    CONSTRAINT fk_users_staff_reviewed_by
+        FOREIGN KEY (staff_reviewed_by) REFERENCES users(id)
+        ON UPDATE RESTRICT ON DELETE RESTRICT,
     CONSTRAINT chk_users_name CHECK (CHAR_LENGTH(TRIM(full_name)) > 0),
-    CONSTRAINT chk_users_email CHECK (CHAR_LENGTH(TRIM(email)) >= 3)
+    CONSTRAINT chk_users_email CHECK (CHAR_LENGTH(TRIM(email)) >= 3),
+    CONSTRAINT chk_users_login_method CHECK (
+        (password_hash IS NOT NULL AND google_sub IS NULL)
+        OR (password_hash IS NULL AND google_sub IS NOT NULL)
+    ),
+    CONSTRAINT chk_users_google_staff CHECK (google_sub IS NULL OR role = 'staff'),
+    CONSTRAINT chk_users_google_approval CHECK (
+        google_sub IS NULL OR staff_approval_status = 'approved' OR is_active = FALSE
+    )
 ) ENGINE = InnoDB;
 
 -- =========================================================
@@ -179,6 +195,9 @@ CREATE TABLE events (
     ),
     CONSTRAINT chk_events_checkin_before_end CHECK (
         checkin_end_at <= end_time
+    ),
+    CONSTRAINT chk_events_checkin_start_same_day CHECK (
+        DATE(checkin_start_at) = DATE(start_time)
     ),
     CONSTRAINT chk_events_sales_before_end CHECK (
         sales_end_at <= end_time
@@ -435,6 +454,8 @@ CREATE TABLE tickets (
     created_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     updated_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
                                       ON UPDATE CURRENT_TIMESTAMP(3),
+
+    qr_token_encrypted  VARCHAR(512) CHARACTER SET ascii COLLATE ascii_bin NULL DEFAULT NULL,
 
     CONSTRAINT pk_tickets PRIMARY KEY (id),
     CONSTRAINT uq_tickets_ticket_code UNIQUE (ticket_code),
@@ -1180,6 +1201,12 @@ BEGIN
        OR NEW.created_at <> OLD.created_at THEN
         SIGNAL SQLSTATE '45000'
             SET MESSAGE_TEXT = 'Ticket identity and QR credential are immutable';
+    END IF;
+
+    IF OLD.qr_token_encrypted IS NOT NULL
+       AND NOT (NEW.qr_token_encrypted <=> OLD.qr_token_encrypted) THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'QR credential is immutable once encrypted';
     END IF;
 
     IF NOT (

@@ -15,3 +15,7 @@ export const loginSchema = z.object({
 });
 
 export type LoginInput = z.infer<typeof loginSchema>;
+
+export const googleLoginSchema = z.object({
+  idToken: z.string().min(100).max(8192),
+});
