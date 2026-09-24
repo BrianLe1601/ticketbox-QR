@@ -241,12 +241,12 @@ export async function insertSuccessfulPayment(conn: PoolConnection, orderId: num
 }
 
 export async function issueTicket(conn: PoolConnection, data: {
-    orderItemId: number; ticketCode: string; qrTokenHash: string; holderName: string; holderEmail: string;
+    orderItemId: number; ticketCode: string; qrTokenHash: string; qrTokenEncrypted: string; holderName: string; holderEmail: string;
 }) {
     const [result] = await conn.query<ResultSetHeader>(
-        `INSERT INTO tickets (order_item_id, ticket_code, qr_token_hash, holder_name, holder_email)
-         VALUES (?, ?, ?, ?, ?)`,
-        [data.orderItemId, data.ticketCode, data.qrTokenHash, data.holderName, data.holderEmail]
+        `INSERT INTO tickets (order_item_id, ticket_code, qr_token_hash, qr_token_encrypted, holder_name, holder_email)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [data.orderItemId, data.ticketCode, data.qrTokenHash, data.qrTokenEncrypted, data.holderName, data.holderEmail]
     );
     return result.insertId;
 }
@@ -278,8 +278,8 @@ export async function findIssuedTickets(orderId: number) {
     return rows;
 }
 
-export async function insertEmailLog(orderId: number, recipient: string) {
-    const [result] = await pool.query<ResultSetHeader>(
+export async function insertEmailLog(orderId: number, recipient: string, conn?: PoolConnection) {
+    const [result] = await (conn ?? pool).query<ResultSetHeader>(
         `INSERT INTO email_logs (order_id, recipient, email_type, status)
          VALUES (?, ?, 'ticket_issued', 'pending')`,
         [orderId, recipient]

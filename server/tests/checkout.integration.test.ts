@@ -20,6 +20,14 @@ vi.mock('../src/services/mail.service.js', () => ({
     sendTicketEmail: vi.fn(async () => ({ messageId: 'week4-test-message' })),
 }));
 
+import * as qrEncryption from '../src/services/qr-encryption.service.js';
+import { sendTicketEmail } from '../src/services/mail.service.js';
+import { deliverTicketEmailJob, prepareTicketEmail } from '../src/services/ticket-email.service.js';
+import { enqueueTicketEmail, claimDueTicketEmails, recoverStaleTicketEmailJobs, markTicketEmailSent } from '../src/modules/tickets/ticket-email.repository.js';
+import { resendTicketEmail, retryOrderEmail } from '../src/modules/orders/admin-orders.service.js';
+import { checkIn } from '../src/modules/checkins/checkin.service.js';
+import { setEventCancelled } from '../src/modules/events/admin-events.repository.js';
+
 import { app } from '../src/app.js';
 import { pool } from '../src/database/pool.js';
 import {
@@ -76,9 +84,12 @@ async function createSellableEvent(label: string, capacity: number): Promise<Tes
              checkin_start_at, checkin_end_at, created_by)
          VALUES (?, ?, 'Week 4 integration fixture', ?, 'Test Venue', '1 Test Street', 'HCM',
                  ?, NULL, 'Week 4 fixture',
-                 DATE_ADD(NOW(3), INTERVAL 2 DAY), DATE_ADD(NOW(3), INTERVAL 3 DAY),
-                 DATE_SUB(NOW(3), INTERVAL 1 DAY), DATE_ADD(NOW(3), INTERVAL 1 DAY),
-                 DATE_ADD(NOW(3), INTERVAL 1 DAY), DATE_ADD(NOW(3), INTERVAL 3 DAY), ?)`,
+                 DATE_ADD(DATE_ADD(CURRENT_DATE(), INTERVAL 2 DAY), INTERVAL 18 HOUR),
+                 DATE_ADD(DATE_ADD(CURRENT_DATE(), INTERVAL 2 DAY), INTERVAL 22 HOUR),
+                 DATE_SUB(NOW(3), INTERVAL 1 DAY),
+                 DATE_ADD(DATE_ADD(CURRENT_DATE(), INTERVAL 2 DAY), INTERVAL 17 HOUR),
+                 DATE_ADD(DATE_ADD(CURRENT_DATE(), INTERVAL 2 DAY), INTERVAL 17 HOUR),
+                 DATE_ADD(DATE_ADD(CURRENT_DATE(), INTERVAL 2 DAY), INTERVAL 22 HOUR), ?)`,
         [`Week 4 ${label}`, slug, categoryId, capacity, adminId]
     );
     const eventId = eventResult.insertId;
@@ -115,6 +126,7 @@ async function inventory(ticketTypeId: number) {
 
 describe.sequential('Week 4 checkout safety integration', () => {
     beforeAll(async () => {
+        if (!process.env.DB_NAME?.startsWith('ticketboxqr_test_')) throw new Error('Checkout integration requires a disposable ticketboxqr_test_* database');
         const [adminResult] = await pool.query<ResultSetHeader>(
             `INSERT INTO users (full_name, email, password_hash, role, is_active)
              VALUES ('Week 4 Test Admin', ?, 'not-used-by-integration-test', 'admin', TRUE)`,
@@ -308,6 +320,15 @@ describe.sequential('Week 4 checkout safety integration', () => {
         const paid = await payOrder(order.id, lookupToken!);
         expect(paid.status).toBe('confirmed');
         expect(paid.tickets).toHaveLength(2);
+        const [credentials] = await pool.query<RowDataPacket[]>('SELECT t.ticket_code, t.qr_token_hash, t.qr_token_encrypted FROM tickets t JOIN order_items oi ON oi.id=t.order_item_id WHERE oi.order_id=?', [order.id]);
+        for (const ticket of credentials) {
+            const raw = qrEncryption.decryptQrToken(ticket.qr_token_encrypted, ticket.ticket_code);
+            expect(crypto.createHash('sha256').update(raw).digest('hex')).toBe(ticket.qr_token_hash);
+            expect(ticket.qr_token_encrypted).not.toContain(raw);
+        }
+        const [queued] = await pool.query<RowDataPacket[]>("SELECT status, attempt_count FROM email_logs WHERE order_id=? AND email_type='ticket_issued'", [order.id]);
+        expect(queued).toHaveLength(1); expect(queued[0]?.status).toBe('pending'); expect(queued[0]?.attempt_count).toBe(0);
+
         await expect(payOrder(order.id, lookupToken!))
             .rejects.toMatchObject({ code: 'ORDER_NOT_PAYABLE' });
 
@@ -319,6 +340,97 @@ describe.sequential('Week 4 checkout safety integration', () => {
         );
         expect(Number(paymentRows[0]?.count)).toBe(1);
         expect(Number(ticketRows[0]?.count)).toBe(2);
+    });
+
+    it('preserves the original QR through enqueue, SMTP failure, retry, check-in and event cancellation', async () => {
+        const fixture = await createSellableEvent('original-qr', 5);
+        await pool.query('UPDATE events SET checkin_start_at=DATE_SUB(NOW(3), INTERVAL 1 HOUR) WHERE id=?', [fixture.eventId]);
+        const [staff] = await pool.query<RowDataPacket[]>("SELECT id FROM users WHERE email='staff@ticketbox.local'");
+        const staffId = Number(staff[0]?.id);
+        await pool.query('INSERT INTO event_staff(event_id,staff_id,assigned_by) VALUES (?,?,?)', [fixture.eventId, staffId, adminId]);
+        const order = await createOrder(makeBody(fixture, 2), makeKey('original-qr'));
+        await payOrder(order.id, order.lookupToken!);
+        const readTickets = async () => {
+            const [rows] = await pool.query<RowDataPacket[]>('SELECT t.* FROM tickets t JOIN order_items oi ON oi.id=t.order_item_id WHERE oi.order_id=? ORDER BY t.id', [order.id]);
+            return rows;
+        };
+        const original = await readTickets();
+        const originalToken = qrEncryption.decryptQrToken(original[0]!.qr_token_encrypted, original[0]!.ticket_code);
+        const results = await Promise.all([resendTicketEmail(order.id), resendTicketEmail(order.id)]);
+        expect(results[0]?.jobId).toBe(results[1]?.jobId);
+        expect(results[0]).toMatchObject({ queued: true, message: 'Đã xếp lịch gửi lại vé.' });
+        await expect(retryOrderEmail(order.id, results[0]!.jobId)).rejects.toMatchObject({ code: 'EMAIL_LOG_NOT_FAILED' });
+        // Claim via the real repository; no provider is called by claim itself.
+        const claimed = [];
+        for (let i = 0; i < 10; i++) {
+            const batch = await claimDueTicketEmails(5); claimed.push(...batch);
+            if (!batch.length) break;
+        }
+        const job = claimed.find(row => row.id === results[0]!.jobId)!;
+        expect(job.attempt_count).toBe(1);
+        vi.mocked(sendTicketEmail).mockRejectedValueOnce({ code: 'EAUTH', responseCode: 535 });
+        await deliverTicketEmailJob(job);
+        expect(await readTickets()).toEqual(original);
+        const [failed] = await pool.query<RowDataPacket[]>('SELECT status,error_message FROM email_logs WHERE id=?', [job.id]);
+        expect(failed[0]?.status).toBe('failed');
+        expect(failed[0]?.error_message).toContain('EMAIL_PROVIDER_FAILED');
+        await expect(retryOrderEmail(order.id, job.id + 100000)).rejects.toMatchObject({ code: 'EMAIL_LOG_NOT_FOUND' });
+        const retried = await retryOrderEmail(order.id, job.id);
+        await expect(retryOrderEmail(order.id, job.id)).rejects.toMatchObject({ code: 'EMAIL_JOB_ACTIVE' });
+        const retryJob = (await claimDueTicketEmails(5)).find(row => row.id === retried.jobId)!;
+        vi.mocked(sendTicketEmail).mockResolvedValueOnce({ messageId: 'accepted', accepted: ['week4.tester@gmail.com'] } as never);
+        await deliverTicketEmailJob(retryJob);
+        expect(await readTickets()).toEqual(original);
+        const [sent] = await pool.query<RowDataPacket[]>('SELECT status,attempt_count FROM email_logs WHERE id=?', [retryJob.id]);
+        expect(sent[0]).toMatchObject({ status: 'sent', attempt_count: 1 });
+        expect((await checkIn(fixture.eventId, staffId, `ticketbox:${originalToken}`)).code).toBe('SUCCESS');
+        expect((await checkIn(fixture.eventId, staffId, `ticketbox:${originalToken}`)).code).toBe('ALREADY_CHECKED_IN');
+        const remaining = await prepareTicketEmail(order.id);
+        expect(remaining.tickets.map(ticket => ticket.ticketCode)).toEqual([original[1]!.ticket_code]);
+        await setEventCancelled(fixture.eventId, 'Integration cancellation verification', adminId);
+        await expect(prepareTicketEmail(order.id)).rejects.toMatchObject({ code: 'NO_ACTIVE_TICKETS' });
+        const cancelled = await readTickets();
+        expect(cancelled.every(ticket => ticket.status === 'cancelled')).toBe(true);
+        expect(cancelled.map(ticket => ticket.qr_token_hash)).toEqual(original.map(ticket => ticket.qr_token_hash));
+        expect((await checkIn(fixture.eventId, staffId, `ticketbox:${originalToken}`)).code).toBe('EVENT_NOT_AVAILABLE');
+    });
+
+    it('recovers expired leases and rejects completion from an obsolete attempt', async () => {
+        const fixture = await createSellableEvent('mail-lease', 2);
+        const order = await createOrder(makeBody(fixture), makeKey('mail-lease'));
+        await payOrder(order.id, order.lookupToken!);
+        const queued = await enqueueTicketEmail(order.id, 'week4.tester@gmail.com', 'ticket_resent');
+        const claims = await Promise.all([claimDueTicketEmails(5), claimDueTicketEmails(5)]);
+        const matching = claims.flat().filter(job => job.id === queued.jobId);
+        expect(matching).toHaveLength(1);
+        await pool.query('UPDATE email_logs SET next_attempt_at=DATE_SUB(NOW(3), INTERVAL 1 SECOND) WHERE id=?', [queued.jobId]);
+        await recoverStaleTicketEmailJobs();
+        const reclaimed = (await claimDueTicketEmails(5)).find(job => job.id === queued.jobId)!;
+        expect(reclaimed.attempt_count).toBe(2);
+        expect(await markTicketEmailSent(queued.jobId, 1, 'stale-worker')).toBe(false);
+        expect(await markTicketEmailSent(queued.jobId, 2, 'current-worker')).toBe(true);
+    });
+
+    it('rolls payment, tickets, email log and inventory back if encryption fails', async () => {
+        const fixture = await createSellableEvent('encrypt-rollback', 3);
+        const order = await createOrder(makeBody(fixture, 2), makeKey('encrypt-rollback'));
+        const realEncrypt = qrEncryption.encryptQrToken;
+        let count = 0;
+        const spy = vi.spyOn(qrEncryption, 'encryptQrToken').mockImplementation((...args) => {
+            if (++count === 2) throw new Error('Encryption unavailable');
+            return realEncrypt(...args);
+        });
+        try { await expect(payOrder(order.id, order.lookupToken!)).rejects.toThrow('Encryption unavailable'); }
+        finally { spy.mockRestore(); }
+        const [orders] = await pool.query<RowDataPacket[]>('SELECT status FROM orders WHERE id = ?', [order.id]);
+        expect(orders[0]?.status).toBe('pending_payment');
+        expect(await inventory(fixture.ticketTypeId)).toMatchObject({ reserved_quantity: 2, sold_quantity: 0 });
+        for (const table of ['payments', 'email_logs']) {
+            const [rows] = await pool.query<CountRow[]>(`SELECT COUNT(*) AS count FROM ${table} WHERE order_id = ?`, [order.id]);
+            expect(Number(rows[0]?.count)).toBe(0);
+        }
+        const [rows] = await pool.query<CountRow[]>('SELECT COUNT(*) AS count FROM tickets t JOIN order_items oi ON oi.id=t.order_item_id WHERE oi.order_id=?', [order.id]);
+        expect(Number(rows[0]?.count)).toBe(0);
     });
 
     it('has the required unique and expiry lookup indexes in MySQL', async () => {

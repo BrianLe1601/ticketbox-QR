@@ -5,13 +5,33 @@ import { AppError } from "../../utils/app-error.js";
 import { signAccessToken } from "../../utils/jwt.js";
 import {
   findActiveUserById,
+  findGoogleStaffBySub,
   findUserByEmail,
+  registerPendingGoogleStaff,
 } from "./auth.repository.js";
+import type { AuthUserRow } from "./auth.repository.js";
+import { verifyGoogleIdentity } from "./google-identity.service.js";
 import type { LoginInput } from "./auth.schema.js";
 import { createSession, lockSession, pool, replaceSession, revokeSession } from "./auth-session.repository.js";
 import { hashToken, newRefreshToken, parseRefreshToken, refreshExpiry } from "./refresh-token.js";
 
 type SessionMetadata={userAgent:string|null;ip:string|null};
+
+async function issueSession(user: AuthUserRow, metadata: SessionMetadata) {
+  const accessToken = signAccessToken({
+    userId: user.id,
+    email: user.email,
+    role: user.role,
+  });
+  const refreshToken = newRefreshToken();
+  await createSession(refreshToken.id, user.id, refreshToken.hash,
+    refreshExpiry(), metadata.userAgent, metadata.ip);
+  return {
+    accessToken,
+    refreshToken: refreshToken.value,
+    user: { id: user.id, fullName: user.full_name, email: user.email, role: user.role },
+  };
+}
 
 export async function login(input: LoginInput,metadata:SessionMetadata) {
   const user = await findUserByEmail(input.email);
@@ -32,7 +52,7 @@ export async function login(input: LoginInput,metadata:SessionMetadata) {
     );
   }
 
-  const passwordMatches = await bcrypt.compare(
+  const passwordMatches = user.password_hash !== null && await bcrypt.compare(
     input.password,
     user.password_hash,
   );
@@ -45,24 +65,28 @@ export async function login(input: LoginInput,metadata:SessionMetadata) {
     );
   }
 
-  const accessToken = signAccessToken({
-    userId: user.id,
-    email: user.email,
-    role: user.role,
-  });
-  const refreshToken=newRefreshToken();
-  await createSession(refreshToken.id,user.id,refreshToken.hash,refreshExpiry(),metadata.userAgent,metadata.ip);
+  return issueSession(user, metadata);
+}
 
-  return {
-    accessToken,
-    refreshToken:refreshToken.value,
-    user: {
-      id: user.id,
-      fullName: user.full_name,
-      email: user.email,
-      role: user.role,
-    },
-  };
+export async function loginWithGoogle(idToken: string, metadata: SessionMetadata) {
+  const identity = await verifyGoogleIdentity(idToken);
+  const user = await findGoogleStaffBySub(identity.sub)
+    ?? await registerPendingGoogleStaff(identity);
+
+  if (!user) {
+    // A different account already owns the verified email. Never link by email.
+    throw new AppError(409, "Email đã thuộc một tài khoản khác", "GOOGLE_EMAIL_CONFLICT");
+  }
+  if (user.staff_approval_status === "pending") {
+    return { status: "pending" as const };
+  }
+  if (user.staff_approval_status === "rejected") {
+    throw new AppError(403, "Tài khoản chưa được cấp quyền Staff", "STAFF_NOT_APPROVED");
+  }
+  if (!user.is_active) {
+    throw new AppError(403, "Tài khoản Staff đã bị vô hiệu hóa", "ACCOUNT_DISABLED");
+  }
+  return { status: "approved" as const, session: await issueSession(user, metadata) };
 }
 
 export async function getCurrentUser(userId: number) {

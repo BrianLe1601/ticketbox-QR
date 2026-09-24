@@ -5,6 +5,7 @@ export interface CreateOrderPayload {
     eventId: string;
     idempotencyKey: string;
     emailVerificationToken: string;
+    checkoutSession: string;
     items: TicketSelection[];
     buyer: BuyerInfo;
 }
@@ -15,7 +16,7 @@ export async function createOrder(payload: CreateOrderPayload): Promise<CreateOr
         emailVerificationToken: payload.emailVerificationToken,
         items: payload.items.map((i) => ({ ticketTypeId: i.ticketTypeId, quantity: i.quantity })),
         buyer: payload.buyer,
-    }, { "Idempotency-Key": payload.idempotencyKey });
+    }, { "Idempotency-Key": payload.idempotencyKey, "X-Checkout-Session": payload.checkoutSession });
     return data;
 }
 
@@ -28,13 +29,13 @@ export async function fetchOrder(orderId: string, token: string): Promise<Order 
     }
 }
 
-export async function requestEmailVerification(email: string) {
-    const { data } = await apiPost<{ message: string; expiresInSeconds: number }>("/checkout/email-verifications", { email });
+export async function requestEmailVerification(email: string, recaptchaToken: string, checkoutSession: string) {
+    const { data } = await apiPost<{ message: string; expiresInSeconds: number }>("/orders/verify-email/request", { email, recaptchaToken }, { "X-Checkout-Session": checkoutSession });
     return data;
 }
 
-export async function confirmEmailVerification(email: string, code: string) {
-    const { data } = await apiPost<{ verificationToken: string; email: string }>("/checkout/email-verifications/confirm", { email, code });
+export async function confirmEmailVerification(email: string, code: string, checkoutSession: string) {
+    const { data } = await apiPost<{ verificationToken: string; email: string }>("/orders/verify-email/confirm", { email, otp: code }, { "X-Checkout-Session": checkoutSession });
     return data;
 }
 

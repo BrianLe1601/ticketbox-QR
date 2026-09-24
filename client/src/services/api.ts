@@ -1,6 +1,6 @@
 import { refreshSessionRequest } from "@/services/auth.service";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000/api";
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000/api";
 
 interface ApiSuccess<T> {
     success: true;
@@ -12,16 +12,19 @@ interface ApiError {
     success: false;
     message: string;
     code?: string;
+    retryAfterSeconds?: number;
 }
 
 export class ApiRequestError extends Error {
     status: number;
     code?: string;
+    retryAfterSeconds?: number;
 
-    constructor(message: string, status: number, code?: string) {
+    constructor(message: string, status: number, code?: string, retryAfterSeconds?: number) {
         super(message);
         this.status = status;
         this.code = code;
+        this.retryAfterSeconds = retryAfterSeconds;
     }
 }
 
@@ -38,7 +41,7 @@ export async function apiGet<T>(path: string, params?: Record<string, string | n
 
     if (!res.ok || !json.success) {
         const message = "message" in json ? json.message : `Request failed (${res.status})`;
-        throw new ApiRequestError(message, res.status, "code" in json ? json.code : undefined);
+        throw new ApiRequestError(message, res.status, "code" in json ? json.code : undefined, "retryAfterSeconds" in json ? json.retryAfterSeconds : undefined);
     }
 
     return { data: json.data, meta: json.meta };
@@ -56,7 +59,7 @@ export async function apiPost<T>(path: string, body: unknown, headers?: HeadersI
 
     if (!res.ok || !json.success) {
         const message = "message" in json ? json.message : `Request failed (${res.status})`;
-        throw new ApiRequestError(message, res.status, "code" in json ? json.code : undefined);
+        throw new ApiRequestError(message, res.status, "code" in json ? json.code : undefined, "retryAfterSeconds" in json ? json.retryAfterSeconds : undefined);
     }
 
     return { data: json.data };
@@ -78,7 +81,7 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}, tok
     if (res.status === 204) return { data: undefined as T };
     const json = (await res.json()) as ApiSuccess<T> | ApiError;
     if (!res.ok || !json.success) {
-        throw new ApiRequestError("message" in json ? json.message : `Request failed (${res.status})`, res.status, "code" in json ? json.code : undefined);
+        throw new ApiRequestError("message" in json ? json.message : `Request failed (${res.status})`, res.status, "code" in json ? json.code : undefined, "retryAfterSeconds" in json ? json.retryAfterSeconds : undefined);
     }
     return { data: json.data, meta: json.meta };
 }

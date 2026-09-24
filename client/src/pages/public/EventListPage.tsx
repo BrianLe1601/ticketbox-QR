@@ -6,8 +6,9 @@ import { fetchEventList } from "@/services/event.service";
 import { fetchCategories } from "@/services/category.service";
 import {
     CATEGORY_FILTER_OPTIONS, CITY_OPTIONS,
-    TIME_OPTIONS, SORT_OPTIONS, PAGE_SIZE,
+    TIME_OPTIONS, SORT_OPTIONS, PAGE_SIZE, EVENT_LIFECYCLE_FALLBACK_REFRESH_MS,
 } from "@/constants/eventconstants";
+import { subscribeToEventLifecycleUpdates } from "@/services/event-realtime.service";
 import type { CategoryFilter } from "@/constants/eventconstants";
 import { daysDiff, cn } from "@/lib/utils";
 import { EventCard } from "@/components/event/EventCard";
@@ -67,6 +68,42 @@ export function EventListPage() {
         const t = setTimeout(() => loadPage(1, false), query ? 400 : 0);
         return () => clearTimeout(t);
     }, [loadPage, query]);
+
+    // Refresh every loaded page without showing the initial-loading skeleton again.
+    useEffect(() => {
+        let active = true;
+        const refreshVisibleEvents = async () => {
+            try {
+                const pages = await Promise.all(Array.from({ length: page }, (_, index) => (
+                    fetchEventList({
+                        q: query || undefined,
+                        category: selectedCategory === "all" ? undefined : (selectedCategory as CategorySlug),
+                        city: selectedCity === "all" ? undefined : selectedCity,
+                        sort: sortBy,
+                        page: index + 1,
+                        limit: PAGE_SIZE,
+                    })
+                )));
+                if (!active) return;
+                setEvents(pages.flatMap((result) => result.events));
+                setTotal(pages[0]?.total ?? 0);
+            } catch {
+                // Keep the last successful list during a transient background refresh failure.
+            }
+        };
+        const unsubscribeRealtime = subscribeToEventLifecycleUpdates(
+            () => void refreshVisibleEvents(),
+        );
+        const refreshTimer = window.setInterval(
+            () => void refreshVisibleEvents(),
+            EVENT_LIFECYCLE_FALLBACK_REFRESH_MS,
+        );
+        return () => {
+            active = false;
+            unsubscribeRealtime();
+            window.clearInterval(refreshTimer);
+        };
+    }, [page, query, selectedCategory, selectedCity, sortBy]);
 
     const timeFiltered = events.filter((event) => {
         if (selectedTime === "all") return true;

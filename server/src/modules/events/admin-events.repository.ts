@@ -12,7 +12,7 @@ export interface AdminEventRow extends RowDataPacket {
   scheduled_publish_at:Date|null; published_at:Date|null; cancelled_at:Date|null;
   cancellation_reason:string|null; completed_at:Date|null; publish_failure_reason:string|null;
   ticket_type_count:number; valid_ticket_type_count:number; allocated_capacity:number; sold_quantity:number;
-  pending_order_count:number; confirmed_order_count:number;
+  pending_order_count:number; confirmed_order_count:number; active_staff_count:number;
 }
 
 const SELECT = `e.*, c.slug category,
@@ -23,7 +23,8 @@ const SELECT = `e.*, c.slug category,
   COALESCE(SUM(tt.capacity),0) allocated_capacity,
   COALESCE(SUM(tt.sold_quantity),0) sold_quantity,
   (SELECT COUNT(*) FROM orders po WHERE po.event_id=e.id AND po.status='pending_payment') pending_order_count,
-  (SELECT COUNT(*) FROM orders co WHERE co.event_id=e.id AND co.status='confirmed') confirmed_order_count`;
+  (SELECT COUNT(*) FROM orders co WHERE co.event_id=e.id AND co.status='confirmed') confirmed_order_count,
+  (SELECT COUNT(*) FROM event_staff es WHERE es.event_id=e.id AND es.is_active=TRUE) active_staff_count`;
 
 function toDatabaseDate(value: string | null | undefined): string | null | undefined {
   if (value === undefined) return undefined;
@@ -97,6 +98,24 @@ export async function deleteDraftEvent(id:number){
 
 export async function setEventPublished(id:number){await pool.execute("UPDATE events SET status='published', published_at=NOW(3), scheduled_publish_at=NULL, last_publish_attempt_at=NOW(3), publish_failure_reason=NULL WHERE id=? AND status='draft'",[id]);}
 export async function setPublishSchedule(id:number,value:string|null){await pool.execute("UPDATE events SET scheduled_publish_at=?, publish_failure_reason=NULL WHERE id=? AND status='draft'",[toDatabaseDate(value)??null,id]);}
+export async function findDueScheduledEvents(limit = 10): Promise<number[]> {
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT id FROM events
+     WHERE status = 'draft'
+       AND scheduled_publish_at IS NOT NULL
+       AND scheduled_publish_at <= NOW(3)
+     ORDER BY scheduled_publish_at ASC
+     LIMIT ?`,
+    [limit]
+  );
+  return rows.map((r) => Number(r.id));
+}
+export async function setPublishAttemptFailure(id: number, reason: string): Promise<void> {
+  await pool.execute(
+    "UPDATE events SET last_publish_attempt_at=NOW(3), publish_failure_reason=? WHERE id=? AND status='draft'",
+    [reason.slice(0, 500), id]
+  );
+}
 export interface EventCancellationImpact {cancelledPendingOrders:number;confirmedOrders:number;refundRecords:number;notificationLogs:number}
 export async function setEventCancelled(id:number,reason:string,adminId:number):Promise<EventCancellationImpact>{
   const connection=await pool.getConnection();
@@ -134,6 +153,9 @@ export async function setEventCancelled(id:number,reason:string,adminId:number):
     await connection.execute(`UPDATE tickets t JOIN order_items oi ON oi.id=t.order_item_id JOIN orders o ON o.id=oi.order_id
       SET t.status='cancelled',t.cancelled_at=NOW(3),t.cancelled_by=?,t.cancel_reason=?
       WHERE o.event_id=? AND o.status='confirmed' AND t.status IN ('issued','checked_in')`,[adminId,reason,id]);
+    // Preserve assignment history but immediately remove check-in authority for
+    // every Staff account attached to the cancelled Event.
+    await connection.execute("UPDATE event_staff SET is_active=FALSE, revoked_at=COALESCE(revoked_at,NOW(3)) WHERE event_id=? AND is_active=TRUE",[id]);
     await connection.execute("UPDATE ticket_types SET is_active=FALSE WHERE event_id=?",[id]);
     const [eventResult]=await connection.execute<ResultSetHeader>("UPDATE events SET status='cancelled', cancelled_at=NOW(3), cancellation_reason=? WHERE id=? AND status IN ('published','ongoing')",[reason,id]);
     if(eventResult.affectedRows!==1)throw new Error("Event is no longer cancellable");

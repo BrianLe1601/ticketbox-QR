@@ -18,7 +18,7 @@ export interface EventRow extends RowDataPacket {
     sales_end_at: Date | null;
     checkin_start_at: Date | null;
     checkin_end_at: Date | null;
-    status: 'draft' | 'published' | 'ended' | 'cancelled';
+    status: 'draft' | 'published' | 'ongoing' | 'completed' | 'cancelled';
     min_price: number | null;
     has_available: number;
     sale_status: 'on-sale' | 'coming-soon' | 'sold-out' | 'closed';
@@ -51,7 +51,7 @@ export async function findPublishedEvents(query: ListEventsQuery) {
     const { q, category, city, page, limit } = query;
     const offset = (page - 1) * limit;
 
-    const conditions: string[] = [`e.status IN ('published','ongoing')`, `e.visibility = 'visible'`];
+    const conditions: string[] = [`e.status IN ('published','ongoing','completed')`, `e.visibility = 'visible'`];
     const params: unknown[] = [];
 
     if (q) {
@@ -69,11 +69,12 @@ export async function findPublishedEvents(query: ListEventsQuery) {
 
     const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
-    const orderBy =
+    const selectedOrder =
         query.sort === 'newest' ? 'e.created_at DESC'
             : query.sort === 'price-asc' ? 'min_price ASC'
                 : query.sort === 'price-desc' ? 'min_price DESC'
                     : 'e.start_time ASC'; // upcoming
+    const orderBy = `CASE WHEN e.status='completed' OR e.end_time<=NOW(3) THEN 1 ELSE 0 END ASC, ${selectedOrder}`;
 
     // has_available: còn ít nhất 1 loại vé active mà (capacity - reserved - sold) > 0.
     // IFNULL bọc ngoài vì event chưa có ticket_types active nào thì LEFT JOIN ra NULL,
@@ -81,11 +82,12 @@ export async function findPublishedEvents(query: ListEventsQuery) {
     const sql = `
         SELECT ${EVENT_SELECT},
             MIN(tt.price) AS min_price,
-            IFNULL(MAX(CASE
+            CASE WHEN e.status='completed' OR e.end_time<=NOW(3) THEN 0 ELSE IFNULL(MAX(CASE
                 WHEN (tt.capacity - tt.reserved_quantity - tt.sold_quantity) > 0 THEN 1
                 ELSE 0
-            END), 0) AS has_available,
+            END), 0) END AS has_available,
             CASE
+              WHEN e.status='completed' OR e.end_time<=NOW(3) THEN 'closed'
               WHEN MAX(CASE WHEN tt.id IS NOT NULL
                 AND (tt.capacity - tt.reserved_quantity - tt.sold_quantity) > 0
                 AND NOW(3) >= COALESCE(tt.sales_start_at,e.sales_start_at)
@@ -130,7 +132,7 @@ export async function findEventById(id: number) {
         `SELECT ${EVENT_SELECT}
          FROM events e
          JOIN categories c ON c.id = e.category_id
-         WHERE e.id = ? AND e.status IN ('published','ongoing') AND e.visibility = 'visible'
+         WHERE e.id = ? AND e.status IN ('published','ongoing','completed') AND e.visibility = 'visible'
          LIMIT 1`,
         [id]
     );

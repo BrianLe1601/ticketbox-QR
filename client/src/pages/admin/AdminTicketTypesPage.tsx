@@ -17,7 +17,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
@@ -63,6 +63,14 @@ const PRESETS = [
   { name: "Free Registration", price: "0", desc: "Complimentary access with registration required for capacity tracking." },
 ];
 
+const eventStatusLabels: Record<string, string> = {
+  draft: "Bản nháp",
+  published: "Đã công bố",
+  ongoing: "Đang diễn ra",
+  completed: "Đã kết thúc",
+  cancelled: "Đã hủy",
+};
+
 export function AdminTicketTypesPage() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
@@ -74,6 +82,13 @@ export function AdminTicketTypesPage() {
   const [referenceTime, setReferenceTime] = useState(0);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
+
+  // Level 1: Event Lifecycle filter
+  const [eventLifecycleFilter, setEventLifecycleFilter] = useState<string>("all");
+
+  // Level 2: Ticket Type filter
+  const [ticketStatusFilter, setTicketStatusFilter] =
+    useState<"all" | "active" | "paused" | "soldOut" | "hasReserved">("all");
 
   const [dialog, setDialog] = useState<{ mode: "create" | "edit"; ticketId?: number } | null>(null);
   const [detailTicketId, setDetailTicketId] = useState<number | null>(null);
@@ -115,9 +130,47 @@ export function AdminTicketTypesPage() {
   }, [dialog, detailTicketId]);
 
   const selected = events.find((item) => item.id === selectedId);
-  const filtered = events.filter((event) =>
-    `${event.name} ${event.venue} ${event.city}`.toLowerCase().includes(query.toLowerCase()),
-  );
+  const filtered = useMemo(() => {
+    return events.filter((event) => {
+      const matchesQuery = `${event.name} ${event.venue} ${event.city}`
+        .toLowerCase()
+        .includes(query.toLowerCase());
+      const matchesLifecycle =
+        eventLifecycleFilter === "all" || event.status === eventLifecycleFilter;
+      return matchesQuery && matchesLifecycle;
+    });
+  }, [events, query, eventLifecycleFilter]);
+
+  const handleSelectEvent = (id: number) => {
+    setSelectedId(id);
+    setTicketStatusFilter("all");
+  };
+
+  const handleEventLifecycleChange = (nextLifecycle: string) => {
+    setEventLifecycleFilter(nextLifecycle);
+    const nextFiltered = events.filter((e) => {
+      const matchesQuery = `${e.name} ${e.venue} ${e.city}`.toLowerCase().includes(query.toLowerCase());
+      const matchesLifecycle = nextLifecycle === "all" || e.status === nextLifecycle;
+      return matchesQuery && matchesLifecycle;
+    });
+    if (nextFiltered.length > 0 && !nextFiltered.some((e) => e.id === selectedId)) {
+      setSelectedId(nextFiltered[0].id);
+      setTicketStatusFilter("all");
+    }
+  };
+
+  const handleQueryChange = (nextQuery: string) => {
+    setQuery(nextQuery);
+    const nextFiltered = events.filter((e) => {
+      const matchesQuery = `${e.name} ${e.venue} ${e.city}`.toLowerCase().includes(nextQuery.toLowerCase());
+      const matchesLifecycle = eventLifecycleFilter === "all" || e.status === eventLifecycleFilter;
+      return matchesQuery && matchesLifecycle;
+    });
+    if (nextFiltered.length > 0 && !nextFiltered.some((e) => e.id === selectedId)) {
+      setSelectedId(nextFiltered[0].id);
+      setTicketStatusFilter("all");
+    }
+  };
 
   const venueCap = selected?.venueCapacity ?? 0;
   const allocated = ticketTypes.reduce((sum, item) => sum + item.capacity, 0);
@@ -134,6 +187,25 @@ export function AdminTicketTypesPage() {
     (sum, item) => sum + item.capacity * item.price,
     0,
   );
+
+  const ticketMetrics = useMemo(() => {
+    const total = ticketTypes.length;
+    const active = ticketTypes.filter((t) => t.isActive).length;
+    const paused = ticketTypes.filter((t) => !t.isActive).length;
+    const soldOut = ticketTypes.filter((t) => t.availableQuantity === 0).length;
+    const hasReserved = ticketTypes.filter((t) => t.reservedQuantity > 0).length;
+    return { total, active, paused, soldOut, hasReserved };
+  }, [ticketTypes]);
+
+  const visibleTicketTypes = useMemo(() => {
+    return ticketTypes.filter((ticket) => {
+      if (ticketStatusFilter === "active") return ticket.isActive;
+      if (ticketStatusFilter === "paused") return !ticket.isActive;
+      if (ticketStatusFilter === "soldOut") return ticket.availableQuantity === 0;
+      if (ticketStatusFilter === "hasReserved") return ticket.reservedQuantity > 0;
+      return true;
+    });
+  }, [ticketTypes, ticketStatusFilter]);
 
   const detailTicket = ticketTypes.find((ticket) => ticket.id === detailTicketId) ?? null;
 
@@ -404,11 +476,26 @@ export function AdminTicketTypesPage() {
         {/* Left Event Browser Sidebar */}
         <aside className="ticket-event-browser">
           <div className="ticket-event-search">
+            <select
+              className="ticket-sidebar-filter"
+              value={eventLifecycleFilter}
+              onChange={(e) => handleEventLifecycleChange(e.target.value)}
+              aria-label="Lọc sự kiện theo trạng thái"
+            >
+              <option value="all">Tất cả sự kiện ({events.length})</option>
+              <option value="draft">Bản nháp ({events.filter((e) => e.status === "draft").length})</option>
+              <option value="published">Đã công bố ({events.filter((e) => e.status === "published").length})</option>
+              <option value="ongoing">Đang diễn ra ({events.filter((e) => e.status === "ongoing").length})</option>
+              <option value="completed">Đã kết thúc ({events.filter((e) => e.status === "completed").length})</option>
+              <option value="cancelled">Đã hủy ({events.filter((e) => e.status === "cancelled").length})</option>
+            </select>
+          </div>
+          <div className="ticket-event-search">
             <Search size={15} className="text-cyan-400/70" />
             <input
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search Events..."
+              onChange={(e) => handleQueryChange(e.target.value)}
+              placeholder="Tìm kiếm sự kiện..."
             />
           </div>
           <div className="ticket-event-list">
@@ -416,12 +503,10 @@ export function AdminTicketTypesPage() {
               <button
                 key={event.id}
                 className={event.id === selectedId ? "selected" : ""}
-                onClick={() => {
-                  setSelectedId(event.id);
-                }}
+                onClick={() => handleSelectEvent(event.id)}
               >
                 <div>
-                  <span className={`event-status ${event.status}`}>{event.status}</span>
+                  <span className={`event-status ${event.status}`}>{eventStatusLabels[event.status] || event.status}</span>
                   <strong>{event.name}</strong>
                   <small>
                     <MapPin size={11} />
@@ -552,37 +637,116 @@ export function AdminTicketTypesPage() {
             </div>
           </div>
 
+          {/* Level 2 Ticket Quick Filter Cards */}
+          <div className="ticket-metric-grid" role="toolbar" aria-label="Bộ lọc nhanh hạng vé">
+            <button
+              type="button"
+              className={`ticket-metric-card ${ticketStatusFilter === "all" ? "active" : ""}`}
+              onClick={() => setTicketStatusFilter("all")}
+              aria-pressed={ticketStatusFilter === "all"}
+              aria-label={`Xem tất cả hạng vé (${ticketMetrics.total})`}
+            >
+              <span className="ticket-metric-label">Tổng hạng vé</span>
+              <strong className="ticket-metric-val">{ticketMetrics.total}</strong>
+            </button>
+            <button
+              type="button"
+              className={`ticket-metric-card ${ticketStatusFilter === "active" ? "active" : ""}`}
+              onClick={() => setTicketStatusFilter("active")}
+              aria-pressed={ticketStatusFilter === "active"}
+              aria-label={`Lọc hạng vé đang bán / đang hoạt động (${ticketMetrics.active})`}
+            >
+              <span className="ticket-metric-label">Đang bán / Hoạt động</span>
+              <strong className="ticket-metric-val text-emerald-400">{ticketMetrics.active}</strong>
+            </button>
+            <button
+              type="button"
+              className={`ticket-metric-card ${ticketStatusFilter === "paused" ? "active" : ""}`}
+              onClick={() => setTicketStatusFilter("paused")}
+              aria-pressed={ticketStatusFilter === "paused"}
+              aria-label={`Lọc hạng vé tạm dừng (${ticketMetrics.paused})`}
+            >
+              <span className="ticket-metric-label">Tạm dừng</span>
+              <strong className="ticket-metric-val text-amber-400">{ticketMetrics.paused}</strong>
+            </button>
+            <button
+              type="button"
+              className={`ticket-metric-card ${ticketStatusFilter === "soldOut" ? "active" : ""}`}
+              onClick={() => setTicketStatusFilter("soldOut")}
+              aria-pressed={ticketStatusFilter === "soldOut"}
+              aria-label={`Lọc hạng vé hết vé (${ticketMetrics.soldOut})`}
+            >
+              <span className="ticket-metric-label">Hết vé</span>
+              <strong className="ticket-metric-val text-rose-400">{ticketMetrics.soldOut}</strong>
+            </button>
+            <button
+              type="button"
+              className={`ticket-metric-card ${ticketStatusFilter === "hasReserved" ? "active" : ""}`}
+              onClick={() => setTicketStatusFilter("hasReserved")}
+              aria-pressed={ticketStatusFilter === "hasReserved"}
+              aria-label={`Lọc hạng vé có vé đang giữ (${ticketMetrics.hasReserved})`}
+            >
+              <span className="ticket-metric-label">Có vé đang giữ</span>
+              <strong className="ticket-metric-val text-cyan-400">{ticketMetrics.hasReserved}</strong>
+            </button>
+          </div>
+
           {/* Ticket Types Table / Cards */}
           <div className="ticket-type-table">
             <div className="ticket-table-heading">
               <div>
-                <span>{ticketTypes.length} TIERS CONFIGURED</span>
-                <h3>Ticket Inventory List</h3>
+                <span>
+                  {ticketStatusFilter === "all"
+                    ? `${ticketTypes.length} HẠNG VÉ`
+                    : `${visibleTicketTypes.length}/${ticketTypes.length} HẠNG VÉ`}
+                </span>
+                <h3>Danh sách kho vé</h3>
               </div>
               {canCreate && (
                 <button onClick={openCreate} className="events-primary-button !py-1.5 !px-3 !text-xs">
-                  <Plus size={14} /> Add Tier
+                  <Plus size={14} /> Thêm hạng vé
                 </button>
               )}
             </div>
 
             {loading ? (
               <div className="ticket-empty">
-                <p>Loading tier inventories...</p>
+                <p>Đang tải kho vé...</p>
               </div>
             ) : ticketTypes.length === 0 ? (
               <div className="ticket-empty">
                 <Ticket size={36} className="text-cyan-400/70" />
-                <h4>No Ticket Tiers Configured</h4>
-                <p>Create at least one active ticket tier before this event can go live.</p>
+                <h4>Chưa có hạng vé nào</h4>
+                <p>Tạo ít nhất một hạng vé hợp lệ và đang hoạt động trước khi sự kiện có thể công bố.</p>
                 {canCreate && (
-                  <button onClick={openCreate}>
-                    <Plus size={15} /> Create First Tier
+                  <button onClick={openCreate} type="button">
+                    <Plus size={15} /> Tạo hạng vé đầu tiên
                   </button>
                 )}
               </div>
+            ) : visibleTicketTypes.length === 0 ? (
+              <div className="ticket-empty">
+                <Ticket size={36} className="text-cyan-400/70" />
+                <h4>
+                  {ticketStatusFilter === "active"
+                    ? "Không có hạng vé nào đang mở bán"
+                    : ticketStatusFilter === "paused"
+                      ? "Không có hạng vé nào đang tạm dừng"
+                      : ticketStatusFilter === "soldOut"
+                        ? "Không có hạng vé nào hết vé"
+                        : "Không có hạng vé nào có vé đang giữ"}
+                </h4>
+                <p>Thử chọn bộ lọc khác hoặc xem toàn bộ hạng vé của sự kiện này.</p>
+                <button
+                  type="button"
+                  className="events-secondary-button mt-3"
+                  onClick={() => setTicketStatusFilter("all")}
+                >
+                  Xem tất cả hạng vé ({ticketTypes.length})
+                </button>
+              </div>
             ) : (
-              ticketTypes.map((ticket) => {
+              visibleTicketTypes.map((ticket) => {
                 const used = ticket.soldQuantity + ticket.reservedQuantity;
                 const effectiveSalesStart = ticket.salesStartAt ?? selected.salesStartAt;
                 const salesStartTime = effectiveSalesStart

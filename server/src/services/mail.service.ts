@@ -1,7 +1,7 @@
 import nodemailer from 'nodemailer';
 import { env } from '../config/env.js';
 
-export interface MailTicket { ticketCode: string; ticketTypeName: string; qrDataUrl: string }
+export interface MailTicket { ticketCode: string; ticketTypeName: string; qrDataUrl: string; eventName: string; startTime: Date; endTime: Date; venue: string }
 
 function createTransporter() {
     if (!env.MAIL_USER || !env.MAIL_APP_PASSWORD) throw new Error('Máy chủ chưa cấu hình MAIL_USER và MAIL_APP_PASSWORD');
@@ -23,6 +23,10 @@ export async function sendTicketEmail(input: { recipient: string; buyerName: str
     }));
     const ticketHtml = input.tickets.map((ticket, index) => `
       <div style="border:1px solid #ddd;border-radius:12px;padding:16px;margin:12px 0;text-align:center">
+        <h3>${escapeHtml(ticket.eventName)}</h3>
+        <p>Bắt đầu: ${escapeHtml(ticket.startTime.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }))}<br>
+        Kết thúc: ${escapeHtml(ticket.endTime.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }))}<br>
+        Địa điểm: ${escapeHtml(ticket.venue)}</p>
         <strong>${escapeHtml(ticket.ticketTypeName)}</strong><br><span>Mã vé: ${escapeHtml(ticket.ticketCode)}</span><br>
         <img src="cid:ticket-${index}@ticketbox" width="240" alt="QR vé ${escapeHtml(ticket.ticketCode)}">
       </div>`).join('');
