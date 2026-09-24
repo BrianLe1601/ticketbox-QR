@@ -9,6 +9,7 @@ import {
 
 import {
   clearStoredToken,
+  googleLoginRequest,
   loginRequest,
   logoutRequest,
   refreshSessionRequest,
@@ -21,6 +22,7 @@ interface AuthContextValue {
   token: string | null;
   isLoading: boolean;
   login: (credentials: LoginCredentials) => Promise<AuthUser>;
+  loginWithGoogle: (idToken: string) => Promise<{ status: "pending" } | { status: "approved"; user: AuthUser }>;
   logout: () => void;
 }
 
@@ -67,6 +69,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return result.user;
   }
 
+  async function loginWithGoogle(idToken: string) {
+    const result = await googleLoginRequest(idToken);
+    if (result.status === "pending") return result;
+    storeToken(result.accessToken);
+    setToken(result.accessToken);
+    setUser(result.user);
+    return { status: "approved" as const, user: result.user };
+  }
+
   function logout(): void {
     void logoutRequest();
     clearStoredToken();
@@ -75,7 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const value = useMemo(
-    () => ({ user, token, isLoading, login, logout }),
+    () => ({ user, token, isLoading, login, loginWithGoogle, logout }),
     [user, token, isLoading],
   );
 

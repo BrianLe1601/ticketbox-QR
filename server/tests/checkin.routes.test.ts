@@ -1,3 +1,4 @@
+/// <reference path="../src/types/express.d.ts" />
 import express from 'express';
 import request from 'supertest';
 import { beforeEach, expect, it, vi } from 'vitest';

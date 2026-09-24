@@ -5,8 +5,14 @@ import {
     findTicketTypesByEventId,
 } from './events.repository.js';
 import type { ListEventsQuery } from './events.schema.js';
+import { deriveEventLifecycleStatus } from './event-lifecycle.service.js';
 
 function mapEventSummary(row: Awaited<ReturnType<typeof findPublishedEvents>>['rows'][number]) {
+    const status = deriveEventLifecycleStatus({
+        status: row.status,
+        startTime: row.start_time,
+        endTime: row.end_time,
+    });
     return {
         id: row.id,
         name: row.name,
@@ -20,7 +26,7 @@ function mapEventSummary(row: Awaited<ReturnType<typeof findPublishedEvents>>['r
         endTime: row.end_time,
         salesStartAt: row.sales_start_at,
         salesEndAt: row.sales_end_at,
-        status: row.status,
+        status,
         minPrice: row.min_price !== null ? Number(row.min_price) : 0,
         hasAvailable: Boolean(row.has_available),
         saleStatus: row.sale_status,
@@ -43,13 +49,21 @@ export async function getEventDetail(id: number) {
 
     const ticketTypes = await findTicketTypesByEventId(id);
     const now = Date.now();
+    const status = deriveEventLifecycleStatus({
+        status: event.status,
+        startTime: event.start_time,
+        endTime: event.end_time,
+    }, new Date(now));
+    const eventClosed = status === 'completed' || status === 'cancelled' || event.end_time.getTime() <= now;
     const mappedTicketTypes = ticketTypes.map((t) => {
         const available = Math.max(0, t.capacity - t.reserved_quantity - t.sold_quantity);
         const salesStartAt = t.sales_start_at ?? event.sales_start_at;
         const salesEndAt = t.sales_end_at ?? event.sales_end_at;
         const start = salesStartAt?.getTime() ?? null;
         const end = salesEndAt?.getTime() ?? null;
-        const saleStatus = start !== null && now < start
+        const saleStatus = eventClosed
+            ? 'closed'
+            : start !== null && now < start
             ? 'coming-soon'
             : end !== null && now > end
                 ? 'closed'
@@ -82,8 +96,8 @@ export async function getEventDetail(id: number) {
         salesEndAt: event.sales_end_at,
         checkinStartAt: event.checkin_start_at,
         checkinEndAt: event.checkin_end_at,
-        status: event.status,
-        saleStatus: eventSaleStatus,
+        status,
+        saleStatus: eventClosed ? 'closed' : eventSaleStatus,
         ticketTypes: mappedTicketTypes,
     };
 }

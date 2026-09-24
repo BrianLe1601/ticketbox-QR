@@ -10,6 +10,7 @@ import { errorHandler, notFoundHandler } from "./middlewares/error-handler.js";
 import { authorize } from "./middlewares/authorize.js";
 import { authenticate } from "./middlewares/authenticate.js";
 import { authRouter } from "./modules/auth/auth.routes.js";
+import { adminStaffRouter } from "./modules/admin-staff/admin-staff.routes.js";
 import { adminCategoriesRouter } from "./modules/categories/admin-categories.routes.js";
 import { categoriesRouter } from "./modules/categories/categories.routes.js";
 import { adminEventsRouter } from "./modules/events/admin-events.routes.js";
@@ -20,6 +21,7 @@ import { router } from "./routes/index.js";
 import { checkinRouter } from "./modules/checkins/checkin.routes.js";
 
 import { adminReportsRouter, adminCheckinsRouter } from "./modules/reports/report.routes.js";
+import { adminDashboardRouter } from "./modules/dashboard/admin-dashboard.routes.js";
 
 export const app = express();
 
@@ -57,6 +59,7 @@ app.get("/api/health", async (_req, res, next) => {
 });
 
 app.use("/api/auth", authRouter);
+app.use("/api/admin/staff", adminStaffRouter);
 app.use("/api/staff", checkinRouter);
 app.use("/api/admin/reports", adminReportsRouter);
 app.use("/api/admin/checkins", adminCheckinsRouter);
@@ -65,6 +68,7 @@ app.use("/api/admin/categories", adminCategoriesRouter);
 app.use("/api/admin/events", adminEventsRouter);
 app.use("/api/admin/ticket-types", adminTicketTypesRouter);
 app.use("/api/admin/uploads", adminUploadsRouter);
+app.use("/api/admin/dashboard", adminDashboardRouter);
 
 // Route dùng để kiểm tra RBAC Admin
 app.get(

@@ -84,9 +84,12 @@ async function createSellableEvent(label: string, capacity: number): Promise<Tes
              checkin_start_at, checkin_end_at, created_by)
          VALUES (?, ?, 'Week 4 integration fixture', ?, 'Test Venue', '1 Test Street', 'HCM',
                  ?, NULL, 'Week 4 fixture',
-                 DATE_ADD(NOW(3), INTERVAL 2 DAY), DATE_ADD(NOW(3), INTERVAL 3 DAY),
-                 DATE_SUB(NOW(3), INTERVAL 1 DAY), DATE_ADD(NOW(3), INTERVAL 1 DAY),
-                 DATE_ADD(NOW(3), INTERVAL 1 DAY), DATE_ADD(NOW(3), INTERVAL 3 DAY), ?)`,
+                 DATE_ADD(DATE_ADD(CURRENT_DATE(), INTERVAL 2 DAY), INTERVAL 18 HOUR),
+                 DATE_ADD(DATE_ADD(CURRENT_DATE(), INTERVAL 2 DAY), INTERVAL 22 HOUR),
+                 DATE_SUB(NOW(3), INTERVAL 1 DAY),
+                 DATE_ADD(DATE_ADD(CURRENT_DATE(), INTERVAL 2 DAY), INTERVAL 17 HOUR),
+                 DATE_ADD(DATE_ADD(CURRENT_DATE(), INTERVAL 2 DAY), INTERVAL 17 HOUR),
+                 DATE_ADD(DATE_ADD(CURRENT_DATE(), INTERVAL 2 DAY), INTERVAL 22 HOUR), ?)`,
         [`Week 4 ${label}`, slug, categoryId, capacity, adminId]
     );
     const eventId = eventResult.insertId;

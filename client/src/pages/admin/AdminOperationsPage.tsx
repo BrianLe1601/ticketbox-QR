@@ -9,6 +9,16 @@ const message = (cause: unknown) => cause instanceof Error ? cause.message : 'Kh
 const number = (value: number) => Number(value).toLocaleString('vi-VN');
 const time = (value: string) => new Date(value).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
 const results = ['SUCCESS', 'ALREADY_CHECKED_IN', 'WRONG_EVENT', 'CANCELLED', 'UNPAID', 'INVALID', 'EVENT_NOT_AVAILABLE', 'STAFF_NOT_ASSIGNED'];
+const resultLabels: Record<string, string> = {
+  SUCCESS: 'Thành công',
+  ALREADY_CHECKED_IN: 'Đã check-in trước đó',
+  WRONG_EVENT: 'Sai sự kiện',
+  CANCELLED: 'Vé đã hủy',
+  UNPAID: 'Chưa thanh toán',
+  INVALID: 'Không hợp lệ',
+  EVENT_NOT_AVAILABLE: 'Sự kiện không khả dụng',
+  STAFF_NOT_ASSIGNED: 'Nhân viên chưa được phân công',
+};
 
 export function AdminOperationsPage({ kind }: { kind: 'reports' | 'checkins' }) {
   const { token } = useAuth();
@@ -88,8 +98,8 @@ export function AdminOperationsPage({ kind }: { kind: 'reports' | 'checkins' }) 
         <label className="space-y-2"><span>Từ ngày</span><input className={field} type="date" value={filters.from} onChange={(e) => update('from', e.target.value)} /></label>
         <label className="space-y-2"><span>Đến hết ngày</span><input className={field} type="date" value={filters.to} onChange={(e) => update('to', e.target.value)} /></label>
         {kind === 'checkins' && <>
-          <label className="space-y-2"><span>Staff ID (không bắt buộc)</span><input className={field} type="number" min="1" step="1" value={filters.staffId ?? ''} onChange={(e) => update('staffId', e.target.value)} /></label>
-          <label className="space-y-2"><span>Kết quả</span><select className={field} value={filters.result ?? ''} onChange={(e) => update('result', e.target.value)}><option value="">Tất cả</option>{results.map((result) => <option key={result}>{result}</option>)}</select></label>
+          <label className="space-y-2"><span>Mã nhân viên (không bắt buộc)</span><input className={field} type="number" min="1" step="1" value={filters.staffId ?? ''} onChange={(e) => update('staffId', e.target.value)} /></label>
+          <label className="space-y-2"><span>Kết quả</span><select className={field} value={filters.result ?? ''} onChange={(e) => update('result', e.target.value)}><option value="">Tất cả</option>{results.map((result) => <option key={result} value={result}>{resultLabels[result]}</option>)}</select></label>
         </>}
       </div>
       {searchLoading && <p role="status">Đang tìm sự kiện…</p>}
@@ -103,7 +113,7 @@ export function AdminOperationsPage({ kind }: { kind: 'reports' | 'checkins' }) 
     {error && <div role="alert" className="text-amber-300">{error} <button className={button} onClick={() => { setLoading(true); setReload((value) => value + 1); }}>Thử lại</button></div>}
     {!applied && <p className="text-slate-400">Chọn sự kiện và bấm Áp dụng bộ lọc để xem dữ liệu.</p>}
     {applied && !loading && !error && <>
-      <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-slate-400">Event #{applied.eventId} · {applied.from || 'Từ đầu'} → {applied.to || 'Đến nay'}</p>
+      <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-slate-400">Sự kiện #{applied.eventId} · {applied.from || 'Từ đầu'} → {applied.to || 'Đến nay'}</p>
         <button className={button} disabled={exporting} onClick={() => { void download(); }}>{exporting ? 'Đang tạo Excel…' : 'Xuất Excel theo bộ lọc đã áp dụng'}</button></div>
       {exportError && <p role="alert" className="text-amber-300">{exportError}</p>}
       {kind === 'reports' && report && <>
@@ -116,7 +126,7 @@ export function AdminOperationsPage({ kind }: { kind: 'reports' | 'checkins' }) 
         <p className="text-sm text-slate-400">Đã thu theo ngày thanh toán thành công; đã hoàn theo ngày hoàn tất hoàn tiền. Thu ròng có thể âm khi hoàn tiền cho đơn mua trước kỳ này. Đơn/vé bán theo ngày xác nhận, vé phát hành theo ngày phát hành, lượt vào theo log thành công (giữ lịch sử kể cả sau khi hủy sự kiện).</p>
       </>}
       {kind === 'checkins' && <>
-        {logs.length === 0 ? <p className="rounded-xl border border-slate-700 p-5">Không có lần quét phù hợp.</p> : <div className="overflow-x-auto rounded-xl border border-slate-700"><table className="w-full text-left text-sm"><caption className="p-3 text-left">Lịch sử check-in · {number(total)} kết quả</caption><thead className="bg-slate-800"><tr>{['Thời điểm', 'Nhân viên', 'Vé / mã che', 'Kết quả', 'Thông báo'].map((label) => <th className="p-3" scope="col" key={label}>{label}</th>)}</tr></thead><tbody>{logs.map((log) => <tr className="border-t border-slate-700" key={log.id}><td className="whitespace-nowrap p-3">{time(log.checkedAt)}</td><td className="p-3">{log.staffName} (#{log.staffId})</td><td className="p-3">{log.ticketCode ?? log.scannedCode ?? '—'}</td><td className={`p-3 ${log.result === 'SUCCESS' ? 'text-emerald-300' : 'text-amber-300'}`}>{log.result}</td><td className="p-3">{log.message}</td></tr>)}</tbody></table></div>}
+        {logs.length === 0 ? <p className="rounded-xl border border-slate-700 p-5">Không có lần quét phù hợp.</p> : <div className="overflow-x-auto rounded-xl border border-slate-700"><table className="w-full text-left text-sm"><caption className="p-3 text-left">Lịch sử check-in · {number(total)} kết quả</caption><thead className="bg-slate-800"><tr>{['Thời điểm', 'Nhân viên', 'Vé / mã che', 'Kết quả', 'Thông báo'].map((label) => <th className="p-3" scope="col" key={label}>{label}</th>)}</tr></thead><tbody>{logs.map((log) => <tr className="border-t border-slate-700" key={log.id}><td className="whitespace-nowrap p-3">{time(log.checkedAt)}</td><td className="p-3">{log.staffName} (#{log.staffId})</td><td className="p-3">{log.ticketCode ?? log.scannedCode ?? '—'}</td><td className={`p-3 ${log.result === 'SUCCESS' ? 'text-emerald-300' : 'text-amber-300'}`}>{resultLabels[log.result] ?? log.result}</td><td className="p-3">{log.message}</td></tr>)}</tbody></table></div>}
         <nav aria-label="Phân trang lịch sử" className="flex items-center gap-3"><button className={button} disabled={page <= 1} onClick={() => { setLoading(true); setPage((value) => value - 1); }}>Trước</button><span>Trang {page} / {Math.max(1, Math.ceil(total / 20))}</span><button className={button} disabled={page * 20 >= total} onClick={() => { setLoading(true); setPage((value) => value + 1); }}>Sau</button></nav>
       </>}
     </>}

@@ -7,6 +7,8 @@ import { fetchEventList } from "@/services/event.service";
 import { CategoryIcon } from "@/components/shared/CategoryIcon";
 import { EventCard } from "@/components/event/EventCard";
 import { EventCardSkeleton } from "@/components/event/EventCardSkeleton";
+import { EVENT_LIFECYCLE_FALLBACK_REFRESH_MS } from "@/constants/eventconstants";
+import { subscribeToEventLifecycleUpdates } from "@/services/event-realtime.service";
 
 export function CategorySection({ category }: { category: CategorySlug }) {
     const navigate = useNavigate();
@@ -15,11 +17,27 @@ export function CategorySection({ category }: { category: CategorySlug }) {
 
     useEffect(() => {
         let cancelled = false;
-        fetchEventList({ category, limit: 3, sort: "upcoming" })
-            .then(({ events }) => { if (!cancelled) setEvents(events); })
-            .catch(() => { if (!cancelled) setEvents([]); })
-            .finally(() => { if (!cancelled) setLoading(false); });
-        return () => { cancelled = true; };
+        const refresh = async (initial: boolean) => {
+            try {
+                const result = await fetchEventList({ category, limit: 3, sort: "upcoming" });
+                if (!cancelled) setEvents(result.events);
+            } catch {
+                if (!cancelled && initial) setEvents([]);
+            } finally {
+                if (!cancelled && initial) setLoading(false);
+            }
+        };
+        void refresh(true);
+        const unsubscribeRealtime = subscribeToEventLifecycleUpdates(() => void refresh(false));
+        const refreshTimer = window.setInterval(
+            () => void refresh(false),
+            EVENT_LIFECYCLE_FALLBACK_REFRESH_MS,
+        );
+        return () => {
+            cancelled = true;
+            unsubscribeRealtime();
+            window.clearInterval(refreshTimer);
+        };
     }, [category]);
 
     if (!loading && events.length === 0) return null;

@@ -20,6 +20,7 @@ const envSchema = z.object({
     .min(32, "JWT_SECRET must contain at least 32 characters"),
 
   JWT_EXPIRES_IN: z.string().default("15m"),
+  GOOGLE_CLIENT_ID: z.string().min(1).optional(),
   REFRESH_TOKEN_DAYS: z.coerce.number().int().min(1).max(30).default(7),
   AUTH_SESSION_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(30),
   AUTH_SESSION_CLEANUP_HOURS: z.coerce.number().int().min(1).max(168).default(24),
