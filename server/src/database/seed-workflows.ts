@@ -145,6 +145,10 @@ async function createEvent(
   categoryId: number,
   fixture: EventFixture,
 ) {
+  // Calls to fromNow() made milliseconds apart may otherwise put check-in
+  // just after the intended event end, violating the Event schema constraint.
+  const checkinEnd = fixture.checkinEnd > fixture.end ? fixture.end : fixture.checkinEnd;
+
   const [result] = await connection.execute<ResultSetHeader>(
     `INSERT INTO events
       (name,slug,description,category_id,venue,address,city,venue_capacity,
@@ -158,7 +162,7 @@ async function createEvent(
       fixture.capacity, fixture.cover === false ? null : COVER_URL,
       fixture.cover === false ? null : `${fixture.name} test cover`, fixture.start,
       fixture.end, fixture.salesStart, fixture.salesEnd, fixture.checkinStart,
-      fixture.checkinEnd, adminId,
+      checkinEnd, adminId,
     ],
   );
   return result.insertId;
