@@ -106,15 +106,15 @@ Khôi xây dựng Scanner, Check-in Logs và Reporting
 
 Còn thiếu hoặc cần hoàn thiện:
 
-- [ ] Admin Orders: danh sách, lọc, chi tiết Order/Payment/Ticket/Refund — Tài.
-- [ ] Chống spam OTP: reCAPTCHA v3, giới hạn theo IP/email/action, HTTP 429 và countdown — Tài.
-- [ ] Làm rõ xử lý khi email phát vé lần đầu thất bại; **không** xây tính năng khách tìm lại vé hay gửi lại email vé — Tài.
+- [ ] Admin Orders: code list/filter/detail/pagination của Tài đã có trên `develop`; cần tích hợp với UI Admin mới, Việt hóa và nghiệm thu Order/Payment/Ticket/Refund.
+- [ ] Chống spam OTP: code reCAPTCHA v3, giới hạn theo IP/email/action, HTTP 429 và countdown đã có trên `develop`; cần đồng bộ owner branch và chạy lại test tích hợp.
+- [ ] Ticket Retrieval và hàng đợi email vé của Tài đã có trên `develop`; cần review schema mã hóa QR, secrets, rate limit, phản hồi trung tính và tương thích Check-in trước khi nghiệm thu chung.
 - [ ] Nối dữ liệu thật cho Admin Dashboard; xây notification center realtime cho Admin theo thiết kế được duyệt — Bửu. Scheduled publish và WebSocket trạng thái Event đã có, nhưng chưa phải notification center.
 - [ ] Lọc Event đã completed/cancelled trong màn Staff; UAT camera trên thiết bị thật — Khôi.
 - [ ] Test tích hợp end-to-end, concurrency, responsive và accessibility — cả nhóm.
 - [ ] Deploy staging, sửa blocker, deploy production và chuẩn bị demo — Bửu điều phối.
 
-Khách mua vé bằng email và không tạo tài khoản. Nhóm đã **loại Ticket Retrieval và customer ticket-email resend khỏi phạm vi đồ án**. Mã QR gốc chỉ được gửi ở lần phát hành; hãy kiểm tra email nhận vé trong demo. Retry email thông báo hủy Event là workflow hệ thống đã có, không phải tính năng resend vé.
+Khách mua vé bằng email và không tạo tài khoản. Nhóm đã thống nhất **đưa Ticket Retrieval và controlled ticket-email redelivery vào phạm vi đồ án**, do Tài sở hữu. Khách có thể yêu cầu gửi lại vé bằng email, nhưng API luôn trả phản hồi trung tính, có reCAPTCHA/rate limit và chỉ gửi dữ liệu của Order đã xác nhận. Gửi lại phải dùng đúng QR gốc, không xoay credential; email thông báo hủy Event vẫn là workflow `order_cancelled` riêng.
 
 ## 5. Cấu trúc repository hiện có
 
@@ -248,12 +248,21 @@ API Bửu dùng cho flow này: `POST /api/auth/google`; `GET /api/admin/staff`; 
 8. Vé được gửi đến email khách hàng.
 9. Nếu hết hạn, Order bị hủy và số vé được nhả ra.
 
+### Luồng tìm lại vé qua email
+
+1. Khách nhập email mua vé; frontend lấy reCAPTCHA token với action riêng cho Ticket Retrieval.
+2. Backend xác minh token/action/hostname/score và giới hạn theo IP, email chuẩn hóa và action.
+3. API luôn trả thông báo chung, không tiết lộ email hoặc vé có tồn tại.
+4. Chỉ Order `confirmed` và Ticket hợp lệ được đưa vào hàng đợi email.
+5. Email chứa Event, lịch, địa điểm, hạng vé, mã vé, trạng thái, QR gốc và hướng dẫn check-in.
+6. QR vẫn dùng payload `ticketbox:<raw-token>` và Check-in vẫn tra bằng hash. Bản có thể khôi phục chỉ được lưu dưới dạng ciphertext xác thực phía server để phục vụ phát hành/gửi lại.
+
 Phần việc tiếp theo của **Tài**:
 
 - Public Header đã gỡ điểm vào Đăng nhập/Đăng ký trong working tree; route `/login` và RBAC Admin/Staff vẫn giữ nguyên.
-- Bảo vệ gửi OTP bằng reCAPTCHA v3: frontend chỉ lấy token `send_otp`; backend xác minh token, action, hostname và điểm số với secret từ environment. Giới hạn riêng theo IP, email chuẩn hóa và action; gửi lại trước 60 giây trả HTTP 429 kèm thời gian chờ, frontend khóa nút và đồng bộ countdown. Giữ quy tắc OTP hết hạn, giới hạn nhập sai, dùng một lần, hash và không ghi mã vào log.
-- Hoàn thiện Admin Orders, hiển thị Payment/Ticket/Refund/email delivery; kiểm thử lỗi gửi email tại **lần phát hành đầu** và thể hiện trạng thái rõ ràng. Không xây Ticket Retrieval hoặc chức năng khách yêu cầu gửi lại email vé.
-- QR dùng payload `ticketbox:<raw-token>`; database chỉ lưu hash. Không thay đổi payload hoặc tự tạo API hoàn nguyên token. Khách phải lưu email/QR lúc được phát hành; trước demo phải thử thành công email đầu tiên.
+- Bảo vệ gửi OTP bằng reCAPTCHA v3: frontend chỉ lấy token action `checkout_email`; Ticket Retrieval dùng action `ticket_retrieval`. Backend xác minh token, action, hostname và điểm số với secret từ environment. Giới hạn riêng theo IP, email chuẩn hóa và action; gửi lại trước 60 giây trả HTTP 429 kèm thời gian chờ, frontend khóa nút và đồng bộ countdown. Giữ quy tắc OTP hết hạn, giới hạn nhập sai, dùng một lần, hash và không ghi mã vào log.
+- Hoàn thiện Admin Orders, hiển thị Payment/Ticket/Refund/email delivery; tích hợp Ticket Retrieval và controlled redelivery đã có trên `develop` mà không làm lộ email có tồn tại.
+- QR dùng payload `ticketbox:<raw-token>` và Check-in chỉ tra cứu bằng hash. Nếu lưu bản có thể khôi phục để gửi email, bắt buộc dùng authenticated encryption với key từ environment, ciphertext bất biến và không trả raw token/ciphertext qua API hoặc log.
 
 ### Luồng check-in
 
@@ -636,8 +645,8 @@ Kế hoạch này là nguồn đối chiếu với Trello. Mỗi tuần có đú
 - [x] Tạo Order/Order Items, backend tự tính tiền và sinh lookup token.
 - [x] Giữ vé bằng transaction, row lock và `expires_at`; job hết hạn nhả tồn kho.
 - [x] Xử lý free/simulated payment và chuyển reservation sang sold.
-- [ ] Xây Admin Orders list/filter/detail cơ bản.
-- [ ] Chống spam gửi OTP: reCAPTCHA v3 xác minh backend, rate limit IP/email/action, HTTP 429 và countdown đồng bộ từ backend.
+- [ ] Admin Orders list/filter/detail/pagination đã có trên `develop`; cần đồng bộ giao diện Admin và nghiệm thu lifecycle Order.
+- [ ] reCAPTCHA v3, rate limit IP/email/action, HTTP 429 và countdown đã có trên `develop`; cần tích hợp và chạy test chung.
 - Bàn giao: luồng Checkout → pending Order → Payment hoạt động và không oversell.
 
 **Khôi — Assigned Events và Scanner foundation**
@@ -663,11 +672,12 @@ Kế hoạch này là nguồn đối chiếu với Trello. Mỗi tuần có đú
 **Tài — Ticket, QR, Email và Admin Orders**
 
 - [x] Xác nhận Payment và phát hành đúng số Ticket theo quantity.
-- [x] Sinh `ticket_code`, raw QR token dùng một lần và chỉ lưu hash.
+- [x] Sinh `ticket_code`, QR payload `ticketbox:<raw-token>` và lưu hash làm khóa tra cứu Check-in.
 - [x] Tạo QR, gửi email vé và ghi `email_logs`.
 - [x] Hiển thị Order Result và tra cứu đơn bằng lookup token.
-- [ ] Hoàn thiện Admin Orders: list/filter/detail Payment, Ticket và trạng thái email.
-- Bàn giao: khách nhận QR lúc phát hành và xem trạng thái Order bằng lookup token; Admin Orders end-to-end còn thiếu.
+- [ ] Ticket Retrieval, ciphertext QR phục vụ gửi lại và email retry job đã có trên `develop`; cần review secrets, phản hồi trung tính, rate limit và tương thích QR Check-in.
+- [ ] Hoàn thiện Admin Orders: tích hợp list/filter/detail Payment, Ticket và trạng thái email với UI Admin mới.
+- Bàn giao: khách nhận QR lúc phát hành, có thể yêu cầu gửi lại đúng QR gốc và xem trạng thái Order bằng lookup token; cần nghiệm thu end-to-end sau khi đồng bộ nhánh.
 
 **Khôi — Scanner kết nối Check-in API**
 
@@ -693,10 +703,10 @@ Kế hoạch này là nguồn đối chiếu với Trello. Mỗi tuần có đú
 
 **Tài — Admin Orders và hậu mãi**
 
-- [ ] Hoàn thiện Admin Orders list/search/filter/detail và phân trang.
-- [ ] Hiển thị Payment, Ticket, email delivery và lookup token an toàn; không xây customer ticket resend.
+- [ ] Hoàn thiện và Việt hóa Admin Orders list/search/filter/detail/phân trang từ `develop`.
+- [ ] Hiển thị Payment, Ticket, email delivery và lookup token an toàn; cho phép controlled ticket redelivery nhưng không trả raw QR/ciphertext qua API.
 - [ ] Hiển thị trạng thái Event cancellation và Refund; không tự xác nhận hoàn tiền thật.
-- [ ] Làm rõ lỗi gửi email tại lần phát hành đầu và đối chiếu dữ liệu doanh thu cho Reports; không xây customer ticket-email resend.
+- [ ] Nghiệm thu Ticket Retrieval, lỗi gửi email lần đầu, retry/redelivery và đối chiếu dữ liệu doanh thu cho Reports.
 - [ ] Bổ sung test và bằng chứng đối chiếu Order–Payment–Ticket–Refund.
 - Bàn giao: Admin quản trị được toàn bộ vòng đời đơn hàng sau mua.
 
@@ -760,7 +770,7 @@ Kế hoạch này là nguồn đối chiếu với Trello. Mỗi tuần có đú
 
 - [ ] Chuẩn bị Event/Ticket Type và dữ liệu mua vé demo.
 - [ ] Demo search/filter → Detail → Checkout → Payment → QR/Email.
-- [ ] Demo Order lookup và Admin Orders; không có chức năng gửi lại vé.
+- [ ] Demo Order lookup, Ticket Retrieval gửi lại đúng QR gốc và Admin Orders mà không làm lộ email có tồn tại.
 - [ ] Chuẩn bị trường hợp free/paid, sold out, expired và lỗi thanh toán.
 - Bàn giao: luồng Commerce end-to-end chạy trên production.
 

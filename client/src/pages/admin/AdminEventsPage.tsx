@@ -1,4 +1,4 @@
-import { Ban, CalendarClock, CalendarDays, Edit3, Eye, EyeOff, MapPin, Plus, Search, ShieldAlert, Ticket, Trash2, Users, X } from "lucide-react";
+import { Ban, CalendarClock, CalendarDays, Edit3, Eye, EyeOff, Grid, LayoutList, MapPin, Plus, Search, ShieldAlert, Ticket, Trash2, Users, X } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -9,6 +9,17 @@ import { EVENT_LIFECYCLE_FALLBACK_REFRESH_MS } from "@/constants/eventconstants"
 import { subscribeToEventLifecycleUpdates } from "@/services/event-realtime.service";
 
 type PublishMode = "manual" | "scheduled";
+type ViewMode = "grid" | "list";
+
+const EVENT_VIEW_STORAGE_KEY = "ticketbox-admin-events-view";
+
+function getInitialViewMode(): ViewMode {
+  try {
+    return window.localStorage.getItem(EVENT_VIEW_STORAGE_KEY) === "list" ? "list" : "grid";
+  } catch {
+    return "grid";
+  }
+}
 
 const statusLabels: Record<Status, string> = {
   draft: "Bản nháp",
@@ -38,6 +49,7 @@ export function AdminEventsPage() {
   const [categories, setCategories] = useState<AdminCategory[]>([]);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"all" | Status>("all");
+  const [viewMode, setViewMode] = useState<ViewMode>(getInitialViewMode);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -75,6 +87,14 @@ export function AdminEventsPage() {
       window.clearInterval(refreshTimer);
     };
   }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(EVENT_VIEW_STORAGE_KEY, viewMode);
+    } catch {
+      // The view still works when storage is unavailable (private mode/policy).
+    }
+  }, [viewMode]);
 
   useEffect(() => {
     if (!dialogOpen && !hideTarget && !cancelTarget) return;
@@ -220,11 +240,31 @@ export function AdminEventsPage() {
     }
   }
 
+  function renderEventActions(event: ManagedEvent, compact = false) {
+    return (
+      <div className={`events-actions ${compact ? "events-actions-compact" : ""}`}>
+        <button className="events-ticket-button" onClick={() => navigate(`/admin/ticket-types?eventId=${event.id}`)}><Ticket size={15} /> Hạng vé</button>
+        <button className="events-ticket-button" onClick={() => navigate(`/admin/staff?eventId=${event.id}`)} title="Xem nhân viên được phân công cho sự kiện"><Users size={15} /> Nhân viên</button>
+        {event.status === "draft" && <button className="events-publish-button" disabled={!event.readiness.ready} onClick={() => void publish(event)} title={event.readiness.missing.join(", ")}>Công bố</button>}
+        <button className={`events-visibility-button ${event.visibility === "hidden" ? "show" : "hide"}`} disabled={["completed", "cancelled"].includes(event.status)} onClick={() => void toggleVisibility(event)} title={event.visibility === "hidden" ? "Hiển thị trên trang khách" : "Tạm ẩn khỏi trang khách"}>{event.visibility === "hidden" ? <><Eye size={15} /> Hiện</> : <><EyeOff size={15} /> Ẩn</>}</button>
+        {["published", "ongoing"].includes(event.status) && <button className="events-cancel-button" onClick={() => openCancel(event)} title="Hủy sự kiện và xử lý các đơn/vé liên quan"><Ban size={15} /> Hủy</button>}
+        <button className="events-icon-button" disabled={["completed", "cancelled"].includes(event.status)} onClick={() => openEdit(event)} aria-label={`Sửa sự kiện ${event.name}`} title={event.status === "draft" ? "Sửa bản nháp" : "Sửa thông tin sự kiện được phép"}><Edit3 size={16} /></button>
+        <button className="events-icon-button danger" disabled={event.status !== "draft" || event.soldQuantity > 0} onClick={() => void removeEvent(event)} aria-label={`Xóa bản nháp ${event.name}`} title="Xóa bản nháp"><Trash2 size={16} /></button>
+      </div>
+    );
+  }
+
   return (
     <section className="events-admin-page">
       <header className="events-page-header">
         <div><div className="admin-live-label"><CalendarDays size={13} /> VÒNG ĐỜI SỰ KIỆN</div><h2>Quản lý sự kiện</h2><p>Tạo, lên lịch, công bố và kết thúc sự kiện theo quy trình an toàn.</p></div>
-        <button className="events-primary-button" onClick={openCreate}><Plus size={17} /> Tạo sự kiện</button>
+        <div className="events-header-actions">
+          <div className="events-view-switcher" role="group" aria-label="Chọn chế độ hiển thị sự kiện">
+            <button type="button" className={`events-view-btn ${viewMode === "grid" ? "active" : ""}`} onClick={() => setViewMode("grid")} aria-label="Hiển thị sự kiện dạng thẻ" aria-pressed={viewMode === "grid"} title="Dạng thẻ"><Grid size={16} /><span>Dạng thẻ</span></button>
+            <button type="button" className={`events-view-btn ${viewMode === "list" ? "active" : ""}`} onClick={() => setViewMode("list")} aria-label="Hiển thị sự kiện dạng danh sách" aria-pressed={viewMode === "list"} title="Danh sách"><LayoutList size={16} /><span>Danh sách</span></button>
+          </div>
+          <button className="events-primary-button" onClick={openCreate}><Plus size={17} /> Tạo sự kiện</button>
+        </div>
       </header>
 
       <div className="events-rule-banner"><ShieldAlert size={20} /><div><strong>Đang áp dụng quy tắc bảo vệ vòng đời</strong><p>Sự kiện chỉ được công bố khi có hạng vé hợp lệ. Sự kiện đã bán vé chỉ có thể hủy, không được xóa vĩnh viễn.</p></div></div>
@@ -313,13 +353,13 @@ export function AdminEventsPage() {
           <option value="all">Tất cả danh mục</option>
           {categories.map((c) => <option key={c.id} value={c.slug}>{c.name}</option>)}
         </select>
+        <span className="events-result-count" aria-live="polite">Hiển thị <strong>{filtered.length}</strong>/{events.length} sự kiện</span>
       </div>
 
-      <div className="events-list-panel">
-        {loading ? (
-          <div className="events-empty"><p>Đang tải sự kiện...</p></div>
-        ) : filtered.length === 0 ? (
-          <div className="events-empty">
+      {loading ? (
+        <div className="events-empty events-presentation-empty"><p>Đang tải sự kiện...</p></div>
+      ) : filtered.length === 0 ? (
+        <div className="events-empty events-presentation-empty">
             <CalendarClock size={38} />
             <h3>
               {query
@@ -373,24 +413,49 @@ export function AdminEventsPage() {
                 <Plus size={16} /> Tạo bản nháp
               </button>
             )}
-          </div>
-        ) : filtered.map((event) => (
+        </div>
+      ) : viewMode === "grid" ? (
+        <div className="events-cards-grid">
+          {filtered.map((event) => (
+            <article className={`event-card-item ${event.status === "draft" ? "is-draft" : ""} ${event.visibility === "hidden" ? "is-hidden" : ""}`} key={event.id}>
+              <div className="event-card-cover-wrap">
+                {event.coverImageUrl ? <img src={event.coverImageUrl} alt={event.coverImageAlt || event.name} loading="lazy" /> : <div className="event-card-cover-fallback"><Ticket size={36} /><span>{event.category.toUpperCase()}</span></div>}
+                <div className="event-card-cover-overlay" />
+                <span className={`event-card-status-badge event-status ${event.status}`}>{statusLabels[event.status]}</span>
+                <span className="event-card-category-tag">{event.category}</span>
+              </div>
+              <div className="event-card-body">
+                <div className="event-card-flags">
+                  {event.visibility === "hidden" && <span className="event-visibility-hidden"><EyeOff size={10} /> ĐANG ẨN</span>}
+                  {event.scheduledPublishAt && <span className="event-scheduled">TỰ ĐỘNG · {new Date(event.scheduledPublishAt).toLocaleString("vi-VN")}</span>}
+                </div>
+                <h3 className="event-card-title" title={event.name}>{event.name}</h3>
+                <div className="event-card-meta">
+                  <p><CalendarClock size={13} /> {new Date(event.startTime).toLocaleString("vi-VN", { dateStyle: "medium", timeStyle: "short" })}</p>
+                  <p><MapPin size={13} /> {event.venue}, {event.city}</p>
+                  <p><Users size={13} /> Sức chứa {event.venueCapacity?.toLocaleString("vi-VN") ?? "—"} · {event.activeStaffCount} nhân viên</p>
+                </div>
+                <div className={`event-card-readiness ${event.readiness.ready ? "ready" : "missing"}`} title={event.readiness.missing.join(", ")}>
+                  <span><Ticket size={15} /><strong>{event.validTicketTypeCount}/{event.ticketTypeCount} hạng vé hợp lệ</strong></span>
+                  <small>{event.readiness.ready ? "Sẵn sàng công bố" : "Cần hoàn thiện cấu hình"}</small>
+                </div>
+              </div>
+              <footer className="event-card-footer">{renderEventActions(event, true)}</footer>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div className="events-list-panel">
+          {filtered.map((event) => (
           <article className={`events-row ${event.visibility==="hidden"?"event-row-hidden":""}`} key={event.id}>
             <div className="events-date"><CalendarDays size={18} /><strong>{new Date(event.startTime).toLocaleDateString("vi-VN", { day: "2-digit", month: "short" })}</strong></div>
             <div className="events-main"><div><span className={`event-status ${event.status}`}>{statusLabels[event.status]}</span>{event.visibility==="hidden" && <span className="event-visibility-hidden"><EyeOff size={10}/> ĐANG ẨN</span>}{event.scheduledPublishAt && <span className="event-scheduled">TỰ ĐỘNG · {new Date(event.scheduledPublishAt).toLocaleString("vi-VN")}</span>}</div><h3>{event.name}</h3><p><MapPin size={13} /> {event.venue}, {event.city}</p></div>
             <div className={`events-ticket-health ${event.readiness.ready ? "ready" : "missing"}`} title={event.readiness.missing.join(", ")}><span className="events-ticket-icon"><Ticket size={16} /></span><div><strong>{event.validTicketTypeCount}/{event.ticketTypeCount}</strong><span>{event.readiness.ready ? "Sẵn sàng công bố" : "Chưa đủ điều kiện công bố"}</span></div></div>
-            <div className="events-actions">
-              <button className="events-ticket-button" onClick={() => navigate(`/admin/ticket-types?eventId=${event.id}`)}><Ticket size={15} /> Hạng vé</button>
-              <button className="events-ticket-button" onClick={() => navigate(`/admin/staff?eventId=${event.id}`)} title="Xem nhân viên được phân công cho sự kiện"><Users size={15} /> Nhân viên</button>
-              {event.status === "draft" && <button className="events-publish-button" disabled={!event.readiness.ready} onClick={() => void publish(event)} title={event.readiness.missing.join(", ")}>Công bố</button>}
-              <button className={`events-visibility-button ${event.visibility==="hidden" ? "show" : "hide"}`} disabled={["completed", "cancelled"].includes(event.status)} onClick={() => void toggleVisibility(event)} title={event.visibility==="hidden" ? "Hiển thị trên trang khách" : "Tạm ẩn khỏi trang khách"}>{event.visibility==="hidden" ? <><Eye size={15}/> Hiện</> : <><EyeOff size={15}/> Ẩn</>}</button>
-              {["published", "ongoing"].includes(event.status) && <button className="events-cancel-button" onClick={() => openCancel(event)} title="Hủy sự kiện và xử lý các đơn/vé liên quan"><Ban size={15}/> Hủy sự kiện</button>}
-              <button className="events-icon-button" disabled={["completed","cancelled"].includes(event.status)} onClick={() => openEdit(event)} aria-label="Sửa sự kiện" title={event.status==="draft"?"Sửa bản nháp":"Sửa thông tin sự kiện được phép"}><Edit3 size={16} /></button>
-              <button className="events-icon-button danger" disabled={event.status !== "draft" || event.soldQuantity > 0} onClick={() => void removeEvent(event)} aria-label="Xóa bản nháp" title="Xóa bản nháp"><Trash2 size={16} /></button>
-            </div>
+            {renderEventActions(event)}
           </article>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {hideTarget&&createPortal(<div className="events-dialog-backdrop" role="presentation" onMouseDown={()=>setHideTarget(null)}><div className="events-dialog events-hide-dialog" role="dialog" aria-modal="true" onMouseDown={(event)=>event.stopPropagation()}><header><div><span>HIỂN THỊ CÔNG KHAI</span><h3>Tạm ẩn sự kiện</h3></div><button onClick={()=>setHideTarget(null)} aria-label="Đóng"><X size={20}/></button></header><div className="events-hide-content"><div className="events-rule-banner"><EyeOff size={19}/><div><strong>{hideTarget.name}</strong><p>Sự kiện sẽ biến mất khỏi trang khách và mọi hạng vé sẽ tạm dừng bán. Đơn hàng và vé đã phát hành không thay đổi.</p></div></div><label>Lý do ẩn <span>*</span><textarea autoFocus rows={4} maxLength={500} value={hideReason} onChange={(event)=>setHideReason(event.target.value)} placeholder="Mô tả sự cố hoặc nội dung đang bảo trì..."/><small>Tối thiểu 5 ký tự. Lý do được lưu để truy vết quản trị.</small></label><footer><button type="button" onClick={()=>setHideTarget(null)}>Hủy</button><button className="primary" disabled={hideReason.trim().length<5} onClick={()=>void confirmHide()}><EyeOff size={15}/> Ẩn sự kiện</button></footer></div></div></div>,document.body)}
 
