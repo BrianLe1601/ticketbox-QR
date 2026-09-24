@@ -33,6 +33,7 @@
     "morgan": "^1.11.0",
     "mysql2": "^3.23.3",
     "node-cron": "^4.6.0",
+    "node-cache": "^5.1.2",
     "nodemailer": "^9.0.5",
     "qrcode": "^1.5.4",
     "ws": "^8.21.3",

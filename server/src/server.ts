@@ -9,6 +9,8 @@ import { startScheduledPublishJob } from "./jobs/scheduled-publish.job.js";
 import { syncEventLifecycleStatuses } from "./modules/events/event-lifecycle.service.js";
 import { createEventRealtimeGateway } from "./realtime/event-status.gateway.js";
 
+import { startTicketEmailJob } from "./jobs/ticket-email.job.js";
+
 async function startServer(): Promise<void> {
   const database = await checkDatabaseConnection();
 
@@ -36,6 +38,7 @@ async function startServer(): Promise<void> {
   const eventLifecycleJob = startEventLifecycleJob(
     eventRealtimeGateway.broadcastLifecycleUpdate,
   );
+  const stopTicketEmail = startTicketEmailJob();
 
   let shuttingDown = false;
   const shutdown = async (): Promise<void> => {
@@ -47,6 +50,7 @@ async function startServer(): Promise<void> {
     scheduledPublishJob.stop();
     eventLifecycleJob.stop();
     await eventRealtimeGateway.close();
+    await stopTicketEmail();
     server.close(async () => {
       await pool.end();
       process.exit(0);

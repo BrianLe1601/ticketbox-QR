@@ -26,6 +26,11 @@ const envSchema = z.object({
   AUTH_SESSION_CLEANUP_HOURS: z.coerce.number().int().min(1).max(168).default(24),
   AUTH_SESSION_CLEANUP_BATCH_SIZE: z.coerce.number().int().min(10).max(5000).default(500),
 
+  QR_ENCRYPTION_KEY: z.string().regex(/^[A-Za-z0-9+/]{43}=$/, "QR_ENCRYPTION_KEY must be canonical Base64 for 32 bytes")
+    .refine(value => Buffer.from(value, 'base64').length === 32 && Buffer.from(value, 'base64').toString('base64') === value,
+      "QR_ENCRYPTION_KEY must decode to exactly 32 bytes"),
+  QR_ENCRYPTION_KEY_ID: z.string().regex(/^[A-Za-z0-9_-]{1,32}$/, "QR_ENCRYPTION_KEY_ID must contain 1-32 safe characters"),
+
   MAIL_USER: z.string().email().optional(),
   MAIL_APP_PASSWORD: z.string().min(1).optional(),
   MAIL_FROM_NAME: z.string().default("TicketBox QR"),

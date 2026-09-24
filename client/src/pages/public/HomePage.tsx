@@ -9,6 +9,8 @@ import { CategorySection } from "@/components/event/CategorySection";
 import { EVENT_LIFECYCLE_FALLBACK_REFRESH_MS } from "@/constants/eventconstants";
 import { subscribeToEventLifecycleUpdates } from "@/services/event-realtime.service";
 
+import { TicketRetrievalForm } from "@/components/event/TicketRetrievalForm";
+
 export function HomePage() {
     const navigate = useNavigate();
     const [events, setEvents] = useState<Event[]>([]);
@@ -48,7 +50,7 @@ export function HomePage() {
                     <div className="absolute inset-0 bg-gradient-to-r from-background/60 via-transparent to-background/20" />
                 </div>
                 <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: "linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)", backgroundSize: "60px 60px" }} />
-                <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
+                <div className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20 lg:py-24">
                     <div className="max-w-2xl">
                         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-primary/15 text-primary border border-primary/20 mb-6">
                             <TrendingUp size={12} /> Nền tảng bán vé #1 Việt Nam
@@ -60,11 +62,12 @@ export function HomePage() {
                             Khám phá hàng trăm sự kiện âm nhạc, hội nghị, lễ hội ẩm thực và nhiều hơn nữa trên toàn Việt Nam. Mua vé không cần đăng nhập.
                         </p>
                         <div className="flex flex-col sm:flex-row gap-3">
-                            <button onClick={() => navigate("/events")} className="flex items-center justify-center gap-2 px-7 py-3.5 rounded-xl bg-primary text-white font-bold text-sm hover:bg-primary/90 transition-all shadow-xl shadow-primary/30 hover:shadow-primary/50 active:scale-[0.98]">
+                            <button onClick={() => navigate("/events")} className="flex items-center justify-center gap-2 px-7 py-3.5 rounded-xl bg-primary text-white font-bold text-sm hover:bg-primary/90 transition-transform motion-reduce:transition-none shadow-xl shadow-primary/30 hover:shadow-primary/50 active:scale-[0.98] motion-reduce:transform-none focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary">
                                 Khám phá sự kiện <ChevronRight size={16} />
                             </button>
-                            <button className="flex items-center justify-center gap-2 px-7 py-3.5 rounded-xl bg-white/10 text-white font-bold text-sm hover:bg-white/15 transition-all border border-white/10 backdrop-blur-sm">Tìm hiểu thêm</button>
+                            <button className="flex items-center justify-center gap-2 px-7 py-3.5 rounded-xl bg-white/10 text-white font-bold text-sm hover:bg-white/15 border border-white/10 backdrop-blur-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary">Tìm hiểu thêm</button>
                         </div>
+                        <TicketRetrievalForm />
                     </div>
                 </div>
             </section>
@@ -73,7 +76,7 @@ export function HomePage() {
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
                     <div className="grid grid-cols-3 divide-x divide-white/[0.07]">
                         {[{ value: "500+", label: "Sự kiện mỗi năm" }, { value: "120K+", label: "Người dùng tin tưởng" }, { value: "99.9%", label: "Check-in thành công" }].map(({ value, label }) => (
-                            <div key={label} className="px-6 text-center">
+                            <div key={label} className="px-2 sm:px-6 text-center">
                                 <p className="text-2xl sm:text-3xl font-extrabold text-primary" style={{ fontFamily: "Manrope, sans-serif" }}>{value}</p>
                                 <p className="text-xs text-muted-foreground mt-1">{label}</p>
                             </div>

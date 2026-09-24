@@ -455,6 +455,8 @@ CREATE TABLE tickets (
     updated_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
                                       ON UPDATE CURRENT_TIMESTAMP(3),
 
+    qr_token_encrypted  VARCHAR(512) CHARACTER SET ascii COLLATE ascii_bin NULL DEFAULT NULL,
+
     CONSTRAINT pk_tickets PRIMARY KEY (id),
     CONSTRAINT uq_tickets_ticket_code UNIQUE (ticket_code),
     CONSTRAINT uq_tickets_qr_token_hash UNIQUE (qr_token_hash),
@@ -1199,6 +1201,12 @@ BEGIN
        OR NEW.created_at <> OLD.created_at THEN
         SIGNAL SQLSTATE '45000'
             SET MESSAGE_TEXT = 'Ticket identity and QR credential are immutable';
+    END IF;
+
+    IF OLD.qr_token_encrypted IS NOT NULL
+       AND NOT (NEW.qr_token_encrypted <=> OLD.qr_token_encrypted) THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'QR credential is immutable once encrypted';
     END IF;
 
     IF NOT (
