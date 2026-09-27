@@ -294,7 +294,7 @@ export function AdminDashboardPage() {
           </div>
           <div>
             <span style={{ fontSize: "11px", color: "#7a93a8", fontWeight: 700 }}>
-              TỔNG DOANH THU ĐÃ THU
+              TỔNG THANH TOÁN MÔ PHỎNG
             </span>
             <div
               style={{
@@ -307,7 +307,7 @@ export function AdminDashboardPage() {
               {loading ? "..." : formatVND(summary?.orders.totalRevenue ?? 0)}
             </div>
             <small style={{ fontSize: "10.5px", color: "#64748b" }}>
-              Từ {summary?.orders.confirmed ?? 0} đơn hàng thành công
+              Từ {summary?.orders.confirmed ?? 0} đơn xác nhận; không có giao dịch tiền thật
             </small>
           </div>
         </div>
@@ -657,8 +657,8 @@ export function AdminDashboardPage() {
 
             <button type="button" onClick={() => navigate("/admin/reports")}>
               <Activity size={20} />
-              <span>Báo cáo doanh thu & check-in</span>
-              <small>Theo dõi tỷ lệ soát vé và doanh thu</small>
+              <span>Báo cáo thanh toán mô phỏng & check-in</span>
+              <small>Theo dõi tỷ lệ soát vé và số tiền mô phỏng</small>
             </button>
           </div>
         </article>

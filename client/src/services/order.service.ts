@@ -1,5 +1,5 @@
 import type { CreateOrderResult, Order, BuyerInfo, TicketSelection, PaymentResult } from "@/types/order.types";
-import { apiGet, apiPost } from "./api";
+import { apiPost } from "./api";
 
 export interface CreateOrderPayload {
     eventId: string;
@@ -22,7 +22,7 @@ export async function createOrder(payload: CreateOrderPayload): Promise<CreateOr
 
 export async function fetchOrder(orderId: string, token: string): Promise<Order | null> {
     try {
-        const { data } = await apiGet<Order>(`/checkout/orders/${orderId}`, { token });
+        const { data } = await apiPost<Order>(`/checkout/orders/${orderId}/lookup`, { token });
         return data;
     } catch {
         return null;

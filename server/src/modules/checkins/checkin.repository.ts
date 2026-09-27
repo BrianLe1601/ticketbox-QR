@@ -29,6 +29,7 @@ export async function listEvents(staffId: number) {
   const [rows] = await pool.execute<EventRow[]>(`SELECT ${eventColumns} FROM events e
     JOIN event_staff es ON es.event_id = e.id
     WHERE es.staff_id = ? AND es.is_active = TRUE AND es.revoked_at IS NULL
+      AND e.status IN ('published', 'ongoing') AND e.end_time > NOW(3)
     ORDER BY e.start_time DESC, e.id DESC`, [staffId]);
   return rows;
 }

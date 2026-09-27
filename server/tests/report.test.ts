@@ -42,8 +42,12 @@ it('creates a real XLSX with numeric revenue and treats formula-looking event na
   const book = new ExcelJS.Workbook(); await book.xlsx.load(buffer);
   const sheet = book.getWorksheet('Báo cáo sự kiện')!;
   expect(sheet.getCell('A2').value).toBe('=1+1');
+  expect(sheet.getCell('I1').value).toBe('Thanh toán mô phỏng (VND)');
+  expect(sheet.getCell('J1').value).toBe('Hoàn tiền mô phỏng (VND)');
+  expect(sheet.getCell('K1').value).toBe('Thu ròng mô phỏng (VND)');
   expect(sheet.getCell('K2').value).toBe(-50);
   expect(sheet.getCell('K2').type).toBe(ExcelJS.ValueType.Number);
+  expect(book.getWorksheet('Bộ lọc')!.getCell('B8').value).toContain('Không có giao dịch tiền thật');
 });
 it('keeps invalid scans with a null ticket in the XLSX and includes filters', async () => {
   const buffer = await logsWorkbook({ eventId: 1, staffId: 2, result: 'INVALID' }, [{ id: 1, eventName: '@event', staffId: 2,

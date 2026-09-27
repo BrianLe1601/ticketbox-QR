@@ -25,6 +25,12 @@ export interface EventForOrderRow extends RowDataPacket {
     sales_end_at: Date | null;
 }
 
+export interface LockedEventRow extends RowDataPacket {
+    id: number;
+    status: 'draft' | 'published' | 'ongoing' | 'completed' | 'cancelled';
+    end_time: Date;
+}
+
 export interface OrderRow extends RowDataPacket {
     id: number;
     order_code: string;
@@ -201,10 +207,11 @@ export async function findOrderEventId(conn: PoolConnection, orderId: number) {
 }
 
 export async function lockEventRow(conn: PoolConnection, eventId: number) {
-    await conn.query(
-        `SELECT id FROM events WHERE id = ? LIMIT 1 FOR UPDATE`,
+    const [rows] = await conn.query<LockedEventRow[]>(
+        `SELECT id, status, end_time FROM events WHERE id = ? LIMIT 1 FOR UPDATE`,
         [eventId]
     );
+    return rows[0] ?? null;
 }
 
 export async function findOrderByIdReadOnly(orderId: number) {

@@ -6,6 +6,7 @@ import {
 } from './events.repository.js';
 import type { ListEventsQuery } from './events.schema.js';
 import { deriveEventLifecycleStatus } from './event-lifecycle.service.js';
+import { deriveTicketSaleStatus, effectiveTicketSalesWindow } from './event-sales.js';
 
 function mapEventSummary(row: Awaited<ReturnType<typeof findPublishedEvents>>['rows'][number]) {
     const status = deriveEventLifecycleStatus({
@@ -57,19 +58,22 @@ export async function getEventDetail(id: number) {
     const eventClosed = status === 'completed' || status === 'cancelled' || event.end_time.getTime() <= now;
     const mappedTicketTypes = ticketTypes.map((t) => {
         const available = Math.max(0, t.capacity - t.reserved_quantity - t.sold_quantity);
-        const salesStartAt = t.sales_start_at ?? event.sales_start_at;
-        const salesEndAt = t.sales_end_at ?? event.sales_end_at;
-        const start = salesStartAt?.getTime() ?? null;
-        const end = salesEndAt?.getTime() ?? null;
-        const saleStatus = eventClosed
-            ? 'closed'
-            : start !== null && now < start
-            ? 'coming-soon'
-            : end !== null && now > end
-                ? 'closed'
-                : available <= 0
-                    ? 'sold-out'
-                    : 'on-sale';
+        const { startAt: salesStartAt, endAt: salesEndAt } = effectiveTicketSalesWindow(
+            event.sales_start_at,
+            event.sales_end_at,
+            t.sales_start_at,
+            t.sales_end_at,
+        );
+        const saleStatus = deriveTicketSaleStatus({
+            eventStatus: status,
+            eventEndAt: event.end_time,
+            eventSalesStartAt: event.sales_start_at,
+            eventSalesEndAt: event.sales_end_at,
+            ticketSalesStartAt: t.sales_start_at,
+            ticketSalesEndAt: t.sales_end_at,
+            available,
+            now: new Date(now),
+        });
         return {id:t.id,name:t.name,description:t.description,price:Number(t.price),capacity:t.capacity,reservedQuantity:t.reserved_quantity,soldQuantity:t.sold_quantity,available,maxPerOrder:t.max_per_order,salesStartAt,salesEndAt,saleStatus,isActive:Boolean(t.is_active)};
     });
     const eventSaleStatus = mappedTicketTypes.some((ticket)=>ticket.saleStatus==='on-sale')

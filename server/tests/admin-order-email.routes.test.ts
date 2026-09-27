@@ -8,7 +8,7 @@ vi.mock('../src/middlewares/authenticate.js', () => ({
         next();
     },
 }));
-const service = vi.hoisted(() => ({ getOrderStats: vi.fn(), listOrders: vi.fn(), getOrderDetail: vi.fn(), cancelOrder: vi.fn(), resendTicketEmail: vi.fn(), retryOrderEmail: vi.fn() }));
+const service = vi.hoisted(() => ({ getOrderStats: vi.fn(), getOrderFilterOptions: vi.fn(), listOrders: vi.fn(), getOrderDetail: vi.fn(), cancelOrder: vi.fn(), resendTicketEmail: vi.fn(), retryOrderEmail: vi.fn(), updateRefundStatus: vi.fn() }));
 vi.mock('../src/modules/orders/admin-orders.service.js', () => service);
 import { adminOrdersRouter } from '../src/modules/orders/admin-orders.routes.js';
 const app = express();
@@ -17,6 +17,8 @@ app.use((error: { statusCode?: number }, _req: express.Request, res: express.Res
 beforeEach(() => {
     vi.resetAllMocks();
     service.retryOrderEmail.mockResolvedValue({ orderId: 1, jobId: 3, queued: true, status: 'pending', message: 'Đã xếp lịch thử gửi lại email.' });
+    service.updateRefundStatus.mockResolvedValue({ id: 1, status: 'confirmed', refund: { status: 'processing' } });
+    service.getOrderStats.mockResolvedValue({ total: 2, pendingPayment: 1, confirmed: 1, expired: 0, cancelled: 0 });
 });
 it('requires authentication and administrator authorization for retry', async () => {
     const path = '/api/admin/orders/1/email-logs/2/retry';
@@ -33,4 +35,23 @@ it('returns an enqueue acknowledgement for Admin retry', async () => {
     expect(response.status).toBe(202);
     expect(response.body).toMatchObject({ success: true, data: { queued: true, jobId: 3, status: 'pending' } });
     expect(service.retryOrderEmail).toHaveBeenCalledWith(1, 2);
+});
+
+it('scopes Order metrics to the selected Event', async () => {
+    const response = await request(app).get('/api/admin/orders/stats?eventId=7').set('Authorization', 'admin');
+    expect(response.status).toBe(200);
+    expect(service.getOrderStats).toHaveBeenCalledWith(7);
+    expect(response.body.data.total).toBe(2);
+});
+
+it('validates and authorizes simulated Refund transitions', async () => {
+    const path = '/api/admin/orders/1/refund';
+    expect((await request(app).patch(path).send({ status: 'processing' })).status).toBe(401);
+    expect((await request(app).patch(path).set('Authorization', 'staff').send({ status: 'processing' })).status).toBe(403);
+    expect((await request(app).patch(path).set('Authorization', 'admin').send({ status: 'failed' })).status).toBe(400);
+    expect(service.updateRefundStatus).not.toHaveBeenCalled();
+
+    const response = await request(app).patch(path).set('Authorization', 'admin').send({ status: 'failed', failureReason: 'Lỗi mô phỏng hợp lệ' });
+    expect(response.status).toBe(200);
+    expect(service.updateRefundStatus).toHaveBeenCalledWith(1, { status: 'failed', failureReason: 'Lỗi mô phỏng hợp lệ' });
 });

@@ -2,7 +2,7 @@ import { expect, it, vi } from 'vitest';
 const send = vi.hoisted(() => vi.fn(async () => ({ messageId: 'test' })));
 vi.mock('nodemailer', () => ({ default: { createTransport: () => ({ sendMail: send }) } }));
 vi.mock('../src/config/env.js', () => ({ env: { MAIL_USER: 'sender@example.com', MAIL_APP_PASSWORD: 'test-only', MAIL_FROM_NAME: 'TicketBox' } }));
-import { sendTicketEmail } from '../src/services/mail.service.js';
+import { sendEmailVerificationCode, sendEventCancellationEmail, sendTicketEmail } from '../src/services/mail.service.js';
 
 it('includes escaped event details, both times, ticket type and an inline QR for every ticket', async () => {
     await sendTicketEmail({ recipient: 'buyer@example.com', buyerName: '<Buyer>', orderCode: 'ORDER-1', tickets: [
@@ -18,5 +18,18 @@ it('includes escaped event details, both times, ticket type and an inline QR for
     expect(message.html).toContain('22:00');
     expect(message.html).toContain('VIP');
     expect(message.html).toContain('T2');
+    expect(message.html).toContain('thanh toán trong TicketBox QR là mô phỏng');
+    expect(message.html).toContain('không có giao dịch tiền thật');
     expect(message.attachments).toHaveLength(2);
+});
+
+it('uses generic email wording for OTP and labels cancellation Refunds as simulated', async () => {
+    await sendEmailVerificationCode('buyer@example.com', '123456');
+    expect(send.mock.calls.at(-1)![0].subject).toContain('email');
+    expect(send.mock.calls.at(-1)![0].subject).not.toContain('Gmail');
+
+    await sendEventCancellationEmail({ recipient: 'buyer@example.com', buyerName: 'Buyer', orderCode: 'ORDER-1', eventName: 'Event', venue: 'Hall', startTime: new Date('2026-09-22T12:00:00Z'), cancellationReason: 'Weather' });
+    const message = send.mock.calls.at(-1)![0];
+    expect(message.html).toContain('mô phỏng');
+    expect(message.html).toContain('không phải xác nhận tiền thật');
 });

@@ -337,7 +337,7 @@ export function AdminEventsPage() {
         >
           <span>Đã hủy</span>
           <strong>{loading ? "—" : counts.cancelled}</strong>
-          <small>Đã dừng & hoàn tiền</small>
+          <small>Đã dừng & hoàn tiền mô phỏng</small>
         </button>
       </div>
 
@@ -474,7 +474,7 @@ export function AdminEventsPage() {
                   <p>Đây là trạng thái kết thúc không thể mở lại. Hệ thống sẽ ẩn sự kiện, dừng bán vé và thu hồi mọi phân công check-in đang hoạt động.</p>
                   <ul>
                     <li>Đơn đang chờ thanh toán được hủy và lượng vé giữ chỗ được trả lại.</li>
-                    <li>Vé đã phát hành bị vô hiệu; đơn đã xác nhận được tạo bản ghi hoàn tiền.</li>
+                    <li>Vé đã phát hành bị vô hiệu; đơn đã xác nhận được tạo bản ghi hoàn tiền mô phỏng.</li>
                     <li>Email thông báo hủy được đưa vào hàng đợi; lịch sử nghiệp vụ vẫn được giữ lại.</li>
                   </ul>
                 </div>

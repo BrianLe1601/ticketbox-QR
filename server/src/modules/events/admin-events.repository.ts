@@ -42,7 +42,7 @@ export async function listAdminEvents(input: AdminEventListInput) {
   if(input.status){conditions.push("e.status=?");params.push(input.status);}
   const where=conditions.length?`WHERE ${conditions.join(" AND ")}`:"";
   const offset=(input.page-1)*input.limit;
-  const [rows]=await pool.query<AdminEventRow[]>(`SELECT ${SELECT} FROM events e JOIN categories c ON c.id=e.category_id LEFT JOIN ticket_types tt ON tt.event_id=e.id ${where} GROUP BY e.id,c.slug ORDER BY e.created_at DESC LIMIT ? OFFSET ?`,[...params,input.limit,offset]);
+  const [rows]=await pool.query<AdminEventRow[]>(`SELECT ${SELECT} FROM events e JOIN categories c ON c.id=e.category_id LEFT JOIN ticket_types tt ON tt.event_id=e.id ${where} GROUP BY e.id,c.slug ORDER BY e.created_at DESC, e.id DESC LIMIT ? OFFSET ?`,[...params,input.limit,offset]);
   const [counts]=await pool.query<RowDataPacket[]>(`SELECT COUNT(*) total FROM events e ${where}`,params);
   return {rows,total:Number(counts[0]?.total??0)};
 }

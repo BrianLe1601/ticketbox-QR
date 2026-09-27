@@ -5,6 +5,7 @@ export type AdminOrderStatus = "pending_payment" | "confirmed" | "expired" | "ca
 export type TicketRowStatus = "issued" | "checked_in" | "cancelled";
 export type PaymentRowStatus = "pending" | "success" | "failed" | "cancelled";
 export type EmailLogStatus = "pending" | "processing" | "sent" | "failed";
+export type RefundStatus = "not_required" | "pending" | "processing" | "completed" | "failed";
 
 export interface AdminOrderListItem {
     id: number;
@@ -65,6 +66,18 @@ export interface AdminOrderEmailLog {
     createdAt: string;
 }
 
+export interface AdminOrderRefund {
+    id: number;
+    orderId: number;
+    amount: number;
+    status: RefundStatus;
+    reason: string;
+    requestedAt: string;
+    completedAt: string | null;
+    failureReason: string | null;
+    updatedAt: string;
+}
+
 export interface AdminOrderDetail {
     id: number;
     orderCode: string;
@@ -86,6 +99,7 @@ export interface AdminOrderDetail {
     items: AdminOrderItem[];
     tickets: AdminOrderTicket[];
     payments: AdminOrderPayment[];
+    refund: AdminOrderRefund | null;
     emailLogs: AdminOrderEmailLog[];
 }
 
@@ -125,10 +139,10 @@ export async function getAdminOrder(id: number) {
     return (await apiRequest<AdminOrderDetail>(`/admin/orders/${id}`, {}, auth())).data;
 }
 
-export async function cancelAdminOrder(id: number, reason?: string) {
+export async function cancelAdminOrder(id: number) {
     return (await apiRequest<AdminOrderDetail>(`/admin/orders/${id}/cancel`, {
         method: "POST",
-        body: JSON.stringify({ reason }),
+        body: JSON.stringify({}),
     }, auth())).data;
 }
 
@@ -137,9 +151,30 @@ export async function resendAdminOrderEmail(id: number) {
         method: "POST",
     }, auth())).data;
 }
-export interface OrderStats { pending: number; paidToday: number; expired: number }
-export async function getAdminOrderStats() {
-    return (await apiRequest<OrderStats>('/admin/orders/stats', {}, getStoredToken())).data;
+export interface OrderStats {
+    total: number;
+    pendingPayment: number;
+    confirmed: number;
+    expired: number;
+    cancelled: number;
+}
+export async function getAdminOrderStats(eventId?: number) {
+    const query = new URLSearchParams();
+    if (eventId) query.set('eventId', String(eventId));
+    const suffix = query.size ? `?${query.toString()}` : '';
+    return (await apiRequest<OrderStats>(`/admin/orders/stats${suffix}`, {}, getStoredToken())).data;
+}
+
+export interface AdminOrderFilterOptions { events: Array<{ id: number; name: string }> }
+export async function getAdminOrderFilterOptions() {
+    return (await apiRequest<AdminOrderFilterOptions>('/admin/orders/filter-options', {}, auth())).data;
+}
+
+export async function updateAdminOrderRefund(id: number, status: "processing" | "completed" | "failed", failureReason?: string) {
+    return (await apiRequest<AdminOrderDetail>(`/admin/orders/${id}/refund`, {
+        method: "PATCH",
+        body: JSON.stringify({ status, failureReason }),
+    }, auth())).data;
 }
 
 export async function retryAdminOrderEmail(id: number, logId: number) {

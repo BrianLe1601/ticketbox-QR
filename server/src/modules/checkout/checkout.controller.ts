@@ -2,7 +2,7 @@ import type { NextFunction, Request, Response } from 'express';
 import { createOrder, getOrderByLookupToken, payOrder } from './checkout.service.js';
 import { sendSuccess } from '../../utils/response.js';
 import { idempotencyKeySchema } from './checkout.schema.js';
-import type { CreateOrderBody, OrderIdParam, OrderLookupQuery, PayOrderBody } from './checkout.schema.js';
+import type { CreateOrderBody, OrderIdParam, OrderLookupBody, PayOrderBody } from './checkout.schema.js';
 import type { RequestEmailVerificationBody, ConfirmEmailVerificationBody } from './checkout.schema.js';
 import { requestEmailVerification, confirmEmailVerification } from '../../services/email-verification.service.js';
 import { z } from 'zod';
@@ -35,7 +35,7 @@ export async function postOrder(req: Request, res: Response, next: NextFunction)
 export async function getOrder(req: Request, res: Response, next: NextFunction) {
     try {
         const { id } = req.params as unknown as OrderIdParam;
-        const { token } = req.query as unknown as OrderLookupQuery;
+        const { token } = req.body as OrderLookupBody;
         const order = await getOrderByLookupToken(id, token);
         sendSuccess(res, order);
     } catch (err) {

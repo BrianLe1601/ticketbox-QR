@@ -90,12 +90,19 @@ export async function findPublishedEvents(query: ListEventsQuery) {
               WHEN e.status='completed' OR e.end_time<=NOW(3) THEN 'closed'
               WHEN MAX(CASE WHEN tt.id IS NOT NULL
                 AND (tt.capacity - tt.reserved_quantity - tt.sold_quantity) > 0
-                AND NOW(3) >= COALESCE(tt.sales_start_at,e.sales_start_at)
-                AND NOW(3) <= COALESCE(tt.sales_end_at,e.sales_end_at)
+                AND (e.sales_start_at IS NULL OR NOW(3) >= e.sales_start_at)
+                AND (e.sales_end_at IS NULL OR NOW(3) <= e.sales_end_at)
+                AND (tt.sales_start_at IS NULL OR NOW(3) >= tt.sales_start_at)
+                AND (tt.sales_end_at IS NULL OR NOW(3) <= tt.sales_end_at)
                 THEN 1 ELSE 0 END)=1 THEN 'on-sale'
               WHEN MAX(CASE WHEN tt.id IS NOT NULL
                 AND (tt.capacity - tt.reserved_quantity - tt.sold_quantity) > 0
-                AND NOW(3) < COALESCE(tt.sales_start_at,e.sales_start_at)
+                AND (e.sales_end_at IS NULL OR NOW(3) <= e.sales_end_at)
+                AND (tt.sales_end_at IS NULL OR NOW(3) <= tt.sales_end_at)
+                AND (e.sales_start_at IS NULL OR tt.sales_end_at IS NULL OR e.sales_start_at <= tt.sales_end_at)
+                AND (tt.sales_start_at IS NULL OR e.sales_end_at IS NULL OR tt.sales_start_at <= e.sales_end_at)
+                AND ((e.sales_start_at IS NOT NULL AND NOW(3) < e.sales_start_at)
+                  OR (tt.sales_start_at IS NOT NULL AND NOW(3) < tt.sales_start_at))
                 THEN 1 ELSE 0 END)=1 THEN 'coming-soon'
               WHEN COUNT(tt.id)>0 AND MAX(CASE WHEN
                 (tt.capacity - tt.reserved_quantity - tt.sold_quantity)>0

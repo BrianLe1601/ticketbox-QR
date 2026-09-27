@@ -24,7 +24,14 @@ it('expires OTP at five minutes and rejects after five incorrect attempts', asyn
     await service.requestEmailVerification('buyer@example.com', 'captcha', 'ip', 's');
     const code = mail.mock.calls[0]![1] as string;
     const wrong = code === '000000' ? '000001' : '000000';
-    for (let attempt = 0; attempt < 5; attempt++) expect(() => service.confirmEmailVerification('buyer@example.com', wrong, 's')).toThrow();
+    const errorCode = () => {
+        try { service.confirmEmailVerification('buyer@example.com', wrong, 's'); return 'NO_ERROR'; }
+        catch (error) { return (error as { code?: string }).code; }
+    };
+    for (let attempt = 0; attempt < 4; attempt++) {
+        expect(errorCode()).toBe('INVALID_EMAIL_CODE');
+    }
+    expect(errorCode()).toBe('EMAIL_CODE_ATTEMPTS_EXCEEDED');
     expect(() => service.confirmEmailVerification('buyer@example.com', code, 's')).toThrow();
     await service.requestEmailVerification('buyer@example.com', 'captcha', 'ip', 's');
     vi.advanceTimersByTime(300001);

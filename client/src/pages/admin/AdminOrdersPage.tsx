@@ -2,12 +2,14 @@ import { Ban, ChevronLeft, ChevronRight, Eye, Mail, PackageSearch, ReceiptText, 
 import { useEffect, useRef, useState } from "react";
 import {
     getAdminOrderStats,
+    getAdminOrderFilterOptions,
     type OrderStats,
     cancelAdminOrder,
     getAdminOrder,
     listAdminOrders,
     resendAdminOrderEmail,
     retryAdminOrderEmail,
+    updateAdminOrderRefund,
     type AdminOrderDetail,
     type AdminOrderListItem,
     type AdminOrderStatus,
@@ -25,7 +27,7 @@ function formatDate(value: string | null) {
 }
 
 function statusLabel(status: string) {
-    return ({ pending_payment: "Chờ thanh toán", confirmed: "Đã thanh toán", expired: "Hết hạn", cancelled: "Đã hủy", issued: "Đã phát hành", checked_in: "Đã check-in", pending: "Đang chờ", processing: "Đang gửi", success: "Thành công", failed: "Thất bại", sent: "Đã gửi", ticket_issued: "Phát hành vé", ticket_resent: "Gửi lại vé", order_cancelled: "Hủy đơn" } as Record<string, string>)[status] ?? status;
+    return ({ pending_payment: "Chờ thanh toán", confirmed: "Đã xác nhận", expired: "Hết hạn", cancelled: "Đã hủy", issued: "Đã phát hành", checked_in: "Đã check-in", not_required: "Không cần hoàn", pending: "Đang chờ", processing: "Đang xử lý", success: "Thành công", failed: "Thất bại", sent: "Đã gửi", ticket_issued: "Phát hành vé", ticket_resent: "Gửi lại vé", order_cancelled: "Thông báo hủy sự kiện" } as Record<string, string>)[status] ?? status;
 }
 
 function orderStatusClass(status: AdminOrderStatus) {
@@ -37,8 +39,9 @@ function orderStatusClass(status: AdminOrderStatus) {
 
 export function AdminOrdersPage() {
     const dialogRef = useRef<HTMLDivElement>(null);
-    const [stats, setStats] = useState<OrderStats | null>(null);
+    const [statsResult, setStatsResult] = useState<{ eventId: string; data: OrderStats } | null>(null);
     const [orders, setOrders] = useState<AdminOrderListItem[]>([]);
+    const [eventOptions, setEventOptions] = useState<Array<{ id: number; name: string }>>([]);
     const [status, setStatus] = useState<"all" | AdminOrderStatus>("all");
     const [eventId, setEventId] = useState("");
     const [buyerEmail, setBuyerEmail] = useState("");
@@ -51,8 +54,8 @@ export function AdminOrdersPage() {
     const [error, setError] = useState("");
     const [detail, setDetail] = useState<AdminOrderDetail | null>(null);
     const [detailLoading, setDetailLoading] = useState(false);
-    const [cancelReason, setCancelReason] = useState("");
-    const [actionLoading, setActionLoading] = useState<"cancel" | "resend" | "retry" | "refresh" | null>(null);
+    const [refundFailureReason, setRefundFailureReason] = useState("");
+    const [actionLoading, setActionLoading] = useState<"cancel" | "resend" | "retry" | "refresh" | "refund" | null>(null);
     const [notice, setNotice] = useState("");
 
     useEffect(() => {
@@ -91,8 +94,17 @@ export function AdminOrdersPage() {
 
     useEffect(() => {
         let active = true;
-        getAdminOrderStats().then(result => { if (active) setStats(result); })
-            .catch(() => { if (active) setStats(null); });
+        const requestedEventId = eventId;
+        getAdminOrderStats(requestedEventId && Number(requestedEventId) > 0 ? Number(requestedEventId) : undefined)
+            .then(result => { if (active) setStatsResult({ eventId: requestedEventId, data: result }); })
+            .catch(() => { if (active) setStatsResult(null); });
+        return () => { active = false; };
+    }, [eventId, refresh]);
+
+    useEffect(() => {
+        let active = true;
+        getAdminOrderFilterOptions().then(result => { if (active) setEventOptions(result.events); })
+            .catch(() => { if (active) setEventOptions([]); });
         return () => { active = false; };
     }, [refresh]);
 
@@ -124,7 +136,7 @@ export function AdminOrdersPage() {
         setDetailLoading(true);
         setError("");
         setNotice("");
-        setCancelReason("");
+        setRefundFailureReason("");
         try {
             setDetail(await getAdminOrder(orderId));
         } catch (caught) {
@@ -132,6 +144,13 @@ export function AdminOrdersPage() {
         } finally {
             setDetailLoading(false);
         }
+    }
+
+    function selectMetric(nextStatus: "all" | AdminOrderStatus) {
+        setStatus(nextStatus);
+        setBuyerEmail("");
+        setDebouncedEmail("");
+        setPage(1);
     }
 
     function syncOrder(updated: AdminOrderDetail) {
@@ -150,12 +169,9 @@ export function AdminOrdersPage() {
         setError("");
         setNotice("");
         try {
-            const updated = cancelReason.trim()
-                ? await cancelAdminOrder(detail.id, cancelReason.trim())
-                : await cancelAdminOrder(detail.id);
+            const updated = await cancelAdminOrder(detail.id);
             syncOrder(updated);
             setRefresh(current => current + 1);
-            setCancelReason("");
             setNotice("Đã hủy đơn hàng thành công.");
         } catch (caught) {
             setError(caught instanceof Error ? caught.message : "Không thể hủy đơn hàng.");
@@ -199,23 +215,59 @@ export function AdminOrdersPage() {
         finally { setActionLoading(null); }
     }
 
+    async function transitionRefund(nextStatus: "processing" | "completed" | "failed") {
+        if (!detail?.refund || actionLoading) return;
+        setActionLoading("refund"); setError(""); setNotice("");
+        try {
+            const updated = await updateAdminOrderRefund(
+                detail.id,
+                nextStatus,
+                nextStatus === "failed" ? refundFailureReason.trim() : undefined,
+            );
+            syncOrder(updated);
+            setRefundFailureReason("");
+            setRefresh(current => current + 1);
+            setNotice(`Đã cập nhật hoàn tiền mô phỏng sang “${statusLabel(nextStatus)}”.`);
+        } catch (caught) {
+            setError(caught instanceof Error ? caught.message : "Không thể cập nhật hoàn tiền mô phỏng.");
+        } finally { setActionLoading(null); }
+    }
+
+    const stats = statsResult?.eventId === eventId ? statsResult.data : null;
+    const metricCards: Array<{ key: "all" | AdminOrderStatus; label: string; count: number | undefined }> = [
+        { key: "all", label: "Tổng đơn hàng", count: stats?.total },
+        { key: "pending_payment", label: "Chờ thanh toán", count: stats?.pendingPayment },
+        { key: "confirmed", label: "Đã xác nhận", count: stats?.confirmed },
+        { key: "expired", label: "Đã hết hạn", count: stats?.expired },
+        { key: "cancelled", label: "Đã hủy", count: stats?.cancelled },
+    ];
+
     return (
         <section className="factory-module-page events-admin-page">
             <header className="factory-module-hero">
-                <div><div className="admin-live-label"><ShoppingCart size={13} /> TRANSACTION CONTROL</div><h2>Order Management</h2><p>Tra cứu giao dịch, kiểm tra vé và xử lý đơn hàng.</p></div>
+                <div><div className="admin-live-label"><ShoppingCart size={13} /> QUẢN LÝ GIAO DỊCH</div><h2>Quản lý đơn hàng</h2><p>Tra cứu giao dịch, kiểm tra vé và xử lý đơn hàng.</p></div>
             </header>
 
             {error && <div role="alert" className="events-form-errors"><p>{error}</p></div>}
 
             <div className="factory-module-metrics" aria-busy={loading}>
-                <article><span>Pending Orders</span><strong>{loading || error ? '—' : stats?.pending ?? '—'}</strong></article>
-                <article><span>Paid Today</span><strong>{loading || error ? '—' : stats?.paidToday ?? '—'}</strong></article>
-                <article><span>Expired Holds</span><strong>{loading || error ? '—' : stats?.expired ?? '—'}</strong></article>
+                {metricCards.map(card => <button
+                    key={card.key}
+                    type="button"
+                    className="factory-module-metric-button"
+                    aria-pressed={status === card.key}
+                    aria-label={`Lọc đơn hàng: ${card.label}`}
+                    disabled={loading || !stats}
+                    onClick={() => selectMetric(card.key)}
+                ><span>{card.label}</span><strong>{loading || !stats ? '—' : card.count ?? 0}</strong></button>)}
             </div>
 
             <div className="events-toolbar">
                 <label><Search size={16} /><input aria-label="Lọc email người mua" type="email" value={buyerEmail} onChange={(event) => { setBuyerEmail(event.target.value); setPage(1); }} placeholder="Tìm theo email người mua" /></label>
-                <label><ReceiptText size={16} /><input aria-label="Lọc mã sự kiện" type="number" min="1" value={eventId} onChange={(event) => { setEventId(event.target.value); setPage(1); }} placeholder="Event ID" /></label>
+                <label><ReceiptText size={16} /><select aria-label="Lọc theo sự kiện" value={eventId} onChange={(event) => { setEventId(event.target.value); setPage(1); }}>
+                    <option value="">Tất cả sự kiện</option>
+                    {eventOptions.map(event => <option key={event.id} value={event.id}>{event.name}</option>)}
+                </select></label>
                 <select aria-label="Lọc trạng thái đơn" value={status} onChange={(event) => { setStatus(event.target.value as typeof status); setPage(1); }}>
                     <option value="all">Tất cả trạng thái</option>
                     {statuses.map((item) => <option key={item} value={item}>{statusLabel(item)}</option>)}
@@ -224,7 +276,7 @@ export function AdminOrdersPage() {
 
             <div className="events-list-panel">
                 {loading ? <div className="events-empty"><p>Đang tải đơn hàng...</p></div> : orders.length === 0 ? (
-                    <div className="events-empty"><PackageSearch size={38} /><h3>Không tìm thấy đơn hàng</h3><p>Hãy thay đổi bộ lọc trạng thái, sự kiện hoặc email người mua.</p></div>
+                    <div className="events-empty"><PackageSearch size={38} /><h3>{status === "all" ? "Không tìm thấy đơn hàng" : `Không có đơn ${statusLabel(status).toLowerCase()}`}</h3><p>Hãy thay đổi bộ lọc trạng thái, sự kiện hoặc email người mua.</p></div>
                 ) : <div className="overflow-x-auto"><table className="w-full text-left text-sm">
                     <caption className="sr-only">Danh sách đơn hàng</caption>
                     <thead><tr>{['Mã đơn', 'Người mua', 'Sự kiện', 'Tổng tiền', 'Trạng thái', 'Ngày tạo', 'Chi tiết'].map(label => <th key={label} scope="col" className="p-3">{label}</th>)}</tr></thead>
@@ -260,7 +312,7 @@ export function AdminOrdersPage() {
             {detailLoading && <div className="events-dialog-backdrop"><div className="events-dialog"><div className="events-empty"><p>Đang tải chi tiết...</p></div></div></div>}
 
             {detail && !detailLoading && <div className="events-dialog-backdrop" role="presentation"><div ref={dialogRef} className="events-dialog" role="dialog" aria-modal="true" aria-labelledby="order-dialog-title">
-                <header><div><span>ADMIN / ORDERS / #{detail.id}</span><h3 id="order-dialog-title">{detail.orderCode}</h3></div><button onClick={() => setDetail(null)} aria-label="Close"><X size={20} /></button></header>
+                <header><div><span>QUẢN TRỊ / ĐƠN HÀNG / #{detail.id}</span><h3 id="order-dialog-title">{detail.orderCode}</h3></div><button onClick={() => setDetail(null)} aria-label="Đóng chi tiết đơn hàng"><X size={20} /></button></header>
                 <form onSubmit={(event) => event.preventDefault()}>
                     {error && <div role="alert" className="events-form-errors"><p>{error}</p></div>}
                     {notice && <div className="events-rule-banner"><Mail size={18} /><div><strong>{notice}</strong></div></div>}
@@ -275,9 +327,28 @@ export function AdminOrdersPage() {
                         <label>Tổng tiền<input readOnly value={formatMoney(detail.totalAmount)} /></label>
                     </div>
 
-                    <fieldset className="events-publish-box"><legend>Order items</legend>{detail.items.length === 0 ? <small>Không có dữ liệu.</small> : detail.items.map((item) => <label key={item.id}><Ticket size={14} /> {item.ticketTypeName} · {item.quantity} × {formatMoney(item.unitPrice)} = {formatMoney(item.lineTotal)}</label>)}</fieldset>
-                    <fieldset className="events-publish-box"><legend>Tickets</legend>{detail.tickets.length === 0 ? <small>Chưa phát hành vé.</small> : detail.tickets.map((ticket) => <label key={ticket.id}><span className={`event-status ${ticket.status === "issued" ? "published" : ticket.status === "checked_in" ? "ongoing" : "cancelled"}`}>{statusLabel(ticket.status)}</span> {ticket.ticketCode} · {ticket.holderName ?? detail.buyerName} · {ticket.holderEmail ?? detail.buyerEmail}</label>)}</fieldset>
-                    <fieldset className="events-publish-box"><legend>Payments</legend>{detail.payments.length === 0 ? <small>Chưa có thanh toán.</small> : detail.payments.map((payment) => <label key={payment.id}><span className={`event-status ${payment.status === "success" ? "ongoing" : payment.status === "failed" || payment.status === "cancelled" ? "cancelled" : "draft"}`}>{statusLabel(payment.status)}</span> {payment.paymentCode} · {payment.method} · {formatMoney(payment.amount)} · {formatDate(payment.paidAt ?? payment.createdAt)}</label>)}</fieldset>
+                    <fieldset className="events-publish-box"><legend>Chi tiết hạng vé</legend>{detail.items.length === 0 ? <small>Không có dữ liệu.</small> : detail.items.map((item) => <label key={item.id}><Ticket size={14} /> {item.ticketTypeName} · {item.quantity} × {formatMoney(item.unitPrice)} = {formatMoney(item.lineTotal)}</label>)}</fieldset>
+                    <fieldset className="events-publish-box"><legend>Vé đã phát hành</legend>{detail.tickets.length === 0 ? <small>Chưa phát hành vé.</small> : detail.tickets.map((ticket) => <label key={ticket.id}><span className={`event-status ${ticket.status === "issued" ? "published" : ticket.status === "checked_in" ? "ongoing" : "cancelled"}`}>{statusLabel(ticket.status)}</span> {ticket.ticketCode} · {ticket.holderName ?? detail.buyerName} · {ticket.holderEmail ?? detail.buyerEmail}</label>)}</fieldset>
+                    <fieldset className="events-publish-box"><legend>Thanh toán mô phỏng</legend>{detail.payments.length === 0 ? <small>Chưa có thanh toán.</small> : detail.payments.map((payment) => <label key={payment.id}><span className={`event-status ${payment.status === "success" ? "ongoing" : payment.status === "failed" || payment.status === "cancelled" ? "cancelled" : "draft"}`}>{statusLabel(payment.status)}</span> {payment.paymentCode} · {payment.method === "free" ? "Miễn phí" : "Mô phỏng"} · {formatMoney(payment.amount)} · {formatDate(payment.paidAt ?? payment.createdAt)}</label>)}</fieldset>
+                    <fieldset className="events-publish-box"><legend>Hoàn tiền mô phỏng</legend>
+                        {!detail.refund ? <small>Đơn hàng chưa có yêu cầu hoàn tiền mô phỏng.</small> : <div className="space-y-3">
+                            <p><span className={`event-status ${detail.refund.status === "completed" ? "ongoing" : detail.refund.status === "failed" ? "cancelled" : "draft"}`}>{statusLabel(detail.refund.status)}</span> · {formatMoney(detail.refund.amount)}</p>
+                            <p>Lý do: {detail.refund.reason}</p>
+                            <p>Ghi nhận lúc: {formatDate(detail.refund.requestedAt)}{detail.refund.completedAt ? ` · Hoàn tất lúc: ${formatDate(detail.refund.completedAt)}` : ""}</p>
+                            {detail.refund.failureReason && <p className="text-red-400">Lỗi: {detail.refund.failureReason}</p>}
+                            <p className="text-xs text-muted-foreground">Đây là quy trình mô phỏng phục vụ đồ án, không xác nhận giao dịch với ngân hàng hoặc cổng thanh toán.</p>
+                            {detail.refund.status === "pending" && <button type="button" disabled={actionLoading !== null} onClick={() => void transitionRefund("processing")} className="focus-visible:outline-2 hover:underline disabled:opacity-50">Bắt đầu xử lý mô phỏng</button>}
+                            {detail.refund.status === "processing" && <div className="space-y-2">
+                                <label htmlFor="refund-failure-reason">Lý do nếu xử lý thất bại</label>
+                                <input id="refund-failure-reason" minLength={5} maxLength={500} disabled={actionLoading !== null} value={refundFailureReason} onChange={event => setRefundFailureReason(event.target.value)} placeholder="Nhập ít nhất 5 ký tự" />
+                                <div className="flex flex-wrap gap-2">
+                                    <button type="button" disabled={actionLoading !== null} onClick={() => void transitionRefund("completed")} className="focus-visible:outline-2 hover:underline disabled:opacity-50">Hoàn tất mô phỏng</button>
+                                    <button type="button" disabled={actionLoading !== null || refundFailureReason.trim().length < 5} onClick={() => void transitionRefund("failed")} className="focus-visible:outline-2 hover:underline disabled:opacity-50">Đánh dấu thất bại</button>
+                                </div>
+                            </div>}
+                            {detail.refund.status === "failed" && <button type="button" disabled={actionLoading !== null} onClick={() => void transitionRefund("processing")} className="focus-visible:outline-2 hover:underline disabled:opacity-50">Thử lại xử lý mô phỏng</button>}
+                        </div>}
+                    </fieldset>
                     <fieldset className="events-publish-box"><legend>Lịch sử gửi email</legend>
                         <button type="button" disabled={actionLoading !== null} onClick={() => void refreshEmailStatus()} className="focus-visible:outline-2 hover:underline">{actionLoading === "refresh" ? "Đang tải..." : "Cập nhật trạng thái"}</button>
                         {detail.emailLogs.length === 0 ? <small>Chưa có email log.</small> : detail.emailLogs.map(log => (
@@ -293,7 +364,7 @@ export function AdminOrdersPage() {
                         ))}
                     </fieldset>
 
-                    {detail.status === "pending_payment" && <fieldset className="events-publish-box"><legend>Hủy đơn thủ công</legend><label htmlFor="order-cancel-reason">Lý do hủy (không bắt buộc)</label><input id="order-cancel-reason" maxLength={255} disabled={actionLoading !== null} value={cancelReason} onChange={(event) => setCancelReason(event.target.value)} placeholder="Nhập lý do hủy đơn" /></fieldset>}
+                    {detail.status === "pending_payment" && <p className="text-sm text-muted-foreground">Chỉ đơn đang chờ thanh toán mới có thể hủy trực tiếp. Thao tác này giải phóng số vé đang giữ.</p>}
                     {detail.status === "confirmed" && <p className="text-sm text-muted-foreground">Đơn đã thanh toán — không thể huỷ trực tiếp tại đây</p>}
 
                     <footer>

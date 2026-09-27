@@ -7,7 +7,7 @@ export const orderItemInputSchema = z.object({
 
 export const createOrderBodySchema = z.object({
     eventId: z.coerce.number().int().positive(),
-    emailVerificationToken: z.string().min(1, 'Gmail chưa được xác minh'),
+    emailVerificationToken: z.string().min(1, 'Email chưa được xác minh'),
     items: z.array(orderItemInputSchema).min(1, 'Cần chọn ít nhất 1 vé'),
     buyer: z.object({
         name: z.string().trim().min(1, 'Vui lòng nhập họ tên'),
@@ -37,13 +37,13 @@ export const orderIdParamSchema = z.object({
     id: z.coerce.number().int().positive(),
 });
 
-export const orderLookupQuerySchema = z.object({
+export const orderLookupBodySchema = z.object({
     token: z.string().min(1, 'Thiếu token tra cứu đơn hàng'),
 });
 
-const gmailSchema = z.string().trim().toLowerCase().email('Email không hợp lệ');
-export const requestEmailVerificationBodySchema = z.object({ email: gmailSchema, recaptchaToken: z.string().min(1).max(4096) });
-export const confirmEmailVerificationBodySchema = z.object({ email: gmailSchema, otp: z.string().regex(/^\d{6}$/, 'Mã xác minh gồm 6 chữ số') });
+const emailSchema = z.string().trim().toLowerCase().email('Email không hợp lệ');
+export const requestEmailVerificationBodySchema = z.object({ email: emailSchema, recaptchaToken: z.string().min(1).max(4096) });
+export const confirmEmailVerificationBodySchema = z.object({ email: emailSchema, otp: z.string().regex(/^\d{6}$/, 'Mã xác minh gồm 6 chữ số') });
 
 export const payOrderBodySchema = z.object({
     token: z.string().min(1, 'Thiếu token thanh toán'),
@@ -51,7 +51,7 @@ export const payOrderBodySchema = z.object({
 
 export type CreateOrderBody = z.infer<typeof createOrderBodySchema>;
 export type OrderIdParam = z.infer<typeof orderIdParamSchema>;
-export type OrderLookupQuery = z.infer<typeof orderLookupQuerySchema>;
+export type OrderLookupBody = z.infer<typeof orderLookupBodySchema>;
 export type PayOrderBody = z.infer<typeof payOrderBodySchema>;
 export type RequestEmailVerificationBody = z.infer<typeof requestEmailVerificationBodySchema>;
 export type ConfirmEmailVerificationBody = z.infer<typeof confirmEmailVerificationBodySchema>;

@@ -12,6 +12,7 @@ TicketBox QR hỗ trợ toàn bộ quy trình quản lý vé sự kiện:
 - Tạo nhiều loại vé, giá bán và số lượng khác nhau.
 - Khách đặt vé bằng email, không cần tài khoản khách hàng.
 - Giữ vé tạm thời trong thời gian thanh toán.
+- Mô phỏng thanh toán và hoàn tiền để kiểm thử đầy đủ vòng đời đơn hàng; không kết nối cổng tiền thật.
 - Phát hành mã QR riêng cho từng vé.
 - Gửi vé qua email.
 - Phân công nhân viên check-in cho từng sự kiện.
@@ -81,9 +82,9 @@ Khôi xây dựng Scanner, Check-in Logs và Reporting
 
 ## 4. Trạng thái hiện tại
 
-Đối chiếu ngày 22/09/2026: `main` và nhánh làm việc `buu-events` cùng bắt đầu ở commit `fd510c4`. Các thay đổi Google Staff/Admin Staff hiện là **working tree chưa commit**, không có trên `main`. Quy ước:
+Đối chiếu ngày 25/09/2026: `buu-events`, `develop`, `main`, `origin/develop` và `origin/main` cùng có base `1146eca`. Các sửa lỗi P0/P1 dưới đây đang ở working tree để review, chưa được xem là đã merge. Quy ước:
 
-- `[x]`: đã có trên `main`, không chỉ tồn tại ở nhánh cá nhân.
+- `[x]`: code đã có trong commit chung; nghiệm thu môi trường thật vẫn được ghi riêng nếu còn thiếu.
 - `[~]`: đã triển khai và kiểm chứng trên nhánh sở hữu, còn chờ review/merge.
 - `[ ]`: chưa hoàn tất, chưa nghiệm thu hoặc còn chờ review/merge.
 - Một chức năng chỉ được tick trên README và Trello khi đáp ứng Definition of Done ở mục 16.
@@ -91,27 +92,27 @@ Khôi xây dựng Scanner, Check-in Logs và Reporting
 Đã có trên `main`:
 
 - [x] Repository React 19 + Vite + TypeScript và Node.js + Express + TypeScript.
-- [x] Schema MySQL hợp nhất gồm 13 bảng, constraints, indexes và triggers (chưa tính cột Google Staff đang sửa ở working tree).
+- [x] Schema MySQL hợp nhất gồm 13 bảng, constraints, indexes và triggers, bao gồm Google identity/approval cho Staff và ciphertext QR phục vụ gửi lại vé.
 - [x] Kết nối MySQL, seed tài khoản và `/api/health`.
 - [x] Authentication, refresh-session rotation/revoke và RBAC Admin/Staff.
 - [x] Admin CRUD Categories, Events và Ticket Types.
 - [x] Event lifecycle, publish readiness, visibility, cancellation và đồng bộ trạng thái qua WebSocket sau khi transaction commit.
+- [x] Scheduled publish job và Admin Dashboard lấy số liệu thật từ API summary.
+- [x] Google Staff sign-in → pending, Admin duyệt/vô hiệu hóa và Event Assignment đã có UI/API/schema/test tự động.
 - [x] Public Home, Event List, Event Detail, search/filter và chọn loại vé.
-- [x] Luồng Checkout/Order/giữ chỗ/Payment mô phỏng/Ticket/QR/Email ở mức tích hợp cơ bản.
+- [x] Luồng Checkout/Order/giữ chỗ/Payment mô phỏng/Ticket/QR/Email, reCAPTCHA/rate limit/countdown và Ticket Retrieval dùng lại QR gốc.
+- [x] Admin Orders có list/search/filter/detail/phân trang, thống kê và điều khiển email retry/redelivery.
 - [x] Assigned Events, camera/manual Scanner, atomic Check-in, Recent Logs, Admin Check-in Logs, Reports và xuất Excel của Khôi đã có trên `main`.
-
-Đã có code ở working tree nhưng chưa được xem là nghiệm thu trên `main`:
-
-- [ ] Google Staff sign-in, duyệt/vô hiệu hóa, Event Assignment UI/API/schema/test của Bửu: cần review, commit/merge và UAT Google thật; database local đã có các cột Google Staff, nhưng chưa kiểm chứng clean-install từ SQL mới.
-- [ ] Điểm vào Login/Register của khách đã được bỏ khỏi Public Header trong working tree; `/login` vẫn dành cho Admin/Staff.
 
 Còn thiếu hoặc cần hoàn thiện:
 
-- [ ] Admin Orders: code list/filter/detail/pagination của Tài đã có trên `develop`; cần tích hợp với UI Admin mới, Việt hóa và nghiệm thu Order/Payment/Ticket/Refund.
-- [ ] Chống spam OTP: code reCAPTCHA v3, giới hạn theo IP/email/action, HTTP 429 và countdown đã có trên `develop`; cần đồng bộ owner branch và chạy lại test tích hợp.
-- [ ] Ticket Retrieval và hàng đợi email vé của Tài đã có trên `develop`; cần review schema mã hóa QR, secrets, rate limit, phản hồi trung tính và tương thích Check-in trước khi nghiệm thu chung.
-- [ ] Nối dữ liệu thật cho Admin Dashboard; xây notification center realtime cho Admin theo thiết kế được duyệt — Bửu. Scheduled publish và WebSocket trạng thái Event đã có, nhưng chưa phải notification center.
-- [ ] Lọc Event đã completed/cancelled trong màn Staff; UAT camera trên thiết bị thật — Khôi.
+- [ ] Nghiệm thu Google Staff với Google Client ID thật và clean-install schema trên database thử nghiệm — Bửu.
+- [~] Worker email hủy Event đã claim bằng `FOR UPDATE SKIP LOCKED`, có lease, stale recovery và attempt fencing; chờ review/merge và UAT SMTP — Bửu.
+- [ ] Xây notification center realtime cho Admin theo thiết kế được duyệt — Bửu. WebSocket lifecycle Event hiện chỉ báo client refetch dữ liệu công khai, không phải notification center.
+- [~] Lần nhập OTP sai thứ 5 trả `EMAIL_CODE_ATTEMPTS_EXCEEDED`; nội dung dùng thuật ngữ email chung; chờ review/merge và UAT reCAPTCHA/SMTP thật — Tài.
+- [~] Admin cancel Order chỉ nhận `pending_payment`; Refund mô phỏng có API/UI `pending -> processing -> completed|failed`, retry từ `failed` và test state transition — Tài triển khai, Bửu review contract.
+- [~] Order lookup đã chuyển từ query string sang POST body; access log chỉ ghi path, không ghi query; chờ review/merge — Tài.
+- [~] `GET /api/staff/events` đã loại Event completed/cancelled/đã hết giờ; chờ review/merge và UAT camera trên thiết bị thật — Khôi.
 - [ ] Test tích hợp end-to-end, concurrency, responsive và accessibility — cả nhóm.
 - [ ] Deploy staging, sửa blocker, deploy production và chuẩn bị demo — Bửu điều phối.
 
@@ -130,13 +131,13 @@ ticketbox-QR/
 └── scripts/verify.ps1              # Kiểm tra client và server trên Windows/PowerShell
 ```
 
-Các thư mục `database/seeds`, `client/src/hooks`, `client/src/schemas` và module backend `orders`, `payments`, `tickets`, `staff` riêng **chưa tồn tại** trong repository hiện tại. Seed thực tế nằm ở `server/src/database`.
+Seed thực tế nằm ở `server/src/database`; repository không có `database/seeds` hoặc `client/src/schemas`. `client/src/hooks` và các module backend `orders`, `tickets` đã tồn tại; Payment nằm trong workflow Checkout/Order và Staff vận hành nằm trong `checkins`/`admin-staff`, không có module `payments` hoặc `staff` tách riêng.
 
 ## 6. Cấu trúc frontend hiện có
 
 - `client/src/pages/public`: Home, Event List/Detail, Checkout và Order Payment/Result.
-- `client/src/pages/auth`: Login Admin/Staff; Google Staff login đang ở working tree.
-- `client/src/pages/admin`: Dashboard, Categories, Events, Ticket Types, Staff đang ở working tree, Check-in Logs/Reports; Orders vẫn là placeholder.
+- `client/src/pages/auth`: Login Admin/Staff bằng mật khẩu hiện có và Google Staff sign-in.
+- `client/src/pages/admin`: Dashboard, Categories, Events, Ticket Types, Staff, Orders, Check-in Logs và Reports.
 - `client/src/pages/staff` và `client/src/components/checkin`: Assigned Events, camera/manual Scanner, Result và Recent Logs.
 - `client/src/components/layout/Header.tsx`: Public Header; không có nút Login/Register sau thay đổi hiện tại.
 - `client/src/layouts`, `routes`, `services`, `context`, `types`, `styles`: layout, route protection, giao tiếp API, auth state, kiểu dữ liệu và giao diện. `event-realtime.service.ts` giữ một WebSocket dùng chung, tự reconnect và yêu cầu trang gọi lại REST khi trạng thái Event đổi.
@@ -146,9 +147,9 @@ Client hiện dùng `fetch` trong `client/src/services/api.ts`; không mô tả 
 ## 7. Cấu trúc backend hiện có
 
 - `server/src/config/env.ts`, `database/pool.ts`: biến môi trường và MySQL pool.
-- `server/src/modules/auth`: password login, refresh session và Google Staff identity trong working tree.
+- `server/src/modules/auth`: password login, refresh session và Google Staff identity.
 - `server/src/modules/categories`, `events`, `ticket-types`: danh mục, Event công khai/quản trị và loại vé.
-- `server/src/modules/admin-staff`: duyệt/quản lý Staff và Event assignment trong working tree.
+- `server/src/modules/admin-staff`: duyệt/quản lý Staff và Event assignment.
 - `server/src/modules/checkout`: xác minh email, giữ chỗ, Order, simulated Payment, phát hành Ticket/QR và email đầu tiên.
 - `server/src/modules/checkins`: Staff Assigned Events, check-in và Recent Logs.
 - `server/src/modules/reports`: Admin Check-in Logs, Reports và export Excel.
@@ -174,7 +175,7 @@ Database `ticketboxqr` có các bảng nghiệp vụ cốt lõi sau:
 | `order_items` | Mỗi loại vé và số lượng trong đơn |
 | `tickets` | Từng vé độc lập cùng QR token |
 | `payments` | Các lần thanh toán của đơn |
-| `refunds` | Tiến trình hoàn tiền có lịch sử kiểm toán cho đơn đã xác nhận |
+| `refunds` | Tiến trình hoàn tiền mô phỏng có lịch sử kiểm toán cho đơn đã xác nhận |
 | `checkin_logs` | Lưu tất cả lần quét thành công hoặc thất bại |
 | `email_logs` | Theo dõi trạng thái gửi email |
 
@@ -209,6 +210,16 @@ Ticket
 5. Admin phân công Staff.
 6. Admin theo dõi đơn hàng và báo cáo.
 
+### Luồng hoàn tiền mô phỏng
+
+Project môn học không chuyển tiền thật. Khi Admin hủy một Event có Order `confirmed`, transaction giữ nguyên Order/Payment thành công để bảo toàn lịch sử, vô hiệu Ticket và tạo tối đa một Refund `pending` với số tiền bất biến.
+
+1. Admin xem Refund trong chi tiết Order hoặc danh sách hậu mãi, luôn có nhãn **Mô phỏng**.
+2. Admin mô phỏng xử lý theo state machine `pending -> processing -> completed|failed`; trường hợp `failed` có thể đưa lại `pending|processing` để thử lại.
+3. `completed` ghi `completed_at`; `failed` bắt buộc có lý do an toàn. Không gọi ngân hàng/cổng thanh toán, không sửa Payment `success` và không thông báo rằng tiền thật đã về tài khoản khách.
+4. Email hủy Event chỉ nói yêu cầu hoàn tiền đã được ghi nhận trong hệ thống mô phỏng. Reports chỉ trừ Refund `completed` khỏi doanh thu mô phỏng.
+5. Code hiện mới tạo Refund `pending`, Dashboard/Reports đọc dữ liệu; API/UI cho Admin chuyển trạng thái mô phỏng và test state transition vẫn là phần còn thiếu của Tài, Bửu review workflow/schema.
+
 ### Đồng bộ trạng thái Event real-time
 
 1. Backend chạy lifecycle job mỗi giây và khóa các Event tới mốc thời gian trong cùng transaction: `published -> ongoing`, sau đó `ongoing -> completed`.
@@ -230,10 +241,10 @@ Ticket
 
 1. Admin chọn Staff đang active và một hoặc nhiều Event còn ở trạng thái `draft`, `published` hoặc `ongoing`, đồng thời chưa qua `end_time`. Màn gán không hiển thị Event đã kết thúc/completed/cancelled; backend vẫn kiểm tra lại điều kiện này trong transaction.
 2. Backend từ chối phân công trùng Staff–Event đang active hoặc Event có thời gian tổ chức chồng lấn với Event khác mà Staff đó đang nhận; khi hợp lệ, lưu từng phân công trong `event_staff` cùng Admin thực hiện và thời điểm gán.
-3. Staff đăng nhập và chỉ thấy Event được phân công còn hiệu lực, chọn đúng Event trước khi quét QR/nhập mã. Quyền check-in vẫn phải được backend kiểm tra theo trạng thái Staff, assignment và cửa sổ check-in; đăng nhập thành công không tự cấp quyền vào mọi Event.
+3. Staff đăng nhập và chỉ thấy Event được phân công còn hiệu lực ở trạng thái `published|ongoing` và chưa qua `end_time`, chọn đúng Event trước khi quét QR/nhập mã. Quyền check-in vẫn được backend kiểm tra theo trạng thái Staff, assignment và cửa sổ check-in; đăng nhập thành công không tự cấp quyền vào mọi Event.
 4. Admin gỡ phân công bằng `is_active = FALSE` và `revoked_at`, không xóa hàng lịch sử. Khi đổi lịch Event, cần xử lý các phân công active trước rồi mới gán lại theo lịch mới. Staff không thể tự gán Event; chỉ Admin xem lịch sử tổng thể.
 
-Working tree `buu-events` có API Google login và Admin Staff UI/API cho duyệt/từ chối, kích hoạt/vô hiệu hóa, sửa tên, gán/gỡ Event và xem lịch sử phân công. Schema thêm `google_sub`, `staff_approval_status` và metadata duyệt; `password_hash` nullable chỉ để hỗ trợ tài khoản Google không có mật khẩu TicketBox. Database local đã có các cột này, nhưng **chưa kiểm chứng clean-install từ SQL mới, chưa test Google thật và chưa merge**. Các trigger chặn Staff inactive, Event đã đóng và lịch chồng lấn; thu hồi phân công xảy ra trước khi vô hiệu hóa.
+Commit chung hiện có API Google login và Admin Staff UI/API cho duyệt/từ chối, kích hoạt/vô hiệu hóa, sửa tên, gán/gỡ Event và xem lịch sử phân công. Schema có `google_sub`, `staff_approval_status` và metadata duyệt; `password_hash` nullable để hỗ trợ tài khoản Google không có mật khẩu TicketBox. Các trigger chặn Staff inactive, Event đã đóng và lịch chồng lấn; thu hồi phân công xảy ra trước khi vô hiệu hóa. Phần còn thiếu là clean-install schema và UAT với Google Client ID/tài khoản thật.
 
 API Bửu dùng cho flow này: `POST /api/auth/google`; `GET /api/admin/staff`; `PATCH /api/admin/staff/:staffId`; `PATCH /api/admin/staff/:staffId/status`; `POST /api/admin/staff/:staffId/assignments`; `DELETE /api/admin/staff/:staffId/assignments/:assignmentId`. Các API `/api/admin/staff` chỉ dành cho Admin; request Google `pending` trả HTTP 202, không kèm phiên ứng dụng.
 
@@ -247,7 +258,7 @@ API Bửu dùng cho flow này: `POST /api/auth/google`; `GET /api/admin/staff`; 
 6. Khi thanh toán thành công, Order chuyển sang `confirmed`.
 7. Backend tạo từng Ticket và QR token riêng.
 8. Vé được gửi đến email khách hàng.
-9. Nếu hết hạn, Order bị hủy và số vé được nhả ra.
+9. Nếu hết hạn, Order chuyển sang `expired` và số vé giữ được nhả ra.
 
 ### Luồng tìm lại vé qua email
 
@@ -258,11 +269,11 @@ API Bửu dùng cho flow này: `POST /api/auth/google`; `GET /api/admin/staff`; 
 5. Email chứa Event, lịch, địa điểm, hạng vé, mã vé, trạng thái, QR gốc và hướng dẫn check-in.
 6. QR vẫn dùng payload `ticketbox:<raw-token>` và Check-in vẫn tra bằng hash. Bản có thể khôi phục chỉ được lưu dưới dạng ciphertext xác thực phía server để phục vụ phát hành/gửi lại.
 
-Phần việc tiếp theo của **Tài**:
+**Trạng thái và việc còn lại của Tài:**
 
-- Public Header đã gỡ điểm vào Đăng nhập/Đăng ký trong working tree; route `/login` và RBAC Admin/Staff vẫn giữ nguyên.
-- Bảo vệ gửi OTP bằng reCAPTCHA v3: frontend chỉ lấy token action `checkout_email`; Ticket Retrieval dùng action `ticket_retrieval`. Backend xác minh token, action, hostname và điểm số với secret từ environment. Giới hạn riêng theo IP, email chuẩn hóa và action; gửi lại trước 60 giây trả HTTP 429 kèm thời gian chờ, frontend khóa nút và đồng bộ countdown. Giữ quy tắc OTP hết hạn, giới hạn nhập sai, dùng một lần, hash và không ghi mã vào log.
-- Hoàn thiện Admin Orders, hiển thị Payment/Ticket/Refund/email delivery; tích hợp Ticket Retrieval và controlled redelivery đã có trên `develop` mà không làm lộ email có tồn tại.
+- Public Header đã gỡ điểm vào Đăng nhập/Đăng ký; route `/login` và RBAC Admin/Staff vẫn giữ nguyên.
+- Bảo vệ OTP/Ticket Retrieval bằng reCAPTCHA v3, rate limit IP/email/action, HTTP 429 và countdown đã có. Working tree đã sửa lần sai thứ 5 và thuật ngữ email chung; còn UAT với reCAPTCHA/SMTP thật.
+- Admin Orders, Payment/Ticket/email delivery, Ticket Retrieval và controlled redelivery đã được tích hợp. Working tree thêm Refund mô phỏng, metric-card filter, bộ chọn Event, giới hạn hủy trực tiếp ở `pending_payment` và loại lookup token khỏi URL/access log.
 - QR dùng payload `ticketbox:<raw-token>` và Check-in chỉ tra cứu bằng hash. Nếu lưu bản có thể khôi phục để gửi email, bắt buộc dùng authenticated encryption với key từ environment, ciphertext bất biến và không trả raw token/ciphertext qua API hoặc log.
 
 ### Luồng check-in
@@ -453,7 +464,7 @@ npm run build
 npm test
 ```
 
-Trên Windows PowerShell, từ root có thể chạy `./scripts/verify.ps1 -Scope all` (hoặc `client`/`server`). Trên macOS/Linux dùng các lệnh `npm run` ở trên trong từng thư mục; không cần chạy PowerShell. Cả hai nền tảng cần MySQL tương thích schema, Node/npm, `.env` riêng và cùng API/Google Client ID cấu hình đúng origin. Test tự động không thay thế UAT Google, email thật, camera và staging.
+Trên Windows PowerShell, từ root có thể chạy `./scripts/verify.ps1 -Scope all` (hoặc `client`/`server`). Trên macOS/Linux dùng các lệnh `npm run` ở trên trong từng thư mục; không cần chạy PowerShell. `npm test` chỉ là full-suite pass khi các suite MySQL được cấp database dùng một lần `ticketboxqr_test_*`; dùng `node scripts/verify-ticket-email.mjs` trong `server` để tạo/chạy/xóa fixture an toàn. Cả hai nền tảng cần MySQL tương thích schema, Node/npm, `.env` riêng và cùng API/Google Client ID cấu hình đúng origin. Test tự động không thay thế UAT Google, email thật, camera và staging.
 
 ### Database workflow và dữ liệu kiểm thử tích hợp
 
@@ -507,7 +518,7 @@ Event -> Orders theo id tăng dần -> Ticket Types theo id tăng dần -> Ticke
 - Hết hạn Order: khóa Event và Order, giảm reservation rồi chuyển Order sang `expired`.
 - Thanh toán: khóa Event và Order, chuyển reserved sang sold, xác nhận Order, ghi Payment và phát hành Ticket trong một transaction.
 - Check-in: khóa Event và kiểm tra assignment, sau đó khóa Order/Ticket, đổi Ticket sang `checked_in` và ghi log trong một transaction.
-- Cancel Event: khóa Event cùng toàn bộ Order, đóng bán, nhả giữ chỗ, hủy pending Order/Payment, vô hiệu QR, tạo Refund và queue Email Log trong một transaction. Gửi email/hoàn tiền qua provider được xử lý ngoài transaction.
+- Cancel Event: khóa Event cùng toàn bộ Order, đóng bán, nhả giữ chỗ, hủy pending Order/Payment, vô hiệu QR, tạo Refund mô phỏng và queue Email Log trong một transaction. SMTP chạy ngoài transaction; project không gọi provider hoàn tiền thật.
 - Lifecycle theo thời gian: server đồng bộ `published -> ongoing` khi đến `start_time` và `ongoing -> completed` khi qua `end_time` lúc khởi động, mỗi 10 giây và ngay sau seed demo/workflow. Admin/Public làm mới nền mỗi 10 giây; API vẫn suy ra trạng thái hiệu lực theo thời gian tại lúc trả dữ liệu để hai giao diện không lệch nhau.
 
 ### Quy tắc dữ liệu không được phá vỡ
@@ -578,7 +589,7 @@ Kế hoạch này là nguồn đối chiếu với Trello. Mỗi tuần có đú
 - [x] Hoàn thiện login, refresh, logout và `/me`.
 - [x] Hash mật khẩu; hash/rotate/revoke refresh session trong `auth_sessions`.
 - [x] Xây middleware authenticate/authorize và ProtectedRoute cho Admin/Staff.
-- [x] Hoàn thiện Login, AdminLayout, khung Admin Dashboard và seed tài khoản; số liệu thật của Dashboard còn thiếu.
+- [x] Hoàn thiện Login, AdminLayout, Admin Dashboard dùng API summary và seed tài khoản.
 - Bàn giao: xác thực và RBAC hoạt động từ frontend đến backend.
 
 **Tài — Public UI foundation**
@@ -607,7 +618,7 @@ Kế hoạch này là nguồn đối chiếu với Trello. Mỗi tuần có đú
 - [x] CRUD Ticket Type, capacity, giá, sales window và pause sales.
 - [x] Áp dụng lifecycle Event và bảo vệ last-active-tier.
 - [x] Hoàn thiện cancellation transaction, refund/email-log queue và workflow verification.
-- [ ] Scheduled publish: UI hiện hứa tự động nhưng server chưa có job; trước nghiệm thu phải triển khai job có test hoặc bỏ lựa chọn/mô tả tự động.
+- [x] Scheduled publish và lifecycle job đã có; WebSocket phát tín hiệu refetch sau commit.
 - Bàn giao: Admin quản lý đầy đủ chuỗi Category → Event → Ticket Type → Publish.
 
 **Tài — Public Event với API thật**
@@ -634,10 +645,10 @@ Kế hoạch này là nguồn đối chiếu với Trello. Mỗi tuần có đú
 
 - [ ] Nghiệm thu Google sign-in → pending → Admin duyệt/từ chối → gán Event theo mục 9 trên database thử nghiệm và Google thật.
 - [ ] Nghiệm thu Admin Staff list/update/activate/deactivate; không hard-delete tài khoản có lịch sử.
-- [ ] Assign/revoke và lịch sử `event_staff` đã có code trong working tree; cần review/merge và UAT.
-- [ ] Chặn Staff inactive, Event terminal và lịch chồng lấn đã có code/trigger; cần clean-install và UAT.
+- [x] Assign/revoke và lịch sử `event_staff` đã được tích hợp vào commit chung.
+- [x] Backend/trigger chặn Staff inactive, Event terminal, duplicate và lịch chồng lấn; còn clean-install/UAT môi trường thật.
 - [x] Review transaction/row lock, inventory và Order expiry của luồng Checkout.
-- [ ] Admin Staff UI/API/validation/authorization/test đã có trong working tree; chưa được nghiệm thu trên `main`.
+- [x] Admin Staff UI/API/validation/authorization/test tự động đã có trong commit chung; Google UAT thật còn ở tuần 7.
 - Bàn giao: Admin quản lý Staff và phân công Event; Khôi dùng API Assigned Events ổn định.
 
 **Tài — Checkout, Order và Payment nền**
@@ -646,8 +657,8 @@ Kế hoạch này là nguồn đối chiếu với Trello. Mỗi tuần có đú
 - [x] Tạo Order/Order Items, backend tự tính tiền và sinh lookup token.
 - [x] Giữ vé bằng transaction, row lock và `expires_at`; job hết hạn nhả tồn kho.
 - [x] Xử lý free/simulated payment và chuyển reservation sang sold.
-- [ ] Admin Orders list/filter/detail/pagination đã có trên `develop`; cần đồng bộ giao diện Admin và nghiệm thu lifecycle Order.
-- [ ] reCAPTCHA v3, rate limit IP/email/action, HTTP 429 và countdown đã có trên `develop`; cần tích hợp và chạy test chung.
+- [~] Admin Orders list/filter/detail/pagination và thống kê đã được tích hợp; working tree đã sửa contract hủy confirmed Order, Việt hóa metric chính và thêm Refund mô phỏng.
+- [x] reCAPTCHA v3, rate limit IP/email/action, HTTP 429 và countdown đã được tích hợp; Google/SMTP UAT thật còn ở tuần 7.
 - Bàn giao: luồng Checkout → pending Order → Payment hoạt động và không oversell.
 
 **Khôi — Assigned Events và Scanner foundation**
@@ -665,9 +676,9 @@ Kế hoạch này là nguồn đối chiếu với Trello. Mỗi tuần có đú
 
 - [x] Hoàn thiện Event cancellation: đóng bán, nhả hold, hủy pending và vô hiệu QR.
 - [x] Tạo Refund/Email Log có audit cho confirmed Order khi Event bị hủy.
-- [ ] Review Admin Staff/Assignment và hợp đồng Assigned Events trước khi merge.
-- [ ] Review idempotency, QR/lookup hash, masking và quyền truy cập liên module.
-- [ ] Review/merge PR của Tài và Khôi vào `develop` sau khi kiểm tra.
+- [x] Admin Staff/Assignment và hợp đồng Assigned Events đã được tích hợp; còn phải lọc Event terminal khỏi danh sách Staff.
+- [~] Idempotency, QR hash/ciphertext, masking và quyền truy cập đã có test; working tree đã chuyển Order lookup sang POST body và access log chỉ ghi path.
+- [x] Code của Tài và Khôi đã có trong commit chung `1146eca`.
 - Bàn giao: các luồng Event–Order–Ticket–Assignment không phá invariant CSDL.
 
 **Tài — Ticket, QR, Email và Admin Orders**
@@ -675,10 +686,10 @@ Kế hoạch này là nguồn đối chiếu với Trello. Mỗi tuần có đú
 - [x] Xác nhận Payment và phát hành đúng số Ticket theo quantity.
 - [x] Sinh `ticket_code`, QR payload `ticketbox:<raw-token>` và lưu hash làm khóa tra cứu Check-in.
 - [x] Tạo QR, gửi email vé và ghi `email_logs`.
-- [x] Hiển thị Order Result và tra cứu đơn bằng lookup token.
-- [ ] Ticket Retrieval, ciphertext QR phục vụ gửi lại và email retry job đã có trên `develop`; cần review secrets, phản hồi trung tính, rate limit và tương thích QR Check-in.
-- [ ] Hoàn thiện Admin Orders: tích hợp list/filter/detail Payment, Ticket và trạng thái email với UI Admin mới.
-- Bàn giao: khách nhận QR lúc phát hành, có thể yêu cầu gửi lại đúng QR gốc và xem trạng thái Order bằng lookup token; cần nghiệm thu end-to-end sau khi đồng bộ nhánh.
+- [~] Hiển thị Order Result và tra cứu đơn bằng lookup token trong POST body; endpoint GET chứa token trong URL đã bị loại bỏ ở working tree.
+- [x] Ticket Retrieval, ciphertext QR bất biến, phản hồi trung tính và email retry job đã được tích hợp, giữ nguyên QR dùng cho Check-in.
+- [~] Admin Orders đã tích hợp list/filter/detail Payment, Ticket, Refund mô phỏng và trạng thái email; còn review/merge và UAT.
+- Bàn giao: code phát hành/gửi lại QR gốc và quản trị đơn đã có; live SMTP/reCAPTCHA và end-to-end staging còn ở tuần 7.
 
 **Khôi — Scanner kết nối Check-in API**
 
@@ -694,21 +705,21 @@ Kế hoạch này là nguồn đối chiếu với Trello. Mỗi tuần có đú
 
 **Bửu — Admin integration và security review**
 
-- [ ] Hoàn tất/ổn định Admin Staff và Event Assignment trên `develop`.
-- [ ] Review authorization, lock order, rate limit, masked log và audit history của Check-in.
-- [ ] Review Event cancellation, refund/email jobs và xử lý partial failure.
-- [ ] Tích hợp menu Admin Staff, Orders, Check-in Logs và Reports không còn placeholder.
-- [ ] Nối số liệu thật và quick actions của Admin Dashboard; hiện đang là `00`/nút chưa nối chức năng.
-- [ ] Chạy schema/seed/workflow verification sau khi tích hợp.
+- [x] Admin Staff và Event Assignment đã được tích hợp vào commit chung.
+- [~] Authorization, lock order, rate limit, masked log và audit history của Check-in đã có test; MySQL/camera UAT vẫn cần thực hiện.
+- [~] Event cancellation, Refund/email job và partial failure đã có workflow; working tree đã bổ sung claim lock, lease, stale recovery và attempt fencing cho email hủy Event.
+- [x] Menu Admin Staff, Orders, Check-in Logs và Reports đã nối tới trang thật.
+- [x] Admin Dashboard lấy số liệu thật và quick actions từ API summary.
+- [ ] Chạy lại clean-install schema, seed/workflow verification và lưu bằng chứng trên database thử nghiệm sau lần hợp nhất cuối.
 - Bàn giao: các module Admin và shared database chạy thống nhất.
 
 **Tài — Admin Orders và hậu mãi**
 
-- [ ] Hoàn thiện và Việt hóa Admin Orders list/search/filter/detail/phân trang từ `develop`.
-- [ ] Hiển thị Payment, Ticket, email delivery và lookup token an toàn; cho phép controlled ticket redelivery nhưng không trả raw QR/ciphertext qua API.
-- [ ] Hiển thị trạng thái Event cancellation và Refund; không tự xác nhận hoàn tiền thật.
-- [ ] Nghiệm thu Ticket Retrieval, lỗi gửi email lần đầu, retry/redelivery và đối chiếu dữ liệu doanh thu cho Reports.
-- [ ] Bổ sung test và bằng chứng đối chiếu Order–Payment–Ticket–Refund.
+- [~] Admin Orders list/search/filter/detail/phân trang đã có; working tree đã thêm metric-card filter, bộ chọn Event, Việt hóa và Refund mô phỏng.
+- [x] Hiển thị Payment, Ticket, email delivery; controlled redelivery không trả raw QR/ciphertext qua API.
+- [~] Hiển thị cancellation/Refund pending đã có; cần chặn endpoint hủy confirmed Order và thêm API/UI mô phỏng `pending -> processing -> completed|failed` với nhãn rõ ràng.
+- [ ] Nghiệm thu live SMTP cho email lần đầu, Ticket Retrieval, retry/redelivery và đối chiếu doanh thu Reports.
+- [ ] Bổ sung bằng chứng MySQL đối chiếu Order–Payment–Ticket–Refund sau khi sửa contract hủy đơn.
 - Bàn giao: Admin quản trị được toàn bộ vòng đời đơn hàng sau mua.
 
 **Khôi — Atomic Check-in, Logs và Attendance Reporting**
@@ -731,7 +742,7 @@ Kế hoạch này là nguồn đối chiếu với Trello. Mỗi tuần có đú
 - [ ] Thiết kế rồi bổ sung notification center realtime cho Admin (nguồn sự kiện, người nhận, quyền xem và cách nhận). WebSocket trạng thái Event đã có nhưng chỉ là tín hiệu refetch dữ liệu công khai, không thay thế notification center.
 - [ ] Clean-install schema, seed, `db:verify`, server typecheck/build/test.
 - [ ] Audit env/secrets, jobs, rate limit, logging và backup/restore.
-- [ ] UAT scheduled publish/WebSocket Event trên môi trường thật và nối số liệu thật Admin Dashboard.
+- [ ] UAT scheduled publish/WebSocket Event và số liệu Admin Dashboard trên môi trường staging.
 - [ ] Deploy staging; lập danh sách lỗi có owner, mức độ và deadline.
 - Bàn giao: staging hoạt động và không còn blocker Platform/Admin.
 
@@ -739,8 +750,8 @@ Kế hoạch này là nguồn đối chiếu với Trello. Mỗi tuần có đú
 
 - [ ] Test Event → Checkout → Payment → Ticket/QR → Email → Order lookup.
 - [ ] Test sold out, expiry, idempotency, concurrency và không oversell.
-- [ ] Hoàn thiện OTP reCAPTCHA/429/countdown và tránh đưa Order lookup token vào URL/access log trước staging.
-- [ ] QA Admin Orders, email phát vé lần đầu, cancellation/refund display và số liệu doanh thu.
+- [~] OTP/reCAPTCHA/429/countdown và loại Order lookup token khỏi URL/access log đã có code/test; còn UAT reCAPTCHA/SMTP trên staging.
+- [ ] QA Admin Orders, email phát vé lần đầu, cancellation, Refund mô phỏng và số liệu doanh thu.
 - [ ] Hoàn thiện responsive/accessibility và bằng chứng desktop/mobile.
 - Bàn giao: luồng khách và Admin Orders ổn định trên staging.
 
@@ -881,10 +892,10 @@ tại hoặc sự cố lưu trữ dùng HTTP lỗi; không được diễn giả
 
 ### Kiểm thử bàn giao
 
-Tự động: `cd server` rồi `npm test` chạy các test service/repository với mock và
-HTTP route test (auth được mô phỏng, authorization/validation thật). Chạy thêm
-client lint/build và server typecheck/build như mục 12. Trên macOS/Linux,
-chạy trực tiếp các lệnh `npm run` tương ứng trong `client` và `server`.
+Tự động: các test service/repository/HTTP dùng Vitest; hai suite MySQL chỉ chạy
+trên database dùng một lần có tên `ticketboxqr_test_*` và chủ động từ chối database
+thường. Dùng `node scripts/verify-ticket-email.mjs` trong `server` cho bộ kiểm tra
+đầy đủ; chạy thêm client lint/build và server typecheck/build như mục 12.
 
 Kiểm thử tích hợp cần MySQL local đã chuẩn bị theo mục 11, backend chạy và dữ liệu
 Event đang mở check-in, Staff được phân công, Order confirmed, Ticket issued:
@@ -902,7 +913,7 @@ Các test mock không thay thế kiểm tra khóa/trigger/concurrency trên MySQ
 hoặc thử camera thiết bị thật. Chỉ đánh dấu UAT hoàn thành sau các bước trên.
 
 Lịch sử kiểm tra ngày 15/09/2026 có thử giải mã QR bằng jsQR và UAT MySQL cho
-Check-in/Reports. Lần kiểm tra working tree mới nhất ghi ở cuối README; camera
+Check-in/Reports. Trạng thái kiểm tra hợp nhất mới nhất ghi ở cuối README; camera
 trên thiết bị thật vẫn cần nghiệm thu.
 
 
@@ -956,21 +967,14 @@ khi bấm **Áp dụng bộ lọc**.
 
 ### Bằng chứng và giới hạn nghiệm thu
 
-Lần kiểm tra working tree 24/09/2026: client lint/build, server typecheck/build và **112/112 test** pass; test Checkout dùng MySQL cho idempotency, reserve/expiry và chống oversell. Lifecycle test kiểm tra transition theo thời gian, chạy lại idempotent, rollback khi cập nhật dở dang và WebSocket thực nhận thông điệp sau commit. Trước đây Khôi đã ghi nhận UAT MySQL local cho Check-in/Reports; bằng chứng tự động không thay thế UAT camera trên thiết bị thật hoặc Google Staff login thật. Cần chạy lại clean-install schema mới trên database thử nghiệm và chụp bằng chứng trước khi nghiệm thu phần Google Staff.
-- Client lint/build và Server typecheck/build pass; 58 test pass (service, routes,
-  transaction, validation, XLSX đọc lại, phân quyền).
-- Schema nạp vào instance MySQL mới; seed và seed:workflows thành công;
-  `db:verify`: 28/28 kiểm tra pass trước khi chạy các lần quét UAT bổ sung.
-- MySQL thật: hai lời gọi Check-in cùng `TKT-QA-ONGOING-PAID-2` đồng thời trả
-  một SUCCESS, một ALREADY_CHECKED_IN; mỗi kết quả có audit log.
-- Event QA ongoing: tiền thu 100.000 VND, 2 vé bán, 2 vé đã vào; lọc kỳ tương lai
-  trả số 0. API Excel reports/checkins trả file XLSX đọc lại được bằng ExcelJS.
-- Chưa thử camera trên thiết bị thật. Các fixture QA có thời gian tương đối;
-  Event ongoing sẽ đóng cổng sau 3 giờ kể từ lúc seed. Khi cần thay bộ dữ liệu QA,
-  chỉ chạy `seed:workflows` trên database local thử (lệnh thay toàn bộ Category QA).
+Lần kiểm tra gần nhất ngày 25/09/2026 trên working tree P0/P1, base commit `1146eca`:
 
-Không thay đổi schema/API của Event, Order hoặc Assignment; cần Bửu review phần
-mount route Admin và Tài review định nghĩa tiền thu/hoàn khi tích hợp vào develop.
+- Client lint/build và server typecheck pass.
+- Vitest thực thi 137 test thành công và bỏ qua 14 test cần fixture; lệnh tổng thể trả exit code 1 vì hai suite tích hợp chủ động từ chối chạy khi `DB_NAME` không bắt đầu bằng `ticketboxqr_test_`. Vì vậy không được ghi “toàn bộ test pass” cho lần chạy này.
+- `node scripts/verify-ticket-email.mjs` đã được gọi nhưng tài khoản MySQL cấu hình hiện tại không có quyền tạo database `ticketboxqr_test_*`; script dừng ở `CREATE DATABASE`, trước khi tạo hoặc xóa dữ liệu. Cần chạy lại bằng tài khoản test có quyền tạo/xóa database dùng một lần để hoàn tất clean-install schema, seed, `db:verify`, checkout concurrency và QR credential suites.
+- Test mới bao phủ OTP lần sai thứ 5, Order lookup qua POST body, lọc Event Staff, contract hủy Order, Refund mô phỏng, cancellation-email claim/lease/fencing và nội dung email mô phỏng.
+- Chưa nghiệm thu Google Staff với tài khoản thật, reCAPTCHA/SMTP inbox thật, camera trên thiết bị thật, staging hoặc production.
+- Các fixture QA có thời gian tương đối; chạy lại `seed:workflows` trên database local thử khi cần dữ liệu mới. Lệnh này thay toàn bộ Category `qa-workflow`, không dùng trên dữ liệu cần giữ.
 
 
 ## Public ticket retrieval and checkout email verification (Tài)
@@ -982,13 +986,14 @@ mount route Admin và Tài review định nghĩa tiền thu/hoàn khi tích hợ
 - `POST /api/orders/verify-email/request` accepts `{ email, recaptchaToken }`, action `checkout_email`. `POST /api/orders/verify-email/confirm` accepts `{ email, otp }`. Both require a random UUID `X-Checkout-Session` header generated for the current checkout. OTP expires after 5 minutes and is invalidated after 5 incorrect attempts. Confirmation returns a token valid for 15 minutes and bound to the normalized email and checkout session.
 - Order creation at `/api/checkout/orders` (also `/api/orders`) sends the same `X-Checkout-Session` plus `emailVerificationToken` and the existing `Idempotency-Key`. Successful creation consumes verification; retries of the same order retain the existing idempotency behavior. `/api/checkout/email-verifications` aliases now require the same reCAPTCHA/session contract; confirm uses `otp` instead of `code`. Email verification accepts valid non-Gmail addresses too.
 - Each flow limits both IP and normalized email to one accepted request per 60 seconds. HTTP 429 returns `code: RATE_LIMITED`, `retryAfterSeconds`, and `Retry-After`. Limits and verification records use `node-cache`; restart clears them. Deploy this implementation as a single server process; multiple replicas require a shared cache/sticky-session design before rollout.
-- Ticket email includes event name, start/end time (Asia/Ho_Chi_Minh), venue, ticket type and the original QR, joined through order items → ticket types → events. Issuance stores an authenticated encrypted token alongside its unchanged hash. Initial delivery and resend use durable `email_logs` jobs; provider calls happen after commit. Resend never rotates the QR. Legacy tickets without recoverable payload fail with `QR_PAYLOAD_UNAVAILABLE`; their existing QR remains valid.
-- `/admin/orders` uses the existing Admin layout with list filters, pagination and detail. `GET /api/admin/orders/stats` adds global pending / confirmed-today / expired counts, independent of list filters and pagination. “Today” follows the MySQL session date. All Admin Orders endpoints retain administrator authentication/authorization.
+- Ticket email includes event name, start/end time (Asia/Ho_Chi_Minh), venue, ticket type and the original QR, joined through order items → ticket types → events. Issuance stores an authenticated encrypted token alongside its unchanged hash. Initial delivery and resend use durable `email_logs` jobs; provider calls happen after commit. Resend never rotates the QR and is rejected when the Event is terminal or its `end_time` has passed. Legacy tickets without recoverable payload fail with `QR_PAYLOAD_UNAVAILABLE`; their existing QR remains valid.
+- `/admin/orders` uses the existing Admin layout with list filters, pagination and detail. `GET /api/admin/orders/stats` accepts the selected `eventId`, so every lifecycle count uses the same stable Event scope as the list; selecting a metric preserves that Event and resets incompatible buyer-email search. `GET /api/admin/orders/filter-options` supplies the Event selector. Refund actions use `PATCH /api/admin/orders/:id/refund` and are explicitly simulated. All Admin Orders endpoints retain administrator authentication/authorization.
+- Public Order lookup uses `POST /api/checkout/orders/:id/lookup` with the lookup token in the JSON body. The legacy GET query endpoint was removed, and Morgan records only the request path so credentials cannot enter access logs through query strings.
 - Public navigation no longer exposes login/register. The standalone `/login` route remains the existing Admin/Staff entry point outside PublicLayout. No auth, Admin Events/Ticket Types/Staff/Categories, Check-in/Reports or schema implementation was changed.
 
 ### Verification for this change
 
-Automated coverage lives in `server/tests/public-email-security.test.ts`, `email-verification.test.ts`, `ticket-retrieval.test.ts`, and `ticket-mail.test.ts`, alongside the existing checkout integration suite. Run `.agents/skills/ticketbox-verify/scripts/verify.ps1` and `npm test` from `server`.
+Automated coverage lives in `server/tests/public-email-security.test.ts`, `email-verification.test.ts`, `ticket-retrieval.test.ts`, and `ticket-mail.test.ts`, alongside the checkout integration suite. Use `.agents/skills/ticketbox-verify/scripts/verify.ps1` for the standard build checks and `node scripts/verify-ticket-email.mjs` from `server` for the disposable-MySQL suite.
 
 Manual acceptance still requires configured Google/SMTP credentials and browser interaction:
 
@@ -996,10 +1001,10 @@ Manual acceptance still requires configured Google/SMTP credentials and browser 
 2. Submit retrieval for a confirmed buyer, an unknown address and a pending-only buyer: same public message, mail only for confirmed active tickets, every QR accompanied by event details.
 3. Repeat with the same IP/different email and same email/different IP: 429 and countdown. After 60 seconds retry. Reject wrong reCAPTCHA action/low score without disclosing the reason.
 4. Request checkout OTP; verify wrong/expired codes fail, another checkout session cannot confirm or use the verification token, and verified email can create an order. Retrieval must never ask for OTP.
-5. Check Admin Orders filters, pagination, details and global metrics, including paid-today date boundaries; keyboard-tab the detail dialog and close with Escape.
+5. Check every Admin Orders metric card against the matching status list, Event selector, pagination and Refund transitions; keyboard-tab the detail dialog and close with Escape.
 6. Simulate mail failure after payment: confirmed order/tickets remain committed and email log records failure. Retry later and verify the original QR still checks in successfully; checked-in/cancelled tickets must not appear as usable tickets in resend mail.
 
-Verification evidence (2026-09-22): server typecheck/build, client lint/build, and all 75 tests across 10 test files passed; `git diff --check` passed. The first sandbox run failed at client build / Vitest worker creation with `spawn EPERM`; rerunning those commands outside the sandbox passed. Browser and live Google/SMTP acceptance steps above have not been executed. No schema reset or migration was run.
+Current consolidated verification status is recorded in **Bằng chứng và giới hạn nghiệm thu** above; older partial test counts are intentionally not treated as current project evidence.
 
 ### Original-QR email queue (2026-09-22)
 
@@ -1010,7 +1015,7 @@ Verification evidence (2026-09-22): server typecheck/build, client lint/build, a
 - Payment commits the initial mail job with the ticket transaction. Public retrieval commits enqueue operations before its neutral acknowledgement; unknown emails create no jobs. A database failure returns generic `503 TICKET_RETRIEVAL_UNAVAILABLE` and logs a request ID. A public acknowledgement does not prove SMTP delivery.
 - Worker: poll every 15 seconds, claim at most five jobs with `FOR UPDATE SKIP LOCKED`, increment attempts and commit before SMTP. Retry temporary failures after 1, 5, 15, 60 minutes, at most five attempts total. QR errors, invalid credentials and permanent provider errors become failed immediately. Five-minute leases recover interrupted workers; an obsolete attempt cannot overwrite a newer result. Delivery is at least once: SMTP acceptance followed by a crash before recording success can produce a duplicate email containing the **same** QR. `sent` means the provider accepted the recipient, not guaranteed inbox delivery.
 - Admin `POST /api/admin/orders/:id/resend-email` now returns HTTP 202 with `orderId`, `jobId`, `queued`, `status`, `message`; the message says queued. `POST /api/admin/orders/:id/email-logs/:logId/retry` requires Admin access and a failed ticket-mail log belonging to that order, with no active job of the same type. Manual retry creates a new job with a fresh attempt budget and retains the failed log for audit. Admin detail exposes attempts, next attempt/lease, status and safe error reason, never the QR hash/ciphertext/token.
-- Before each attempt, only `issued` tickets on a `confirmed` order are prepared. Any eligible legacy ticket with no payload fails the whole order's email; no partial or replacement email is sent. Tickets may still be checked in or an event cancelled after mail preparation; scanner/database state remains authoritative even for a QR already in transit.
-- Run `node scripts/verify-ticket-email.mjs` from `server` for the complete schema, seeds, DB verification and test suite in a uniquely named `ticketboxqr_test_*` database. It uses an explicit test-only key, never writes `.env`, and drops only the database it created. Integration tests refuse the normal database. Ordinary `npm test` requires this disposable fixture and configured test environment. Run `.agents/skills/ticketbox-verify/scripts/verify.ps1` for server typecheck/build and client lint/build.
+- Before each attempt, only `issued` tickets on a `confirmed` order for a `published|ongoing` Event whose `end_time` is still in the future are prepared. Any eligible legacy ticket with no payload fails the whole order's email; no partial or replacement email is sent. Tickets may still be checked in or an event cancelled after mail preparation; scanner/database state remains authoritative even for a QR already in transit.
+- Run `node scripts/verify-ticket-email.mjs` from `server` for the complete schema, seeds, DB verification and test suite in a uniquely named `ticketboxqr_test_*` database. It uses an explicit test-only key, never writes `.env`, and drops only the database it created. Integration tests refuse the normal database. A plain `npm test` outside this fixture can run unit suites but must not be reported as a passing full suite when the guarded integration suites refuse to start. Run `.agents/skills/ticketbox-verify/scripts/verify.ps1` for server typecheck/build and client lint/build.
 - Removal audit: `rotateTicketQrToken` existed only as the repository definition and service import/call; no direct client/test references existed. Git attribution: `a3ddff12`, Tai1245, 2026-09-13 23:11:28 +0700. The retrieval tests and Admin response/UI expectations now cover enqueue completion instead of QR replacement.
-- Verification: 95 tests in 14 files passed, including real-MySQL QR immutability, payment encryption rollback, concurrent enqueue/claim, stale-lease recovery, SMTP failure/manual retry, original-QR check-in and event cancellation. Disposable schema seed, workflow seed and 29/29 DB checks passed. Server typecheck/build, client lint/build and `git diff --check` passed. Disposable databases were removed; the existing `ticketboxqr` database and real `.env` were not changed. Live browser/Google/SMTP inbox delivery has not been exercised for this queue change.
+- Historical feature-level verification covered real-MySQL QR immutability, payment encryption rollback, concurrent enqueue/claim, stale-lease recovery, SMTP failure/manual retry, original-QR check-in and Event cancellation. Re-run the current consolidated suite before release; live browser/Google/SMTP inbox delivery remains unverified.
