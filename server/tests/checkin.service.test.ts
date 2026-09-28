@@ -3,10 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const repo = vi.hoisted(() => ({
   transaction: vi.fn(), listEvents: vi.fn(), lockEvent: vi.fn(), hasAssignment: vi.fn(),
   databaseNow: vi.fn(), findTicket: vi.fn(), lockOrder: vi.fn(), lockTicket: vi.fn(),
-  markCheckedIn: vi.fn(), appendLog: vi.fn(), recentLogs: vi.fn(),
+  markCheckedIn: vi.fn(), appendLog: vi.fn(), recentLogs: vi.fn(), listAssignments: vi.fn(),
+  findAssignment: vi.fn(), assignmentLogs: vi.fn(), assignmentLogCount: vi.fn(),
 }));
 vi.mock('../src/modules/checkins/checkin.repository.js', () => repo);
-import { checkIn, getRecentLogs } from '../src/modules/checkins/checkin.service.js';
+import { checkIn, getAssignmentLogs, getRecentLogs } from '../src/modules/checkins/checkin.service.js';
 
 const now = new Date('2026-09-15T08:00:00Z');
 const ticket = { id: 10, orderId: 20, eventId: 1, code: 'TKT-123', holderName: 'Guest', status: 'issued', checkedInAt: null };
@@ -107,5 +108,21 @@ describe('check-in business rules', () => {
     repo.hasAssignment.mockResolvedValue(false);
     await expect(getRecentLogs(1, 2)).rejects.toMatchObject({ statusCode: 403 });
     expect(repo.recentLogs).not.toHaveBeenCalled();
+  });
+  it('does not read historical logs for an assignment outside the authenticated Staff scope', async () => {
+    repo.findAssignment.mockResolvedValue(undefined);
+    await expect(getAssignmentLogs(2, 99, { page: 1, limit: 20 })).rejects.toMatchObject({ statusCode: 404, code: 'STAFF_ASSIGNMENT_NOT_FOUND' });
+    expect(repo.assignmentLogs).not.toHaveBeenCalled();
+    expect(repo.assignmentLogCount).not.toHaveBeenCalled();
+  });
+  it('allows a Staff member to read only their own archived assignment logs', async () => {
+    repo.findAssignment.mockResolvedValue({ assignmentId: 11, id: 1, isActive: 0, revokedAt: new Date('2026-09-15T10:00:00Z') });
+    repo.assignmentLogs.mockResolvedValue([{ id: 1, code: 'SUCCESS' }]);
+    repo.assignmentLogCount.mockResolvedValue(1);
+    await expect(getAssignmentLogs(2, 11, { page: 1, limit: 20 })).resolves.toEqual({
+      data: [{ id: 1, code: 'SUCCESS' }], meta: { total: 1, page: 1, limit: 20 },
+    });
+    expect(repo.assignmentLogs).toHaveBeenCalledWith(2, 11, { page: 1, limit: 20 });
+    expect(repo.assignmentLogCount).toHaveBeenCalledWith(2, 11, { page: 1, limit: 20 });
   });
 });

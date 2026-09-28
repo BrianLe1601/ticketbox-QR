@@ -149,7 +149,7 @@ export function CheckoutPlaceholder() {
                     <div>
                         <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Email nhận vé</label>
                         <div className="flex gap-2">
-                            <input aria-label="Email nhận vé" required type="email" value={email} disabled={Boolean(verificationToken) || sendingCode || verifyingCode} onChange={(e) => { setEmail(e.target.value); setCodeSent(false); setVerificationToken(""); }} placeholder="ban@gmail.com" className="min-w-0 flex-1 px-3.5 py-2.5 rounded-xl bg-card border border-white/[0.08] text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 disabled:opacity-70" />
+                            <input aria-label="Email nhận vé" required type="email" value={email} disabled={Boolean(verificationToken) || sendingCode || verifyingCode} onChange={(e) => { setEmail(e.target.value); setCodeSent(false); setVerificationToken(""); }} placeholder="ban@example.com" className="min-w-0 flex-1 px-3.5 py-2.5 rounded-xl bg-card border border-white/[0.08] text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 disabled:opacity-70" />
                             <button type="button" onClick={handleSendCode} disabled={!captcha.ready || sendingCode || remaining > 0 || Boolean(verificationToken) || !email} className="px-3 rounded-xl border border-primary/30 text-primary text-xs font-bold disabled:opacity-50">{sendingCode ? "Đang gửi..." : remaining > 0 ? `Gửi lại sau ${remaining}s` : "Gửi mã"}</button>
                         </div>
                         {!captcha.ready && !captcha.error && <p role="status" className="mt-2 text-xs">Đang tải xác minh reCAPTCHA...</p>}
@@ -171,7 +171,7 @@ export function CheckoutPlaceholder() {
                         {submitting && <Loader2 size={15} className="animate-spin" />}
                         {submitting ? "Đang giữ vé..." : "Tiếp tục"}
                     </button>
-                    <p className="text-[11px] text-center text-muted-foreground">Vé sẽ được giữ trong 10 phút để hoàn tất thanh toán.</p>
+                    <p className="text-[11px] text-center text-muted-foreground">Vé sẽ được giữ trong 10 phút để hoàn tất thanh toán mô phỏng; không có giao dịch tiền thật.</p>
                 </form>
 
                 <div className="sm:col-span-2">

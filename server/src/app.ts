@@ -36,7 +36,11 @@ app.use(
     }),
 );
 
-app.use(morgan(env.NODE_ENV === "production" ? "combined" : "dev"));
+morgan.token("safe-path", (req) => (req as express.Request).path);
+const accessLogFormat = env.NODE_ENV === "production"
+    ? ':remote-addr - :remote-user [:date[clf]] ":method :safe-path HTTP/:http-version" :status :res[content-length] ":referrer" ":user-agent"'
+    : ':method :safe-path :status :response-time ms - :res[content-length]';
+app.use(morgan(accessLogFormat));
 app.use(express.json({ limit: "1mb" }));
 app.use(cookieParser());
 

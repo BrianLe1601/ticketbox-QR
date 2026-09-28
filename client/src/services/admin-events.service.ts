@@ -20,7 +20,17 @@ export interface EventPayload {
 }
 
 const auth=()=>getStoredToken();
-export async function listAdminEvents(){return apiRequest<AdminEvent[]>("/admin/events?limit=50",{},auth());}
+export async function listAdminEvents(){
+  const limit=50;
+  const first=await apiRequest<AdminEvent[]>(`/admin/events?page=1&limit=${limit}`,{},auth());
+  const total=first.meta?.total??first.data.length;
+  const data=[...first.data];
+  for(let page=2;page<=Math.ceil(total/limit);page+=1){
+    const response=await apiRequest<AdminEvent[]>(`/admin/events?page=${page}&limit=${limit}`,{},auth());
+    data.push(...response.data);
+  }
+  return {data,meta:{total:data.length,page:1,limit:Math.max(1,data.length)}};
+}
 export async function getAdminEvent(id:number){return (await apiRequest<AdminEvent>(`/admin/events/${id}`,{},auth())).data;}
 export async function createAdminEvent(body:EventPayload){return (await apiRequest<AdminEvent>("/admin/events",{method:"POST",body:JSON.stringify(body)},auth())).data;}
 export async function updateAdminEvent(id:number,body:EventPayload){return (await apiRequest<AdminEvent>(`/admin/events/${id}`,{method:"PATCH",body:JSON.stringify(body)},auth())).data;}

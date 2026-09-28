@@ -17,7 +17,10 @@ const AdminCategoriesPage = lazy(() => import("@/pages/admin/AdminCategoriesPage
 const AdminStaffPage = lazy(() => import("@/pages/admin/AdminStaffPage").then((module) => ({ default: module.AdminStaffPage })));
 const AdminOrdersPage = lazy(() => import("@/pages/admin/AdminOrdersPage").then(module => ({ default: module.AdminOrdersPage })));
 const StaffLayout = lazy(() => import("@/layouts/StaffLayout").then((module) => ({ default: module.StaffLayout })));
-const StaffHomePage = lazy(() => import("@/pages/staff/StaffHomePage").then((module) => ({ default: module.StaffHomePage })));
+const StaffOverviewPage = lazy(() => import("@/pages/staff/StaffOverviewPage").then((module) => ({ default: module.StaffOverviewPage })));
+const StaffCheckinPage = lazy(() => import("@/pages/staff/StaffCheckinPage").then((module) => ({ default: module.StaffCheckinPage })));
+const StaffEventsPage = lazy(() => import("@/pages/staff/StaffEventsPage").then((module) => ({ default: module.StaffEventsPage })));
+const StaffHistoryPage = lazy(() => import("@/pages/staff/StaffHistoryPage").then((module) => ({ default: module.StaffHistoryPage })));
 
 const AdminOperationsPage = lazy(() => import("@/pages/admin/AdminOperationsPage").then((module) => ({ default: module.AdminOperationsPage })));
 
@@ -48,7 +51,10 @@ export function AppRoutes() {
 
             <Route element={<ProtectedRoute allowedRoles={["staff"]} />}>
                 <Route path="/staff" element={<StaffLayout />}>
-                    <Route index element={<StaffHomePage />} />
+                    <Route index element={<StaffOverviewPage />} />
+                    <Route path="check-in" element={<StaffCheckinPage />} />
+                    <Route path="events" element={<StaffEventsPage />} />
+                    <Route path="history" element={<StaffHistoryPage />} />
                 </Route>
             </Route>
         </Routes></Suspense>

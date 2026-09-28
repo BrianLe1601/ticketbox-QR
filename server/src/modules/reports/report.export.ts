@@ -10,8 +10,8 @@ function workbook(query: ReportQuery) {
   info.addRows([
     ['Event ID', query.eventId], ['Từ ngày', query.from ?? 'Không giới hạn'], ['Đến hết ngày', query.to ?? 'Không giới hạn'],
     ['Múi giờ', 'Asia/Ho_Chi_Minh (UTC+07:00)'], ['Xuất lúc (UTC)', new Date().toISOString()],
-    ['Cách tính', 'Thu theo paid_at; hoàn theo completed_at; lượt vào theo log SUCCESS; mỗi chỉ số lọc thời điểm riêng.'],
-    ['Tiền tệ', 'VND; thu ròng = đã thu - đã hoàn trong kỳ, có thể âm.'],
+    ['Cách tính', 'Thanh toán mô phỏng theo paid_at; hoàn tiền mô phỏng theo completed_at; lượt vào theo log SUCCESS; mỗi chỉ số lọc thời điểm riêng.'],
+    ['Tiền tệ', 'VND mô phỏng; thu ròng mô phỏng = đã thu mô phỏng - đã hoàn mô phỏng trong kỳ, có thể âm. Không có giao dịch tiền thật.'],
   ]);
   return book;
 }
@@ -31,8 +31,8 @@ export async function reportWorkbook(query: ReportQuery, report: ReportRow) {
     { header: 'Đơn xác nhận', key: 'confirmedOrders', width: 18 }, { header: 'Vé đã bán', key: 'soldTickets', width: 16 },
     { header: 'Vé phát hành', key: 'issuedTickets', width: 18 }, { header: 'Vé đã vào', key: 'admissions', width: 16 },
     { header: 'Tổng lần quét', key: 'scans', width: 18 }, { header: 'Quét từ chối', key: 'rejectedScans', width: 18 },
-    { header: 'Đã thu (VND)', key: 'grossRevenue', width: 22 }, { header: 'Đã hoàn (VND)', key: 'refundedAmount', width: 22 },
-    { header: 'Thu ròng (VND)', key: 'netRevenue', width: 22 },
+    { header: 'Thanh toán mô phỏng (VND)', key: 'grossRevenue', width: 30 }, { header: 'Hoàn tiền mô phỏng (VND)', key: 'refundedAmount', width: 30 },
+    { header: 'Thu ròng mô phỏng (VND)', key: 'netRevenue', width: 28 },
   ];
   sheet.addRow(report);
   for (const key of ['grossRevenue', 'refundedAmount', 'netRevenue']) sheet.getColumn(key).numFmt = '#,##0.00';

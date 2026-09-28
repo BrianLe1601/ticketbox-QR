@@ -5,12 +5,12 @@ import {
   QrCode,
   ShieldCheck,
   Sparkles,
-  Ticket,
   Users,
 } from "lucide-react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 
 import loginBackground from "@/assets/backgrounds/login-gate-inside.webp";
+import ticketboxLogoDark from "@/assets/brand/ticketbox-logo-dark.svg";
 import { GoogleStaffLogin } from "@/components/auth/GoogleStaffLogin";
 import { LoginForm } from "@/components/auth/LoginForm";
 import { useAuth } from "@/context/AuthContext";
@@ -49,13 +49,7 @@ export function LoginPage() {
           onClick={() => navigate("/")}
           aria-label="Về trang chủ TicketBox QR"
         >
-          <span className="auth-brand-icon">
-            <Ticket size={22} />
-          </span>
-          <div>
-            <strong>TICKETBOX QR</strong>
-            <small>OPERATIONS GATEWAY</small>
-          </div>
+          <img className="auth-brand-logo" src={ticketboxLogoDark} alt="TicketBox" />
         </button>
 
         <Link to="/" className="auth-home-btn">

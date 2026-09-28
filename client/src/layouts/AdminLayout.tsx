@@ -2,7 +2,6 @@ import {
   Activity,
   BarChart3,
   Bell,
-  Bot,
   CalendarDays,
   ChevronLeft,
   ClipboardCheck,
@@ -16,9 +15,10 @@ import {
   X,
 } from "lucide-react";
 import { useState } from "react";
-import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import adminBackground from "@/assets/backgrounds/admin-command-room.webp";
+import ticketboxLogoDark from "@/assets/brand/ticketbox-logo-dark.svg";
 import { useAuth } from "@/context/AuthContext";
 
 const navigation = [
@@ -66,8 +66,10 @@ export function AdminLayout() {
 
       <aside className={`admin-sidebar ${sidebarOpen ? "is-open" : ""}`}>
         <div className="admin-sidebar-brand">
-          <div className="admin-brand-core"><Bot size={23} /></div>
-          <div><strong>TICKETBOX</strong><span>TRUNG TÂM ĐIỀU HÀNH</span></div>
+          <Link to="/admin" className="admin-brand-lockup" aria-label="TicketBox Admin - Về Dashboard">
+            <img src={ticketboxLogoDark} alt="TicketBox" />
+            <span>TRUNG TÂM ĐIỀU HÀNH</span>
+          </Link>
           <button className="admin-mobile-close" type="button" onClick={() => setSidebarOpen(false)} aria-label="Đóng thanh điều hướng"><X size={20} /></button>
         </div>
 

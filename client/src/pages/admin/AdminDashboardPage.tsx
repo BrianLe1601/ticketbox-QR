@@ -102,7 +102,7 @@ export function AdminDashboardPage() {
       summary.refunds.pendingCount > 0);
 
   return (
-    <div className="admin-dashboard">
+    <div className={`admin-dashboard ${hasAlerts ? "has-alerts" : ""}`}>
       {/* 1. Welcome & System Header */}
       <section className="admin-welcome">
         <div>
@@ -257,6 +257,7 @@ export function AdminDashboardPage() {
 
       {/* 3. Secondary Metrics: Financial & Orders Overview */}
       <section
+        className="admin-secondary-metrics"
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
@@ -266,6 +267,7 @@ export function AdminDashboardPage() {
         aria-label="Tài chính và giao dịch"
       >
         <div
+          className="admin-secondary-metric"
           style={{
             padding: "16px 18px",
             borderRadius: "14px",
@@ -278,6 +280,7 @@ export function AdminDashboardPage() {
           }}
         >
           <div
+            className="admin-secondary-metric-icon"
             style={{
               width: "42px",
               height: "42px",
@@ -294,7 +297,7 @@ export function AdminDashboardPage() {
           </div>
           <div>
             <span style={{ fontSize: "11px", color: "#7a93a8", fontWeight: 700 }}>
-              TỔNG DOANH THU ĐÃ THU
+              TỔNG THANH TOÁN MÔ PHỎNG
             </span>
             <div
               style={{
@@ -307,12 +310,13 @@ export function AdminDashboardPage() {
               {loading ? "..." : formatVND(summary?.orders.totalRevenue ?? 0)}
             </div>
             <small style={{ fontSize: "10.5px", color: "#64748b" }}>
-              Từ {summary?.orders.confirmed ?? 0} đơn hàng thành công
+              Từ {summary?.orders.confirmed ?? 0} đơn xác nhận; không có giao dịch tiền thật
             </small>
           </div>
         </div>
 
         <div
+          className="admin-secondary-metric"
           style={{
             padding: "16px 18px",
             borderRadius: "14px",
@@ -325,6 +329,7 @@ export function AdminDashboardPage() {
           }}
         >
           <div
+            className="admin-secondary-metric-icon"
             style={{
               width: "42px",
               height: "42px",
@@ -360,6 +365,7 @@ export function AdminDashboardPage() {
         </div>
 
         <div
+          className="admin-secondary-metric"
           style={{
             padding: "16px 18px",
             borderRadius: "14px",
@@ -372,6 +378,7 @@ export function AdminDashboardPage() {
           }}
         >
           <div
+            className="admin-secondary-metric-icon"
             style={{
               width: "42px",
               height: "42px",
@@ -410,6 +417,7 @@ export function AdminDashboardPage() {
       {/* 4. Operational Alerts & Warnings (if any) */}
       {hasAlerts && (
         <section
+          className="admin-operations-alerts"
           style={{
             marginTop: "18px",
             padding: "18px 20px",
@@ -420,6 +428,7 @@ export function AdminDashboardPage() {
           aria-label="Cảnh báo vận hành cần xử lý"
         >
           <div
+            className="admin-operations-alerts-heading"
             style={{
               display: "flex",
               alignItems: "center",
@@ -434,11 +443,12 @@ export function AdminDashboardPage() {
             </h3>
           </div>
 
-          <div style={{ display: "grid", gap: "10px" }}>
+          <div className="admin-operations-alerts-list" style={{ display: "grid", gap: "10px" }}>
             {/* Unstaffed Upcoming Events */}
             {summary.alerts.unstaffedUpcomingEvents.map((evt) => (
               <div
                 key={evt.id}
+                className="admin-operation-alert-row"
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -457,6 +467,7 @@ export function AdminDashboardPage() {
                   </span>
                 </div>
                 <button
+                  className="admin-operation-alert-action"
                   type="button"
                   onClick={() => navigate("/admin/staff")}
                   style={{
@@ -482,6 +493,7 @@ export function AdminDashboardPage() {
             {summary.alerts.scheduledPublishFailedEvents.map((evt) => (
               <div
                 key={evt.id}
+                className="admin-operation-alert-row"
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -500,6 +512,7 @@ export function AdminDashboardPage() {
                   </span>
                 </div>
                 <button
+                  className="admin-operation-alert-action"
                   type="button"
                   onClick={() => navigate("/admin/events")}
                   style={{
@@ -524,6 +537,7 @@ export function AdminDashboardPage() {
             {/* Pending Staff Approval */}
             {summary.staff.pendingApproval > 0 && (
               <div
+                className="admin-operation-alert-row"
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -542,6 +556,7 @@ export function AdminDashboardPage() {
                   </span>
                 </div>
                 <button
+                  className="admin-operation-alert-action"
                   type="button"
                   onClick={() => navigate("/admin/staff")}
                   style={{
@@ -657,8 +672,8 @@ export function AdminDashboardPage() {
 
             <button type="button" onClick={() => navigate("/admin/reports")}>
               <Activity size={20} />
-              <span>Báo cáo doanh thu & check-in</span>
-              <small>Theo dõi tỷ lệ soát vé và doanh thu</small>
+              <span>Báo cáo thanh toán mô phỏng & check-in</span>
+              <small>Theo dõi tỷ lệ soát vé và số tiền mô phỏng</small>
             </button>
           </div>
         </article>

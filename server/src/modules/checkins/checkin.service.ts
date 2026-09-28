@@ -3,9 +3,65 @@ import { AppError } from '../../utils/app-error.js';
 import * as repo from './checkin.repository.js';
 import { resultMessages } from './checkin.types.js';
 import type { ResultCode, ScanResult } from './checkin.types.js';
+import type { AssignmentListQuery, AssignmentLogsQuery } from './checkin.schema.js';
 
 const hashCode = (value: string) => createHash('sha256').update(value).digest('hex');
 export const getAssignedEvents = repo.listEvents;
+
+function mapAssignment(row: repo.AssignmentRow) {
+  return {
+    assignmentId: row.assignmentId,
+    eventId: row.id,
+    name: row.name,
+    venue: row.venue,
+    address: row.address,
+    city: row.city,
+    startTime: row.startTime,
+    endTime: row.endTime,
+    status: row.status,
+    checkinStartAt: row.checkinStartAt,
+    checkinEndAt: row.checkinEndAt,
+    assignedAt: row.assignedAt,
+    revokedAt: row.revokedAt,
+    isActive: Boolean(row.isActive),
+    operationalState: row.operationalState,
+  };
+}
+
+export async function getAssignments(staffId: number, query: AssignmentListQuery) {
+  const { rows, total } = await repo.listAssignments(staffId, query);
+  return { data: rows.map(mapAssignment), meta: { total, page: query.page, limit: query.limit } };
+}
+
+export async function getAssignment(staffId: number, assignmentId: number) {
+  const row = await repo.findAssignment(staffId, assignmentId);
+  if (!row) throw AppError.notFound('Không tìm thấy phân công.', 'STAFF_ASSIGNMENT_NOT_FOUND');
+  return mapAssignment(row);
+}
+
+export async function getAssignmentLogs(staffId: number, assignmentId: number, query: AssignmentLogsQuery) {
+  if (!await repo.findAssignment(staffId, assignmentId)) {
+    throw AppError.notFound('Không tìm thấy phân công.', 'STAFF_ASSIGNMENT_NOT_FOUND');
+  }
+  const [data, total] = await Promise.all([
+    repo.assignmentLogs(staffId, assignmentId, query),
+    repo.assignmentLogCount(staffId, assignmentId, query),
+  ]);
+  return { data, meta: { total, page: query.page, limit: query.limit } };
+}
+
+export async function getOverview(staffId: number) {
+  const [open, upcoming, history] = await Promise.all([
+    getAssignments(staffId, { segment: 'open', page: 1, limit: 4 }),
+    getAssignments(staffId, { segment: 'upcoming', page: 1, limit: 1 }),
+    getAssignments(staffId, { segment: 'history', page: 1, limit: 1 }),
+  ]);
+  return {
+    counts: { open: open.meta.total, upcoming: upcoming.meta.total, history: history.meta.total, total: open.meta.total + upcoming.meta.total + history.meta.total },
+    openEvents: open.data,
+    nextUpcomingAssignment: upcoming.data[0] ?? null,
+  };
+}
 
 export async function getRecentLogs(eventId: number, staffId: number) {
   return repo.transaction(async (conn) => {
