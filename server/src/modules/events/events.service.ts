@@ -3,10 +3,21 @@ import {
     findEventById,
     findPublishedEvents,
     findTicketTypesByEventId,
+    findPublicEventStats,
 } from './events.repository.js';
 import type { ListEventsQuery } from './events.schema.js';
 import { deriveEventLifecycleStatus } from './event-lifecycle.service.js';
 import { deriveTicketSaleStatus, effectiveTicketSalesWindow } from './event-sales.js';
+
+export async function getPublicEventStats() {
+    const row = await findPublicEventStats();
+    const denominator = Number(row.eligible_tickets);
+    return {
+        eventsThisYear: Number(row.events_this_year),
+        buyers: Number(row.buyers),
+        checkinRate: denominator === 0 ? null : Math.round(Number(row.checked_in) / denominator * 1000) / 10,
+    };
+}
 
 function mapEventSummary(row: Awaited<ReturnType<typeof findPublishedEvents>>['rows'][number]) {
     const status = deriveEventLifecycleStatus({

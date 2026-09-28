@@ -14,15 +14,16 @@ export function CategorySection({ category }: { category: CategorySlug }) {
     const navigate = useNavigate();
     const [events, setEvents] = useState<Event[]>([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
 
     useEffect(() => {
         let cancelled = false;
         const refresh = async (initial: boolean) => {
             try {
                 const result = await fetchEventList({ category, limit: 3, sort: "upcoming" });
-                if (!cancelled) setEvents(result.events);
+                if (!cancelled) { setEvents(result.events); setError(''); }
             } catch {
-                if (!cancelled && initial) setEvents([]);
+                if (!cancelled) { setEvents([]); setError('Không thể tải sự kiện. Vui lòng thử lại sau.'); }
             } finally {
                 if (!cancelled && initial) setLoading(false);
             }
@@ -40,8 +41,6 @@ export function CategorySection({ category }: { category: CategorySlug }) {
         };
     }, [category]);
 
-    if (!loading && events.length === 0) return null;
-
     const label = getCategoryLabel(category);
 
     return (
@@ -57,7 +56,9 @@ export function CategorySection({ category }: { category: CategorySlug }) {
                     Xem tất cả <ChevronRight size={14} />
                 </button>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {error && <p role="alert" className="mb-4 text-sm text-red-400">{error}</p>}
+            {!loading && !error && events.length === 0 && <p role="status" className="text-sm text-muted-foreground">Chưa có sự kiện trong danh mục này.</p>}
+            <div aria-busy={loading} aria-label={`Sự kiện ${label}`} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 {loading
                     ? Array.from({ length: 3 }).map((_, i) => <EventCardSkeleton key={i} />)
                     : events.map((event) => <EventCard key={event.id} event={event} />)}

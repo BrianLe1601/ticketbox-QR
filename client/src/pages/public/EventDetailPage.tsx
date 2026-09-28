@@ -14,16 +14,21 @@ export function EventDetailPage() {
     const [event, setEvent] = useState<Event | null | undefined>(undefined); // undefined = đang tải
     const [notFoundId, setNotFoundId] = useState<string | null>(null);
 
+    const [error, setError] = useState<{ id: string; message: string } | null>(null);
+    const [retry, setRetry] = useState(0);
+
     useEffect(() => {
         if (!id) return;
         let cancelled = false;
         const refresh = async () => {
-            const result = await fetchEventById(id);
-            if (cancelled) return;
-            if (!result) setNotFoundId(id);
-            else {
-                setNotFoundId(null);
-                setEvent(result);
+            try {
+                const result = await fetchEventById(id, true);
+                if (cancelled) return;
+                setError(null);
+                if (!result) setNotFoundId(id);
+                else { setNotFoundId(null); setEvent(result); }
+            } catch {
+                if (!cancelled) setError({ id, message: 'Không thể tải chi tiết sự kiện. Vui lòng thử lại.' });
             }
         };
         void refresh();
@@ -41,11 +46,13 @@ export function EventDetailPage() {
             unsubscribeRealtime();
             window.clearInterval(refreshTimer);
         };
-    }, [id]);
+    }, [id, retry]);
 
-    if (!id || notFoundId === id || event === null) return <Navigate to="/events" replace />;
+    if (!id) return <Navigate to="/events" replace />;
+    if (error?.id === id) return <div className="max-w-7xl mx-auto px-4 py-16"><p role="alert" className="text-red-400">{error.message}</p><button className="mt-4 text-primary underline focus-visible:outline-2" onClick={() => { setError(null); setEvent(undefined); setRetry(value => value + 1); }}>Thử lại</button></div>;
+    if (notFoundId === id || event === null) return <div role="status" className="max-w-7xl mx-auto px-4 py-16">Sự kiện không tồn tại hoặc không còn được công bố.</div>;
     if (event === undefined || event.id !== id) {
-        return <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 text-sm text-muted-foreground">Đang tải...</div>;
+        return <div role="status" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 text-sm text-muted-foreground">Đang tải...</div>;
     }
 
     const cityLabel = event.city ? (CITY_LABELS[event.city] ?? event.city) : "";
@@ -82,17 +89,10 @@ export function EventDetailPage() {
                         <div className="border-t border-white/[0.07] pt-8">
                             <h3 className="font-extrabold text-foreground text-base mb-4" style={{ fontFamily: "Manrope, sans-serif" }}>Địa điểm</h3>
                             <div className="bg-card border border-white/[0.08] rounded-xl overflow-hidden">
-                                <div className="h-40 bg-secondary relative flex items-center justify-center">
-                                    <div className="absolute inset-0 opacity-20" style={{ backgroundImage: "linear-gradient(rgba(123,92,246,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(123,92,246,0.3) 1px, transparent 1px)", backgroundSize: "30px 30px" }} />
-                                    <div className="relative text-center">
-                                        <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center mx-auto mb-2 shadow-lg shadow-primary/40"><MapPin size={18} className="text-white" /></div>
-                                        <p className="text-xs text-muted-foreground">Bản đồ</p>
-                                    </div>
-                                </div>
                                 <div className="p-4">
                                     <p className="text-sm font-semibold text-foreground">{event.venue}</p>
                                     <p className="text-xs text-muted-foreground mt-0.5">{event.address}, {cityLabel}</p>
-                                    <button className="mt-3 text-xs text-primary font-semibold hover:text-primary/80 transition-colors flex items-center gap-1">Xem trên bản đồ <ChevronRight size={12} /></button>
+                                    <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([event.venue, event.address, cityLabel].filter(Boolean).join(", "))}`} target="_blank" rel="noopener noreferrer" className="mt-3 text-xs text-primary font-semibold hover:text-primary/80 focus-visible:outline-2 flex items-center gap-1">Xem trên bản đồ <ChevronRight size={12} /></a>
                                 </div>
                             </div>
                         </div>
@@ -104,7 +104,6 @@ export function EventDetailPage() {
                             {[
                                 { Icon: CheckCircle2, text: "Vé điện tử gửi qua email sau thanh toán mô phỏng" },
                                 { Icon: Ticket, text: "QR code độc nhất, tra cứu không cần đăng nhập" },
-                                { Icon: Users, text: "Hỗ trợ 24/7 qua chat và hotline 1900-6868" },
                             ].map(({ Icon, text }, i) => (
                                 <div key={i} className="flex items-start gap-2.5"><Icon size={13} className="text-emerald-400 mt-0.5 shrink-0" /><span className="text-xs text-muted-foreground">{text}</span></div>
                             ))}

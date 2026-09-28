@@ -10,7 +10,7 @@ export function EventHeader({ event }: { event: Event }) {
     return (
         <div className="relative">
             <div className="relative h-72 sm:h-96 overflow-hidden bg-secondary">
-                <img src={event.coverImage} alt={event.name} className="w-full h-full object-cover" />
+                {event.coverImage && <img src={event.coverImage} alt={event.name} className="w-full h-full object-cover" />}
                 <div className="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent" />
                 <div className="absolute inset-0 bg-gradient-to-r from-background/60 via-transparent to-transparent" />
             </div>

@@ -1,6 +1,6 @@
 export function EventCardSkeleton() {
     return (
-        <div className="bg-card border border-white/[0.08] rounded-2xl overflow-hidden animate-pulse">
+        <div role="status" aria-label="Đang tải sự kiện" className="bg-card border border-white/[0.08] rounded-2xl overflow-hidden animate-pulse motion-reduce:animate-none">
             <div className="aspect-[16/10] bg-secondary" />
             <div className="p-5 space-y-4">
                 <div className="space-y-2">
