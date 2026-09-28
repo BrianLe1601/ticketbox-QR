@@ -83,9 +83,11 @@ export function AdminOperationsPage({ kind }: { kind: 'reports' | 'checkins' }) 
     finally { setExporting(false); }
   }
   const rangeInvalid = !!(filters.from && filters.to && filters.from > filters.to);
-  return <section className="space-y-5 text-slate-100">
-    <div><h2 className="text-2xl font-bold">{kind === 'reports' ? 'Báo cáo sự kiện' : 'Lịch sử check-in'}</h2>
-      <p className="mt-2 text-sm text-slate-400">Lọc theo sự kiện và ngày (giờ Việt Nam). Để trống ngày để xem toàn bộ lịch sử.</p></div>
+  return <section className="space-y-4 text-slate-100">
+    <div className="admin-command-header">
+      <h2 className="text-xl font-bold text-slate-100">{kind === 'reports' ? 'Báo cáo sự kiện' : 'Lịch sử check-in'}</h2>
+      <p className="mt-1 text-xs text-slate-400">Lọc theo sự kiện và ngày (giờ Việt Nam). Để trống ngày để xem toàn bộ lịch sử.</p>
+    </div>
     <form className="space-y-4 rounded-xl border border-slate-700 bg-slate-900/80 p-5" onSubmit={(e) => {
       e.preventDefault(); if (rangeInvalid) return;
       setApplied({ ...filters }); setPage(1); setLoading(true); setExportError(''); setReload((value) => value + 1);
@@ -119,11 +121,11 @@ export function AdminOperationsPage({ kind }: { kind: 'reports' | 'checkins' }) 
       {kind === 'reports' && report && <>
         <h3 className="text-xl font-semibold">{report.name}</h3>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{([
-          ['Đã thu (VND)', report.grossRevenue], ['Đã hoàn (VND)', report.refundedAmount], ['Thu ròng (VND)', report.netRevenue],
+          ['Thanh toán mô phỏng (VND)', report.grossRevenue], ['Hoàn tiền mô phỏng (VND)', report.refundedAmount], ['Thu ròng mô phỏng (VND)', report.netRevenue],
           ['Đơn xác nhận', report.confirmedOrders], ['Vé đã bán', report.soldTickets], ['Vé phát hành', report.issuedTickets],
           ['Vé đã vào cổng', report.admissions], ['Tổng lần quét', report.scans], ['Lần quét bị từ chối', report.rejectedScans],
         ] as const).map(([label, value]) => <div className="rounded-xl border border-slate-700 bg-slate-900/80 p-5" key={label}><p className="text-sm text-slate-400">{label}</p><strong className="mt-2 block text-2xl">{number(value)}</strong></div>)}</div>
-        <p className="text-sm text-slate-400">Đã thu theo ngày thanh toán thành công; đã hoàn theo ngày hoàn tất hoàn tiền. Thu ròng có thể âm khi hoàn tiền cho đơn mua trước kỳ này. Đơn/vé bán theo ngày xác nhận, vé phát hành theo ngày phát hành, lượt vào theo log thành công (giữ lịch sử kể cả sau khi hủy sự kiện).</p>
+        <p className="text-sm text-slate-400">Các số tiền chỉ mô phỏng cho đồ án, không phản ánh giao dịch ngân hàng hoặc cổng thanh toán thật. Thanh toán mô phỏng tính theo ngày thành công; hoàn tiền mô phỏng tính theo ngày hoàn tất. Thu ròng mô phỏng có thể âm khi hoàn cho đơn mua trước kỳ này. Đơn/vé bán theo ngày xác nhận, vé phát hành theo ngày phát hành, lượt vào theo log thành công (giữ lịch sử kể cả sau khi hủy sự kiện).</p>
       </>}
       {kind === 'checkins' && <>
         {logs.length === 0 ? <p className="rounded-xl border border-slate-700 p-5">Không có lần quét phù hợp.</p> : <div className="overflow-x-auto rounded-xl border border-slate-700"><table className="w-full text-left text-sm"><caption className="p-3 text-left">Lịch sử check-in · {number(total)} kết quả</caption><thead className="bg-slate-800"><tr>{['Thời điểm', 'Nhân viên', 'Vé / mã che', 'Kết quả', 'Thông báo'].map((label) => <th className="p-3" scope="col" key={label}>{label}</th>)}</tr></thead><tbody>{logs.map((log) => <tr className="border-t border-slate-700" key={log.id}><td className="whitespace-nowrap p-3">{time(log.checkedAt)}</td><td className="p-3">{log.staffName} (#{log.staffId})</td><td className="p-3">{log.ticketCode ?? log.scannedCode ?? '—'}</td><td className={`p-3 ${log.result === 'SUCCESS' ? 'text-emerald-300' : 'text-amber-300'}`}>{resultLabels[log.result] ?? log.result}</td><td className="p-3">{log.message}</td></tr>)}</tbody></table></div>}

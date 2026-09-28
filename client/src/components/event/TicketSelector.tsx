@@ -114,7 +114,7 @@ export function TicketSelector({
                     <ShoppingCart size={16} />
                     {eventStatus === "sold-out" ? "Đã hết vé" : eventStatus === "coming-soon" ? "Chưa mở bán" : totalTickets > 0 ? "Tiếp tục mua vé" : "Chọn vé để tiếp tục"}
                 </button>
-                {eventStatus === "on-sale" && <p className="text-[11px] text-center text-muted-foreground">Bảo mật thanh toán · Vé điện tử qua email</p>}
+                {eventStatus === "on-sale" && <p className="text-[11px] text-center text-muted-foreground">Thanh toán mô phỏng · Vé điện tử qua email</p>}
             </div>
         </div>
     );

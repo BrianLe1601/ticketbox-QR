@@ -107,7 +107,7 @@ function renderForm(f, checkout) {
                 ? { id: '1', shortTitle: 'Test', tickets: [{ id: '1', price: 100, name: 'VIP' }] } : initial;
             return [states[index], value => { states[index] = value; }];
         },
-        useEffect() {}, useMemo: fn => fn(), useRef: value => ({ current: value }),
+        useEffect() {}, useMemo: fn => fn(), useRef: value => ({ current: value }), useId: () => 'test-id',
     };
     const api = f.load('services/api.ts', { '@/services/auth.service': {} });
     const orders = f.load('services/order.service.ts', { './api': api });

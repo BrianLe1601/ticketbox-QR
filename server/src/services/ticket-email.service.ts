@@ -6,12 +6,16 @@ import { decryptQrToken } from './qr-encryption.service.js';
 import { createTicketQrDataUrl } from './qr.service.js';
 import { sendTicketEmail } from './mail.service.js';
 import { AppError } from '../utils/app-error.js';
+import { isEventAvailableForTicketDelivery } from '../modules/events/event-sales.js';
 
 export async function prepareTicketEmail(orderId: number) {
     const order = await findOrderDetail(orderId);
     if (!order || order.status !== 'confirmed') throw AppError.badRequest('Order is not confirmed', 'ORDER_NOT_CONFIRMED');
     const rows = await findTicketsForResend(orderId);
     if (!rows.length) throw AppError.badRequest('No unused tickets remain', 'NO_ACTIVE_TICKETS');
+    if (rows.some(row => !isEventAvailableForTicketDelivery(row.event_status, row.end_time))) {
+        throw new AppError(409, 'Event has ended or is no longer available for ticket delivery', 'EVENT_NOT_AVAILABLE_FOR_TICKET_EMAIL');
+    }
     const tickets = await Promise.all(rows.map(async row => {
         if (!row.qr_token_encrypted) throw new AppError(409, 'Original QR payload is unavailable; legacy ticket requires separate recovery', 'QR_PAYLOAD_UNAVAILABLE');
         const rawToken = decryptQrToken(row.qr_token_encrypted, row.ticket_code);

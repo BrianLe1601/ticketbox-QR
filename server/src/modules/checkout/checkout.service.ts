@@ -15,6 +15,7 @@ import { assertEmailVerified, consumeEmailVerification } from '../../services/em
 import { env } from '../../config/env.js';
 
 import { findTicketsForResend } from '../orders/admin-orders.repository.js';
+import { effectiveTicketSalesWindow } from '../events/event-sales.js';
 
 const HOLD_MINUTES = 10;
 
@@ -134,8 +135,14 @@ export async function createOrder(body: CreateOrderBody, idempotencyKey: string,
                 throw AppError.badRequest(`Loại vé không hợp lệ (id ${item.ticketTypeId})`, 'INVALID_TICKET_TYPE');
             }
 
-            const salesStart = row.sales_start_at ? new Date(row.sales_start_at).getTime() : null;
-            const salesEnd = row.sales_end_at ? new Date(row.sales_end_at).getTime() : null;
+            const effectiveWindow = effectiveTicketSalesWindow(
+                event.sales_start_at,
+                event.sales_end_at,
+                row.sales_start_at,
+                row.sales_end_at,
+            );
+            const salesStart = effectiveWindow.startAt?.getTime() ?? null;
+            const salesEnd = effectiveWindow.endAt?.getTime() ?? null;
             if (salesStart && now < salesStart) {
                 throw AppError.badRequest(`${row.name} chưa mở bán`, 'TICKET_NOT_ON_SALE');
             }

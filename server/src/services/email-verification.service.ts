@@ -38,12 +38,14 @@ export function confirmEmailVerification(emailInput: string, code: string, sessi
         pending.del(cacheKey);
         throw AppError.badRequest('Mã xác minh đã hết hạn hoặc không tồn tại', 'EMAIL_CODE_EXPIRED');
     }
-    record.attempts += 1;
-    if (record.attempts > 5) {
-        pending.del(cacheKey);
-        throw AppError.badRequest('Bạn đã nhập sai quá nhiều lần, vui lòng gửi mã mới', 'EMAIL_CODE_ATTEMPTS_EXCEEDED');
+    if (hash(code) !== record.codeHash) {
+        record.attempts += 1;
+        if (record.attempts >= 5) {
+            pending.del(cacheKey);
+            throw AppError.badRequest('Bạn đã nhập sai quá nhiều lần, vui lòng gửi mã mới', 'EMAIL_CODE_ATTEMPTS_EXCEEDED');
+        }
+        throw AppError.badRequest('Mã xác minh không đúng', 'INVALID_EMAIL_CODE');
     }
-    if (hash(code) !== record.codeHash) { if (record.attempts >= 5) pending.del(cacheKey); throw AppError.badRequest('Mã xác minh không đúng', 'INVALID_EMAIL_CODE'); }
     pending.del(cacheKey);
     const token = crypto.randomBytes(32).toString('hex');
     verified.set(hash(token), { email, session, expiresAt: Date.now() + TOKEN_TTL_MS });
@@ -53,7 +55,7 @@ export function confirmEmailVerification(emailInput: string, code: string, sessi
 export function assertEmailVerified(emailInput: string, token: string, session = '') {
     const record = verified.get<VerifiedEmail>(hash(token));
     if (!record || !session || record.session !== session || record.expiresAt <= Date.now() || record.email !== normalize(emailInput)) {
-        throw AppError.badRequest('Gmail chưa được xác minh hoặc phiên xác minh đã hết hạn', 'EMAIL_NOT_VERIFIED');
+        throw AppError.badRequest('Email chưa được xác minh hoặc phiên xác minh đã hết hạn', 'EMAIL_NOT_VERIFIED');
     }
 }
 

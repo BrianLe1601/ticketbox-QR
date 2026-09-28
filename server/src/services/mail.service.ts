@@ -11,8 +11,8 @@ function createTransporter() {
 export function sendEmailVerificationCode(recipient: string, code: string) {
     return createTransporter().sendMail({
         from: `"${env.MAIL_FROM_NAME.replaceAll('"', '')}" <${env.MAIL_USER}>`, to: recipient,
-        subject: 'Mã xác minh Gmail - TicketBox QR',
-        html: `<h2>Xác minh Gmail nhận vé</h2><p>Mã xác minh của bạn là:</p><p style="font-size:30px;font-weight:bold;letter-spacing:6px">${code}</p><p>Mã có hiệu lực trong 5 phút. Không cung cấp mã này cho người khác.</p>`,
+        subject: 'Mã xác minh email - TicketBox QR',
+        html: `<h2>Xác minh email nhận vé</h2><p>Mã xác minh của bạn là:</p><p style="font-size:30px;font-weight:bold;letter-spacing:6px">${code}</p><p>Mã có hiệu lực trong 5 phút. Không cung cấp mã này cho người khác.</p>`,
     });
 }
 
@@ -33,7 +33,7 @@ export async function sendTicketEmail(input: { recipient: string; buyerName: str
     return transporter.sendMail({
         from: `"${env.MAIL_FROM_NAME.replaceAll('"', '')}" <${env.MAIL_USER}>`, to: input.recipient,
         subject: `Vé điện tử ${input.orderCode} - TicketBox QR`,
-        html: `<h2>Thanh toán thành công</h2><p>Xin chào ${escapeHtml(input.buyerName)}, đây là ${input.tickets.length} vé trong đơn <b>${escapeHtml(input.orderCode)}</b>.</p>${ticketHtml}<p>Vui lòng mang mã QR đến sự kiện và không chia sẻ mã với người khác.</p>`,
+        html: `<h2>Đơn hàng đã được xác nhận</h2><p>Xin chào ${escapeHtml(input.buyerName)}, đây là ${input.tickets.length} vé trong đơn <b>${escapeHtml(input.orderCode)}</b>.</p><p><b>Lưu ý:</b> thanh toán trong TicketBox QR là mô phỏng phục vụ đồ án; không có giao dịch tiền thật qua ngân hàng hoặc cổng thanh toán.</p>${ticketHtml}<p>Vui lòng mang mã QR đến sự kiện và không chia sẻ mã với người khác.</p>`,
         attachments,
     });
 }
@@ -41,8 +41,8 @@ export async function sendTicketEmail(input: { recipient: string; buyerName: str
 export function sendEventCancellationEmail(input:{recipient:string;buyerName:string;orderCode:string;eventName:string;venue:string;startTime:Date;cancellationReason:string}){
     return createTransporter().sendMail({
         from:`"${env.MAIL_FROM_NAME.replaceAll('"','')}" <${env.MAIL_USER}>`,to:input.recipient,
-        subject:`Event cancelled: ${input.eventName} - TicketBox QR`,
-        html:`<h2>Important event cancellation notice</h2><p>Hello ${escapeHtml(input.buyerName)},</p><p><b>${escapeHtml(input.eventName)}</b> scheduled at ${escapeHtml(input.venue)} on ${escapeHtml(input.startTime.toLocaleString('en-GB'))} has been cancelled.</p><p><b>Reason:</b> ${escapeHtml(input.cancellationReason)}</p><p>Your order is <b>${escapeHtml(input.orderCode)}</b>. All issued QR tickets are now invalid. If payment was completed, a refund request has been recorded; please contact the organizer with this order code for refund support.</p>`,
+        subject:`Sự kiện đã hủy: ${input.eventName} - TicketBox QR`,
+        html:`<h2>Thông báo hủy sự kiện</h2><p>Xin chào ${escapeHtml(input.buyerName)},</p><p>Sự kiện <b>${escapeHtml(input.eventName)}</b> tại ${escapeHtml(input.venue)}, dự kiến bắt đầu lúc ${escapeHtml(input.startTime.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }))}, đã bị hủy.</p><p><b>Lý do:</b> ${escapeHtml(input.cancellationReason)}</p><p>Đơn hàng của bạn là <b>${escapeHtml(input.orderCode)}</b>. Tất cả mã QR đã được vô hiệu hóa. Nếu đơn đã thanh toán, hệ thống đã ghi nhận yêu cầu hoàn tiền <b>mô phỏng</b> phục vụ đồ án; đây không phải xác nhận tiền thật đã được chuyển về tài khoản.</p>`,
     });
 }
 

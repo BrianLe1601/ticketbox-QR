@@ -2,6 +2,7 @@ import type { RowDataPacket, ResultSetHeader } from 'mysql2/promise';
 import { pool } from '../../database/pool.js';
 import { withTransaction, findOrderEventId, lockEventRow, findOrderByIdForUpdate } from '../checkout/checkout.repository.js';
 import { AppError } from '../../utils/app-error.js';
+import { isEventAvailableForTicketDelivery } from '../events/event-sales.js';
 
 export type TicketEmailType = 'ticket_issued' | 'ticket_resent';
 export interface TicketEmailJob extends RowDataPacket {
@@ -14,7 +15,10 @@ export async function enqueueTicketEmail(orderId: number, recipient: string, ema
     return withTransaction(async conn => {
         const eventId = await findOrderEventId(conn, orderId);
         if (eventId === null) throw AppError.notFound('Không tìm thấy đơn hàng');
-        await lockEventRow(conn, eventId);
+        const event = await lockEventRow(conn, eventId);
+        if (!event || !isEventAvailableForTicketDelivery(event.status, event.end_time)) {
+            throw new AppError(409, 'Sự kiện đã kết thúc hoặc không còn khả dụng; không thể gửi lại vé.', 'EVENT_NOT_AVAILABLE_FOR_TICKET_EMAIL');
+        }
         const order = await findOrderByIdForUpdate(conn, orderId);
         if (!order || order.status !== 'confirmed') throw AppError.badRequest('Đơn chưa thanh toán', 'ORDER_NOT_CONFIRMED');
         if (order.buyer_email.toLowerCase() !== recipient.toLowerCase()) throw AppError.badRequest('Người nhận không hợp lệ', 'EMAIL_RECIPIENT_MISMATCH');

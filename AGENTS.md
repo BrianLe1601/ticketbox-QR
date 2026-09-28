@@ -11,7 +11,7 @@
 | Owner | Primary responsibility | Owned API/modules |
 |---|---|---|
 | Bửu | Leader, platform, database, backend authentication, login, Admin Events, Admin Ticket Types, Admin Staff, Admin Categories; Admin Dashboard and planned realtime Admin notifications | `auth`, `categories`, admin `events`, admin `ticket-types`, `admin-staff`, shared platform/database |
-| Tài | Public Event experience, Checkout, Order, Payment, QR, initial ticket Email and Admin Orders | public `events`, `checkout`, QR and initial mail delivery, admin Orders |
+| Tài | Public Event experience, Checkout, Order, Payment, QR, ticket Email, Ticket Retrieval and Admin Orders | public `events`, `checkout`, QR, initial delivery/redelivery, Ticket Retrieval, admin Orders |
 | Khôi | Scanner, Check-in, Admin Check-in Logs, Admin Reports | `checkins`, scanner/staff gate UI, admin check-in logs and reports |
 
 - The owner of a module designs and implements that module's API, tests, migrations, frontend service and UI integration.
@@ -22,8 +22,9 @@
 ## Agreed product scope and task boundaries
 
 - Guests buy by email without an account. The Public Header has no Login/Register entry points; `/login` remains for Admin and Staff. **Ticket Retrieval and controlled ticket-email redelivery are in scope** and owned by Tài. The public response must remain neutral whether an email exists or not; require reCAPTCHA action verification plus independent IP/email/action rate limits before enqueueing mail.
+- Payment and Refund are course-project simulations. Do not integrate, advertise, or imply real money transfer. A simulated success changes the internal workflow/audit state only; every Admin/Public label and demo script must say that payment/refund is simulated.
 - Scope Bửu's Admin Staff work to Staff account administration and Event assignment. Tài owns Checkout/OTP, initial ticket delivery, Ticket Retrieval and Admin Orders; Khôi owns scanner/check-in. Preserve the `ticketbox:<raw-token>` QR payload and hash-based check-in lookup. A recoverable QR credential may exist only as immutable authenticated ciphertext for server-side initial delivery/redelivery; never use ciphertext as the lookup key, expose it to clients/logs, store plaintext, or rotate the QR merely because an email is resent.
-- Tài owns OTP reCAPTCHA v3 verification, IP/email/action rate limits, HTTP 429/countdown, Ticket Retrieval and ticket-email delivery jobs. Reuse the reviewed implementation from `develop` when integrating owner branches instead of recreating competing routes. The cancellation-notification retry job remains a distinct `order_cancelled` workflow and must not be conflated with ticket delivery/redelivery.
+- Tài owns OTP reCAPTCHA v3 verification, IP/email/action rate limits, HTTP 429/countdown, Ticket Retrieval and ticket-email delivery jobs. Extend the canonical implementation already integrated into the shared branches instead of recreating competing routes. The cancellation-notification retry job remains a distinct `order_cancelled` workflow and must not be conflated with ticket delivery/redelivery.
 - Ticket Retrieval may return only confirmed Orders and their currently valid Ticket/Event context. Email content must identify the Event, schedule, venue, Ticket Type/code, status, QR and check-in guidance. Public acknowledgement never proves that mail was delivered; provider work stays outside the request/transaction and must use auditable retry state without leaking whether a buyer was found.
 - Bửu owns general realtime Admin notifications; keep notification-center work in a later task until event source, recipients, delivery and authorization are specified. Event lifecycle status push is already a separate, public-data-only WebSocket transport and must not be presented as a completed Admin notification center.
 - Edit only files needed for the current task; do not perform broad refactors or overwrite another owner's work. A shared schema, API contract, or business-workflow change requires affected-owner review before implementation.
@@ -45,6 +46,7 @@
 - Client: `npm run lint` and `npm run build` from `client`.
 - Server: `npm run typecheck`, `npm run build`, and relevant tests from `server`.
 - Database setup: run the complete `database/migrations/001_initial_schema.sql`, then run `npm run seed` from `server`.
+- The real-MySQL integration suites refuse the normal `ticketboxqr` database. Run `node scripts/verify-ticket-email.mjs` from `server` when the full disposable-database suite is required; do not interpret a deliberately skipped/refused integration suite as a passing full verification.
 - Do not install, commit, push, merge, reset, or rewrite user changes unless explicitly requested.
 
 ## Daily Git workflow
@@ -75,6 +77,7 @@ git push origin <branch-name>
 ```
 
 - Pull request flow: owner branch -> `develop`; reviewed/stable `develop` -> `main`.
+- `npm test` is sufficient only when the current environment satisfies every selected suite. For the full MySQL-backed verification, use the disposable `ticketboxqr_test_*` workflow documented in README; never point destructive integration setup at the normal database.
 - Never run `git add .` blindly when unrelated files are present. Stage explicit paths and inspect `git diff --cached`.
 - Never force-push a shared branch. Resolve cross-owner conflicts together; do not delete unfamiliar code to make a conflict disappear.
 - LF/CRLF conversion warnings are not build failures. Keep `.gitattributes` as the shared line-ending policy and do not mass-convert files in a feature PR.
@@ -126,16 +129,19 @@ users -> auth_sessions
 - Checkout locks the Event, then requested Ticket Types before checking availability and incrementing reservations.
 - Payment and order expiry resolve the immutable Event id, lock the Event, then lock the Order and inventory rows.
 - Event cancellation locks the Event and all related Orders before releasing reservations, cancelling pending work, invalidating QR Tickets, creating Refunds and queueing Email Logs.
-- Never call email, Cloudinary or payment providers while a database transaction is open. Commit the auditable outbox/workflow row first; process the provider asynchronously.
+- Never call email or Cloudinary while a database transaction is open. This project does not call a payment/refund provider; if that scope is ever approved later, commit an auditable outbox/workflow row first and process the provider asynchronously.
 - Retry/idempotency keys and unique codes are database contracts. A retry must return/reuse the prior result or be rejected predictably; it must not duplicate inventory or money movement.
 
 ### State and inventory contract
 
 - Event: `draft -> published -> ongoing -> completed`; `published|ongoing -> cancelled`. Completed and Cancelled are terminal.
-- Order: `pending_payment -> confirmed|expired|cancelled`. Confirmed Orders remain historical records during Event cancellation; Refund tracks money reversal.
+- Order: `pending_payment -> confirmed|expired|cancelled`. Confirmed Orders remain historical records during Event cancellation; Refund tracks the simulated reversal workflow.
+- The Admin cancel-order endpoint may cancel only `pending_payment` Orders. A confirmed Order follows the simulated Refund workflow while preserving its confirmed history; do not force `confirmed -> cancelled` while the schema and reporting contract treat confirmed Orders as immutable sales history.
 - Ticket: `issued -> checked_in|cancelled`; `checked_in -> cancelled` only for Event cancellation.
 - Payment: `pending -> success|failed|cancelled`. Never rewrite a successful payment into another state.
+- Refund: `pending -> processing|completed|failed`; `failed -> pending|processing` for a simulated retry. `order_id`, amount and request time are immutable. Only a confirmed Order affected by the agreed cancellation workflow receives one Refund record.
 - Refund and Email delivery have retryable states; immutable identity/amount/recipient fields must not be overwritten during retry.
+- Completing a Refund records a **simulated** outcome and `completed_at`; failure records a safe `failure_reason`. It never calls a bank/payment provider, never promises money reached the customer, and never changes a successful Payment row. Reports subtract only simulated Refunds whose status is `completed`.
 - Availability is always `capacity - reserved_quantity - sold_quantity`; all three values are changed in the same transaction as the related Order state.
 - Public sale state is derived on the server from Event lifecycle/visibility, effective Event/Tier sales window, tier active state and remaining inventory.
 
@@ -171,8 +177,13 @@ users -> auth_sessions
 ## Cancellation safety
 - Cancellation is one database transaction: hide/cancel Event, close tiers, release pending holds, cancel pending payments/orders, invalidate issued QR tickets, create refund records for confirmed orders, and queue email logs.
 - Email delivery is asynchronous and retryable. A mail provider failure must not roll back the cancellation.
-- Refund records are an audit workflow; do not mark a real refund completed without payment-provider or administrator confirmation.
+- A cancellation-email worker must claim rows transactionally (`FOR UPDATE SKIP LOCKED` or an equivalent atomic claim), commit the claim before calling SMTP, use a lease/stale-processing recovery rule, and prevent an obsolete attempt from overwriting a newer result. Do not claim a batch with an unlocked `SELECT` followed by a broad update.
+- Refund records are a simulated audit workflow for this course project. Only an authorized Admin action/test fixture may advance their state; the UI and email must distinguish “đã ghi nhận/yêu cầu hoàn tiền mô phỏng” from a real provider refund.
 - Preserve Orders, Order Items, Tickets, Payments, Check-in Logs, Email Logs, and Refunds for audit history.
+
+## Staff operation safety
+- `GET /api/staff/events` must not offer completed, cancelled, ended or otherwise non-operable Events as check-in choices. If historical assignments are exposed later, return them in a clearly separate read-only scope; the check-in service remains authoritative for every request.
+- Filtering closed Events in the UI is not an authorization control. Every scan still verifies active Staff, active assignment, Event lifecycle/check-in window, confirmed Order, valid Ticket and atomic `issued -> checked_in` transition on the backend.
 
 ## UI and performance
 - Accessible labels, keyboard escape, visible hover/focus, loading/disabled/error states are required for every action.

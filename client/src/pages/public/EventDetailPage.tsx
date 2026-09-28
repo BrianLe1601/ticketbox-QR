@@ -102,7 +102,7 @@ export function EventDetailPage() {
                         <TicketSelector tickets={event.tickets} eventId={event.id} eventStatus={event.saleStatus} />
                         <div className="p-4 bg-card border border-white/[0.08] rounded-xl space-y-2.5">
                             {[
-                                { Icon: CheckCircle2, text: "Vé điện tử gửi qua email ngay sau thanh toán" },
+                                { Icon: CheckCircle2, text: "Vé điện tử gửi qua email sau thanh toán mô phỏng" },
                                 { Icon: Ticket, text: "QR code độc nhất, tra cứu không cần đăng nhập" },
                                 { Icon: Users, text: "Hỗ trợ 24/7 qua chat và hotline 1900-6868" },
                             ].map(({ Icon, text }, i) => (
