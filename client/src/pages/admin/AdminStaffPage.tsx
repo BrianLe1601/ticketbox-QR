@@ -4,6 +4,8 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Clock,
   Edit2,
   Eye,
@@ -43,6 +45,7 @@ import {
 
 type TabType = "all" | "pending" | "active" | "disabled";
 type DisabledSubFilter = "all" | "inactive" | "rejected";
+const STAFF_PAGE_SIZE = 10;
 
 interface ConfirmModalData {
   type: "approve" | "reject" | "deactivate" | "reactivate" | "revokeAssignment";
@@ -83,6 +86,7 @@ export function AdminStaffPage() {
   });
   const [disabledSubFilter, setDisabledSubFilter] = useState<DisabledSubFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [staffPage, setStaffPage] = useState(1);
   const [selectedEventFilter, setSelectedEventFilter] = useState(
     () => searchParams.get("eventId") || "",
   );
@@ -245,6 +249,11 @@ export function AdminStaffPage() {
     });
   }, [staff, activeTab, disabledSubFilter, searchQuery, selectedEventFilter]);
 
+  const staffPageCount = Math.max(1, Math.ceil(filteredStaff.length / STAFF_PAGE_SIZE));
+  const currentStaffPage = Math.min(staffPage, staffPageCount);
+  const staffPageStart = (currentStaffPage - 1) * STAFF_PAGE_SIZE;
+  const visibleStaff = filteredStaff.slice(staffPageStart, staffPageStart + STAFF_PAGE_SIZE);
+
   const selectedFilterEvent = useMemo(
     () => events.find((event) => event.id === Number(selectedEventFilter)) ?? null,
     [events, selectedEventFilter],
@@ -260,6 +269,7 @@ export function AdminStaffPage() {
   function clearAllFilters() {
     setSearchQuery("");
     setSelectedEventFilter("");
+    setStaffPage(1);
   }
 
   // The backend applies the same rule inside the assignment transaction. Keeping
@@ -415,7 +425,7 @@ export function AdminStaffPage() {
   }
 
   return (
-    <section className="factory-module-page space-y-6">
+    <section className="factory-module-page admin-staff-page space-y-6">
       {/* 1. Header Hero */}
       <header className="factory-module-hero">
         <div>
@@ -435,13 +445,14 @@ export function AdminStaffPage() {
         {/* Card 1: Chờ duyệt */}
         <article
           className={`staff-metric-card cursor-pointer ${activeTab === "pending" ? "active" : ""}`}
-          onClick={() => setActiveTab("pending")}
+          onClick={() => { setActiveTab("pending"); setStaffPage(1); }}
           role="button"
           tabIndex={0}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault();
               setActiveTab("pending");
+              setStaffPage(1);
             }
           }}
           aria-pressed={activeTab === "pending"}
@@ -462,13 +473,14 @@ export function AdminStaffPage() {
         {/* Card 2: Đang hoạt động */}
         <article
           className={`staff-metric-card cursor-pointer ${activeTab === "active" ? "active" : ""}`}
-          onClick={() => setActiveTab("active")}
+          onClick={() => { setActiveTab("active"); setStaffPage(1); }}
           role="button"
           tabIndex={0}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault();
               setActiveTab("active");
+              setStaffPage(1);
             }
           }}
           aria-pressed={activeTab === "active"}
@@ -492,6 +504,7 @@ export function AdminStaffPage() {
           onClick={() => {
             setActiveTab("disabled");
             setDisabledSubFilter("all");
+            setStaffPage(1);
           }}
           role="button"
           tabIndex={0}
@@ -500,6 +513,7 @@ export function AdminStaffPage() {
               e.preventDefault();
               setActiveTab("disabled");
               setDisabledSubFilter("all");
+              setStaffPage(1);
             }
           }}
           aria-pressed={activeTab === "disabled"}
@@ -605,13 +619,13 @@ export function AdminStaffPage() {
               type="text"
               placeholder="Tìm kiếm theo họ tên hoặc email..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => { setSearchQuery(e.target.value); setStaffPage(1); }}
               aria-label="Tìm kiếm nhân sự"
             />
             {searchQuery && (
               <button
                 type="button"
-                onClick={() => setSearchQuery("")}
+                onClick={() => { setSearchQuery(""); setStaffPage(1); }}
                 className="text-slate-400 hover:text-white"
                 title="Xóa tìm kiếm"
               >
@@ -625,7 +639,7 @@ export function AdminStaffPage() {
             <Filter size={14} className="text-slate-400 flex-shrink-0" />
             <select
               value={selectedEventFilter}
-              onChange={(e) => setSelectedEventFilter(e.target.value)}
+              onChange={(e) => { setSelectedEventFilter(e.target.value); setStaffPage(1); }}
               aria-label="Lọc theo sự kiện đang phân công"
             >
               <option value="">Không lọc theo sự kiện</option>
@@ -662,7 +676,7 @@ export function AdminStaffPage() {
           </button>
 
           <span className="text-xs font-semibold text-slate-400 ml-1">
-            Hiển thị <b>{filteredStaff.length}</b> / {staff.length}
+            Hiển thị <b>{filteredStaff.length === 0 ? 0 : staffPageStart + 1}–{Math.min(staffPageStart + STAFF_PAGE_SIZE, filteredStaff.length)}</b> / {filteredStaff.length} kết quả · {staff.length} tổng
           </span>
         </div>
       </div>
@@ -681,6 +695,7 @@ export function AdminStaffPage() {
             onClick={() => {
               setActiveTab("all");
               setDisabledSubFilter("all");
+              setStaffPage(1);
             }}
           >
             <Users size={16} />
@@ -696,7 +711,7 @@ export function AdminStaffPage() {
             aria-selected={activeTab === "pending"}
             aria-controls="panel-pending"
             className={`staff-tab-btn ${activeTab === "pending" ? "active" : ""}`}
-            onClick={() => setActiveTab("pending")}
+            onClick={() => { setActiveTab("pending"); setStaffPage(1); }}
           >
             <Clock size={16} />
             <span>Chờ Admin duyệt</span>
@@ -711,7 +726,7 @@ export function AdminStaffPage() {
             aria-selected={activeTab === "active"}
             aria-controls="panel-active"
             className={`staff-tab-btn ${activeTab === "active" ? "active" : ""}`}
-            onClick={() => setActiveTab("active")}
+            onClick={() => { setActiveTab("active"); setStaffPage(1); }}
           >
             <UserCheck size={16} />
             <span>Nhân viên đang hoạt động</span>
@@ -726,7 +741,7 @@ export function AdminStaffPage() {
             aria-selected={activeTab === "disabled"}
             aria-controls="panel-disabled"
             className={`staff-tab-btn ${activeTab === "disabled" ? "active" : ""}`}
-            onClick={() => setActiveTab("disabled")}
+            onClick={() => { setActiveTab("disabled"); setStaffPage(1); }}
           >
             <UserX size={16} />
             <span>Đã ngưng quyền</span>
@@ -741,21 +756,21 @@ export function AdminStaffPage() {
             <button
               type="button"
               className={`staff-chip ${disabledSubFilter === "all" ? "active" : ""}`}
-              onClick={() => setDisabledSubFilter("all")}
+              onClick={() => { setDisabledSubFilter("all"); setStaffPage(1); }}
             >
               Tất cả ({disabledTotal})
             </button>
             <button
               type="button"
               className={`staff-chip ${disabledSubFilter === "inactive" ? "active" : ""}`}
-              onClick={() => setDisabledSubFilter("inactive")}
+              onClick={() => { setDisabledSubFilter("inactive"); setStaffPage(1); }}
             >
               Đã vô hiệu hóa ({inactiveCount})
             </button>
             <button
               type="button"
               className={`staff-chip ${disabledSubFilter === "rejected" ? "active" : ""}`}
-              onClick={() => setDisabledSubFilter("rejected")}
+              onClick={() => { setDisabledSubFilter("rejected"); setStaffPage(1); }}
             >
               Đã từ chối ({rejectedCount})
             </button>
@@ -820,7 +835,7 @@ export function AdminStaffPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredStaff.map((person) => {
+                  {visibleStaff.map((person) => {
                     const activeAssignments = person.assignments.filter((a) => a.isActive);
                     const nearestAssignment = activeAssignments[0];
 
@@ -1007,7 +1022,7 @@ export function AdminStaffPage() {
 
             {/* Mobile / Tablet Compact Cards View */}
             <div className="staff-mobile-cards md:hidden space-y-3">
-              {filteredStaff.map((person) => {
+              {visibleStaff.map((person) => {
                 const activeAssignments = person.assignments.filter((a) => a.isActive);
 
                 return (
@@ -1130,6 +1145,25 @@ export function AdminStaffPage() {
                 );
               })}
             </div>
+            {staffPageCount > 1 && (
+              <nav className="staff-pagination" aria-label="Phân trang danh sách nhân viên">
+                <button
+                  type="button"
+                  disabled={currentStaffPage === 1}
+                  onClick={() => setStaffPage((value) => Math.max(1, value - 1))}
+                >
+                  <ChevronLeft size={14} /> Trang trước
+                </button>
+                <span>Trang <strong>{currentStaffPage}</strong> / {staffPageCount}</span>
+                <button
+                  type="button"
+                  disabled={currentStaffPage === staffPageCount}
+                  onClick={() => setStaffPage((value) => Math.min(staffPageCount, value + 1))}
+                >
+                  Trang sau <ChevronRight size={14} />
+                </button>
+              </nav>
+            )}
           </>
         )}
       </div>

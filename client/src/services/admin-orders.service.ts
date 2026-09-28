@@ -6,12 +6,23 @@ export type TicketRowStatus = "issued" | "checked_in" | "cancelled";
 export type PaymentRowStatus = "pending" | "success" | "failed" | "cancelled";
 export type EmailLogStatus = "pending" | "processing" | "sent" | "failed";
 export type RefundStatus = "not_required" | "pending" | "processing" | "completed" | "failed";
+export type AdminEventStatus = "draft" | "published" | "ongoing" | "completed" | "cancelled";
+
+export interface RefundSummary {
+    total: number;
+    notRequired: number;
+    pending: number;
+    processing: number;
+    completed: number;
+    failed: number;
+}
 
 export interface AdminOrderListItem {
     id: number;
     orderCode: string;
     eventId: number;
     eventName: string;
+    eventStatus: AdminEventStatus;
     buyerName: string;
     buyerEmail: string;
     totalQuantity: number;
@@ -20,6 +31,7 @@ export interface AdminOrderListItem {
     createdAt: string;
     expiresAt: string | null;
     confirmedAt: string | null;
+    refundStatus: RefundStatus | null;
 }
 
 export interface AdminOrderItem {
@@ -83,6 +95,7 @@ export interface AdminOrderDetail {
     orderCode: string;
     eventId: number;
     eventName: string;
+    eventStatus: AdminEventStatus;
     buyerName: string;
     buyerEmail: string;
     buyerPhone: string | null;
@@ -165,7 +178,13 @@ export async function getAdminOrderStats(eventId?: number) {
     return (await apiRequest<OrderStats>(`/admin/orders/stats${suffix}`, {}, getStoredToken())).data;
 }
 
-export interface AdminOrderFilterOptions { events: Array<{ id: number; name: string }> }
+export interface AdminOrderEventOption {
+    id: number;
+    name: string;
+    status: AdminEventStatus;
+    refundSummary: RefundSummary;
+}
+export interface AdminOrderFilterOptions { events: AdminOrderEventOption[] }
 export async function getAdminOrderFilterOptions() {
     return (await apiRequest<AdminOrderFilterOptions>('/admin/orders/filter-options', {}, auth())).data;
 }
@@ -174,6 +193,22 @@ export async function updateAdminOrderRefund(id: number, status: "processing" | 
     return (await apiRequest<AdminOrderDetail>(`/admin/orders/${id}/refund`, {
         method: "PATCH",
         body: JSON.stringify({ status, failureReason }),
+    }, auth())).data;
+}
+
+export interface BulkRefundResult {
+    eventId: number;
+    eventName: string;
+    eventStatus: AdminEventStatus;
+    transitioned: number;
+    summary: RefundSummary;
+    message: string;
+}
+
+export async function updateAdminEventRefunds(eventId: number, status: "processing" | "completed") {
+    return (await apiRequest<BulkRefundResult>(`/admin/orders/events/${eventId}/refunds`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
     }, auth())).data;
 }
 

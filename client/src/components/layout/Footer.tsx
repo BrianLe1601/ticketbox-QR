@@ -1,4 +1,5 @@
-import { Phone, Mail, FileText, Shield, AlertCircle, Ticket } from "lucide-react";
+import { Phone, Mail, FileText, Shield, AlertCircle } from "lucide-react";
+import ticketboxLogoDark from "@/assets/brand/ticketbox-logo-dark.svg";
 
 export function Footer() {
     const col1Links = [
@@ -21,9 +22,8 @@ export function Footer() {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-12">
                     <div className="lg:col-span-1">
-                        <div className="flex items-center gap-2 mb-4">
-                            <div className="w-7 h-7 rounded-md bg-primary flex items-center justify-center"><Ticket size={13} className="text-white" /></div>
-                            <span className="font-extrabold text-foreground text-lg" style={{ fontFamily: "Manrope, sans-serif" }}>Tick<span className="text-primary">Flow</span></span>
+                        <div className="mb-4">
+                            <img className="h-12 w-auto max-w-[210px] object-contain object-left drop-shadow-[0_2px_14px_rgba(124,92,252,0.25)]" src={ticketboxLogoDark} alt="TicketBox" />
                         </div>
                         <p className="text-xs text-muted-foreground leading-relaxed mb-5">
                             Nền tảng bán vé và check-in QR thông minh hàng đầu Việt Nam. Mua vé dễ dàng, check-in nhanh chóng, không cần đăng nhập.

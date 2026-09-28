@@ -9,7 +9,10 @@ vi.mock('../src/middlewares/authenticate.js', () => ({
     next();
   },
 }));
-const service = vi.hoisted(() => ({ getAssignedEvents: vi.fn(), getRecentLogs: vi.fn(), checkIn: vi.fn() }));
+const service = vi.hoisted(() => ({
+  getAssignedEvents: vi.fn(), getRecentLogs: vi.fn(), checkIn: vi.fn(), getOverview: vi.fn(),
+  getAssignments: vi.fn(), getAssignment: vi.fn(), getAssignmentLogs: vi.fn(),
+}));
 vi.mock('../src/modules/checkins/checkin.service.js', () => service);
 import { checkinRouter } from '../src/modules/checkins/checkin.routes.js';
 const app = express();
@@ -34,4 +37,22 @@ it('uses the authenticated Staff ID and validated code', async () => {
   const response = await request(app).post('/api/staff/events/1/checkins').set('Authorization', 'staff').send({ code: ' TKT-123 ' });
   expect(response.status).toBe(200);
   expect(service.checkIn).toHaveBeenCalledWith(1, 2, 'TKT-123');
+});
+it('exposes the Staff overview only to the authenticated Staff account', async () => {
+  service.getOverview.mockResolvedValue({ counts: { total: 0, open: 0, upcoming: 0, history: 0 }, openEvents: [], nextUpcomingAssignment: null });
+  const response = await request(app).get('/api/staff/overview').set('Authorization', 'staff');
+  expect(response.status).toBe(200);
+  expect(service.getOverview).toHaveBeenCalledWith(2);
+});
+it.each(['/api/staff/assignments?segment=bad', '/api/staff/assignments/0', '/api/staff/assignments/1/checkins?limit=101'])('rejects invalid assignment filters %s', async (path) => {
+  expect((await request(app).get(path).set('Authorization', 'staff')).status).toBe(400);
+  expect(service.getAssignments).not.toHaveBeenCalled();
+  expect(service.getAssignment).not.toHaveBeenCalled();
+  expect(service.getAssignmentLogs).not.toHaveBeenCalled();
+});
+it('uses the authenticated Staff identity for read-only assignment history', async () => {
+  service.getAssignmentLogs.mockResolvedValue({ data: [], meta: { total: 0, page: 1, limit: 20 } });
+  const response = await request(app).get('/api/staff/assignments/7/checkins?page=1&limit=20').set('Authorization', 'staff');
+  expect(response.status).toBe(200);
+  expect(service.getAssignmentLogs).toHaveBeenCalledWith(2, 7, { page: 1, limit: 20 });
 });

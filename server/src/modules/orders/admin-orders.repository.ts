@@ -6,6 +6,7 @@ export interface AdminOrderListRow extends RowDataPacket {
     order_code: string;
     event_id: number;
     event_name: string;
+    event_status: 'draft' | 'published' | 'ongoing' | 'completed' | 'cancelled';
     buyer_name: string;
     buyer_email: string;
     total_quantity: number;
@@ -14,6 +15,7 @@ export interface AdminOrderListRow extends RowDataPacket {
     created_at: Date;
     expires_at: Date | null;
     confirmed_at: Date | null;
+    refund_status: RefundStatus | null;
 }
 
 export interface AdminOrderDetailRow extends RowDataPacket {
@@ -21,6 +23,7 @@ export interface AdminOrderDetailRow extends RowDataPacket {
     order_code: string;
     event_id: number;
     event_name: string;
+    event_status: 'draft' | 'published' | 'ongoing' | 'completed' | 'cancelled';
     buyer_name: string;
     buyer_email: string;
     buyer_phone: string | null;
@@ -95,6 +98,25 @@ export interface AdminRefundRow extends RowDataPacket {
 export interface AdminOrderEventOptionRow extends RowDataPacket {
     id: number;
     name: string;
+    status: 'draft' | 'published' | 'ongoing' | 'completed' | 'cancelled';
+    refund_total: number;
+    refund_not_required: number;
+    refund_pending: number;
+    refund_processing: number;
+    refund_completed: number;
+    refund_failed: number;
+}
+
+export interface EventRefundSummaryRow extends RowDataPacket {
+    event_id: number;
+    event_name: string;
+    event_status: 'draft' | 'published' | 'ongoing' | 'completed' | 'cancelled';
+    total: number;
+    not_required: number;
+    pending: number;
+    processing: number;
+    completed: number;
+    failed: number;
 }
 
 export interface ResendTicketRow extends RowDataPacket {
@@ -126,11 +148,12 @@ export async function findOrdersList(filters: {
     const offset = (filters.page - 1) * filters.limit;
 
     const [rows] = await pool.query<AdminOrderListRow[]>(
-        `SELECT o.id, o.order_code, o.event_id, e.name AS event_name,
+        `SELECT o.id, o.order_code, o.event_id, e.name AS event_name, e.status AS event_status,
                 o.buyer_name, o.buyer_email, o.total_quantity, o.total_amount,
-                o.status, o.created_at, o.expires_at, o.confirmed_at
+                o.status, o.created_at, o.expires_at, o.confirmed_at, r.status AS refund_status
          FROM orders o
          JOIN events e ON e.id = o.event_id
+         LEFT JOIN refunds r ON r.order_id = o.id
          ${whereClause}
          ORDER BY o.created_at DESC
          LIMIT ? OFFSET ?`,
@@ -148,7 +171,7 @@ export async function findOrdersList(filters: {
 
 export async function findOrderDetail(orderId: number) {
     const [rows] = await pool.query<AdminOrderDetailRow[]>(
-        `SELECT o.id, o.order_code, o.event_id, e.name AS event_name,
+        `SELECT o.id, o.order_code, o.event_id, e.name AS event_name, e.status AS event_status,
                 o.buyer_name, o.buyer_email, o.buyer_phone,
                 o.total_quantity, o.subtotal_amount, o.discount_amount, o.total_amount,
                 o.status, o.expires_at, o.confirmed_at, o.expired_at, o.cancelled_at, o.created_at
@@ -210,8 +233,17 @@ export async function findOrderRefund(orderId: number) {
 
 export async function findAdminOrderEventOptions() {
     const [rows] = await pool.query<AdminOrderEventOptionRow[]>(
-        `SELECT DISTINCT e.id, e.name
-         FROM events e JOIN orders o ON o.event_id = e.id
+        `SELECT e.id, e.name, e.status,
+                COUNT(r.id) AS refund_total,
+                COALESCE(SUM(r.status = 'not_required'), 0) AS refund_not_required,
+                COALESCE(SUM(r.status = 'pending'), 0) AS refund_pending,
+                COALESCE(SUM(r.status = 'processing'), 0) AS refund_processing,
+                COALESCE(SUM(r.status = 'completed'), 0) AS refund_completed,
+                COALESCE(SUM(r.status = 'failed'), 0) AS refund_failed
+         FROM events e
+         JOIN orders o ON o.event_id = e.id
+         LEFT JOIN refunds r ON r.order_id = o.id
+         GROUP BY e.id, e.name, e.status
          ORDER BY e.name ASC, e.id ASC`
     );
     return rows;
@@ -242,6 +274,56 @@ export async function transitionRefund(
         [nextStatus, nextStatus, nextStatus, failureReason, refundId, currentStatus]
     );
     return result.affectedRows === 1;
+}
+
+export async function lockConfirmedOrdersForEvent(conn: PoolConnection, eventId: number) {
+    const [rows] = await conn.query<RowDataPacket[]>(
+        `SELECT id FROM orders
+         WHERE event_id = ? AND status = 'confirmed'
+         ORDER BY id ASC FOR UPDATE`,
+        [eventId]
+    );
+    return rows.map((row) => Number(row.id));
+}
+
+export async function transitionEventRefunds(
+    conn: PoolConnection,
+    eventId: number,
+    nextStatus: 'processing' | 'completed',
+) {
+    const eligibleStatuses = nextStatus === 'processing' ? ['pending', 'failed'] : ['processing'];
+    const [result] = await conn.query<ResultSetHeader>(
+        `UPDATE refunds r
+         JOIN orders o ON o.id = r.order_id
+         SET r.status = ?,
+             r.completed_at = CASE WHEN ? = 'completed' THEN NOW(3) ELSE NULL END,
+             r.failure_reason = NULL
+         WHERE o.event_id = ?
+           AND o.status = 'confirmed'
+           AND r.status IN (?)`,
+        [nextStatus, nextStatus, eventId, eligibleStatuses]
+    );
+    return result.affectedRows;
+}
+
+export async function findEventRefundSummary(eventId: number) {
+    const [rows] = await pool.query<EventRefundSummaryRow[]>(
+        `SELECT e.id AS event_id, e.name AS event_name, e.status AS event_status,
+                COUNT(r.id) AS total,
+                COALESCE(SUM(r.status = 'not_required'), 0) AS not_required,
+                COALESCE(SUM(r.status = 'pending'), 0) AS pending,
+                COALESCE(SUM(r.status = 'processing'), 0) AS processing,
+                COALESCE(SUM(r.status = 'completed'), 0) AS completed,
+                COALESCE(SUM(r.status = 'failed'), 0) AS failed
+         FROM events e
+         LEFT JOIN orders o ON o.event_id = e.id AND o.status = 'confirmed'
+         LEFT JOIN refunds r ON r.order_id = o.id
+         WHERE e.id = ?
+         GROUP BY e.id, e.name, e.status
+         LIMIT 1`,
+        [eventId]
+    );
+    return rows[0] ?? null;
 }
 
 export async function findTicketsForResend(orderId: number, conn?: PoolConnection, includeCancelled = false) {

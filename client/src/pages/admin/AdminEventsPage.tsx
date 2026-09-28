@@ -1,4 +1,4 @@
-import { Ban, CalendarClock, CalendarDays, Edit3, Eye, EyeOff, Grid, LayoutList, MapPin, Plus, Search, ShieldAlert, Ticket, Trash2, Users, X } from "lucide-react";
+import { Ban, CalendarClock, CalendarDays, ChevronLeft, ChevronRight, Edit3, Eye, EyeOff, Grid, LayoutList, MapPin, Plus, Search, ShieldAlert, Ticket, Trash2, Users, X } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -12,6 +12,7 @@ type PublishMode = "manual" | "scheduled";
 type ViewMode = "grid" | "list";
 
 const EVENT_VIEW_STORAGE_KEY = "ticketbox-admin-events-view";
+const EVENTS_PAGE_SIZE = 8;
 
 function getInitialViewMode(): ViewMode {
   try {
@@ -50,6 +51,7 @@ export function AdminEventsPage() {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"all" | Status>("all");
   const [viewMode, setViewMode] = useState<ViewMode>(getInitialViewMode);
+  const [page, setPage] = useState(1);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -115,6 +117,10 @@ export function AdminEventsPage() {
     (categoryFilter === "all" || event.category === categoryFilter) &&
     `${event.name} ${event.venue} ${event.city} ${event.category}`.toLowerCase().includes(query.toLowerCase()),
   ), [events, query, status, categoryFilter]);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / EVENTS_PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const pageStart = (currentPage - 1) * EVENTS_PAGE_SIZE;
+  const visibleEvents = filtered.slice(pageStart, pageStart + EVENTS_PAGE_SIZE);
 
   const counts = useMemo(() => ({
     all: events.length,
@@ -260,8 +266,8 @@ export function AdminEventsPage() {
         <div><div className="admin-live-label"><CalendarDays size={13} /> VÒNG ĐỜI SỰ KIỆN</div><h2>Quản lý sự kiện</h2><p>Tạo, lên lịch, công bố và kết thúc sự kiện theo quy trình an toàn.</p></div>
         <div className="events-header-actions">
           <div className="events-view-switcher" role="group" aria-label="Chọn chế độ hiển thị sự kiện">
-            <button type="button" className={`events-view-btn ${viewMode === "grid" ? "active" : ""}`} onClick={() => setViewMode("grid")} aria-label="Hiển thị sự kiện dạng thẻ" aria-pressed={viewMode === "grid"} title="Dạng thẻ"><Grid size={16} /><span>Dạng thẻ</span></button>
-            <button type="button" className={`events-view-btn ${viewMode === "list" ? "active" : ""}`} onClick={() => setViewMode("list")} aria-label="Hiển thị sự kiện dạng danh sách" aria-pressed={viewMode === "list"} title="Danh sách"><LayoutList size={16} /><span>Danh sách</span></button>
+            <button type="button" className={`events-view-btn ${viewMode === "grid" ? "active" : ""}`} onClick={() => { setViewMode("grid"); setPage(1); }} aria-label="Hiển thị sự kiện dạng thẻ" aria-pressed={viewMode === "grid"} title="Dạng thẻ"><Grid size={16} /><span>Dạng thẻ</span></button>
+            <button type="button" className={`events-view-btn ${viewMode === "list" ? "active" : ""}`} onClick={() => { setViewMode("list"); setPage(1); }} aria-label="Hiển thị sự kiện dạng danh sách" aria-pressed={viewMode === "list"} title="Danh sách"><LayoutList size={16} /><span>Danh sách</span></button>
           </div>
           <button className="events-primary-button" onClick={openCreate}><Plus size={17} /> Tạo sự kiện</button>
         </div>
@@ -276,6 +282,7 @@ export function AdminEventsPage() {
           onClick={() => {
             setStatus("all");
             setQuery("");
+            setPage(1);
           }}
           aria-pressed={status === "all"}
           aria-label="Xem tất cả sự kiện"
@@ -287,7 +294,7 @@ export function AdminEventsPage() {
         <button
           type="button"
           className={`events-metric-card ${status === "draft" ? "active" : ""}`}
-          onClick={() => setStatus("draft")}
+          onClick={() => { setStatus("draft"); setPage(1); }}
           aria-pressed={status === "draft"}
           aria-label="Lọc sự kiện bản nháp"
         >
@@ -298,7 +305,7 @@ export function AdminEventsPage() {
         <button
           type="button"
           className={`events-metric-card ${status === "published" ? "active" : ""}`}
-          onClick={() => setStatus("published")}
+          onClick={() => { setStatus("published"); setPage(1); }}
           aria-pressed={status === "published"}
           aria-label="Lọc sự kiện đã công bố"
         >
@@ -309,7 +316,7 @@ export function AdminEventsPage() {
         <button
           type="button"
           className={`events-metric-card ${status === "ongoing" ? "active" : ""}`}
-          onClick={() => setStatus("ongoing")}
+          onClick={() => { setStatus("ongoing"); setPage(1); }}
           aria-pressed={status === "ongoing"}
           aria-label="Lọc sự kiện đang diễn ra"
         >
@@ -320,7 +327,7 @@ export function AdminEventsPage() {
         <button
           type="button"
           className={`events-metric-card ${status === "completed" ? "active" : ""}`}
-          onClick={() => setStatus("completed")}
+          onClick={() => { setStatus("completed"); setPage(1); }}
           aria-pressed={status === "completed"}
           aria-label="Lọc sự kiện đã kết thúc"
         >
@@ -331,7 +338,7 @@ export function AdminEventsPage() {
         <button
           type="button"
           className={`events-metric-card ${status === "cancelled" ? "active" : ""}`}
-          onClick={() => setStatus("cancelled")}
+          onClick={() => { setStatus("cancelled"); setPage(1); }}
           aria-pressed={status === "cancelled"}
           aria-label="Lọc sự kiện đã hủy"
         >
@@ -342,18 +349,21 @@ export function AdminEventsPage() {
       </div>
 
       <div className="events-toolbar">
-        <label><Search size={16} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Tìm theo sự kiện, địa điểm hoặc thành phố" /></label>
-        <select value={status} onChange={(e) => setStatus(e.target.value as typeof status)}><option value="all">Tất cả trạng thái</option>{(["draft", "published", "ongoing", "completed", "cancelled"] as Status[]).map((item) => <option key={item} value={item}>{statusLabels[item]}</option>)}</select>
+        <label><Search size={16} /><input value={query} onChange={(e) => { setQuery(e.target.value); setPage(1); }} placeholder="Tìm theo sự kiện, địa điểm hoặc thành phố" /></label>
+        <select value={status} onChange={(e) => { setStatus(e.target.value as typeof status); setPage(1); }}><option value="all">Tất cả trạng thái</option>{(["draft", "published", "ongoing", "completed", "cancelled"] as Status[]).map((item) => <option key={item} value={item}>{statusLabels[item]}</option>)}</select>
         <select value={categoryFilter} onChange={(e) => {
           const next = new URLSearchParams(searchParams);
           if (e.target.value === "all") next.delete("category");
           else next.set("category", e.target.value);
           setSearchParams(next);
+          setPage(1);
         }}>
           <option value="all">Tất cả danh mục</option>
           {categories.map((c) => <option key={c.id} value={c.slug}>{c.name}</option>)}
         </select>
-        <span className="events-result-count" aria-live="polite">Hiển thị <strong>{filtered.length}</strong>/{events.length} sự kiện</span>
+        <span className="events-result-count" aria-live="polite">
+          Hiển thị <strong>{filtered.length === 0 ? 0 : pageStart + 1}–{Math.min(pageStart + EVENTS_PAGE_SIZE, filtered.length)}</strong> / {filtered.length} kết quả · {events.length} tổng
+        </span>
       </div>
 
       {loading ? (
@@ -401,6 +411,7 @@ export function AdminEventsPage() {
                 onClick={() => {
                   setQuery("");
                   setStatus("all");
+                  setPage(1);
                   const next = new URLSearchParams(searchParams);
                   next.delete("category");
                   setSearchParams(next);
@@ -416,7 +427,7 @@ export function AdminEventsPage() {
         </div>
       ) : viewMode === "grid" ? (
         <div className="events-cards-grid">
-          {filtered.map((event) => (
+          {visibleEvents.map((event) => (
             <article className={`event-card-item ${event.status === "draft" ? "is-draft" : ""} ${event.visibility === "hidden" ? "is-hidden" : ""}`} key={event.id}>
               <div className="event-card-cover-wrap">
                 {event.coverImageUrl ? <img src={event.coverImageUrl} alt={event.coverImageAlt || event.name} loading="lazy" /> : <div className="event-card-cover-fallback"><Ticket size={36} /><span>{event.category.toUpperCase()}</span></div>}
@@ -446,7 +457,7 @@ export function AdminEventsPage() {
         </div>
       ) : (
         <div className="events-list-panel">
-          {filtered.map((event) => (
+          {visibleEvents.map((event) => (
           <article className={`events-row ${event.visibility==="hidden"?"event-row-hidden":""}`} key={event.id}>
             <div className="events-date"><CalendarDays size={18} /><strong>{new Date(event.startTime).toLocaleDateString("vi-VN", { day: "2-digit", month: "short" })}</strong></div>
             <div className="events-main"><div><span className={`event-status ${event.status}`}>{statusLabels[event.status]}</span>{event.visibility==="hidden" && <span className="event-visibility-hidden"><EyeOff size={10}/> ĐANG ẨN</span>}{event.scheduledPublishAt && <span className="event-scheduled">TỰ ĐỘNG · {new Date(event.scheduledPublishAt).toLocaleString("vi-VN")}</span>}</div><h3>{event.name}</h3><p><MapPin size={13} /> {event.venue}, {event.city}</p></div>
@@ -455,6 +466,18 @@ export function AdminEventsPage() {
           </article>
           ))}
         </div>
+      )}
+
+      {!loading && filtered.length > 0 && pageCount > 1 && (
+        <nav className="events-pagination" aria-label="Phân trang danh sách sự kiện">
+          <button type="button" disabled={currentPage === 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>
+            <ChevronLeft size={16} /> Trang trước
+          </button>
+          <span>Trang <strong>{currentPage}</strong> / {pageCount}</span>
+          <button type="button" disabled={currentPage === pageCount} onClick={() => setPage((value) => Math.min(pageCount, value + 1))}>
+            Trang sau <ChevronRight size={16} />
+          </button>
+        </nav>
       )}
 
       {hideTarget&&createPortal(<div className="events-dialog-backdrop" role="presentation" onMouseDown={()=>setHideTarget(null)}><div className="events-dialog events-hide-dialog" role="dialog" aria-modal="true" onMouseDown={(event)=>event.stopPropagation()}><header><div><span>HIỂN THỊ CÔNG KHAI</span><h3>Tạm ẩn sự kiện</h3></div><button onClick={()=>setHideTarget(null)} aria-label="Đóng"><X size={20}/></button></header><div className="events-hide-content"><div className="events-rule-banner"><EyeOff size={19}/><div><strong>{hideTarget.name}</strong><p>Sự kiện sẽ biến mất khỏi trang khách và mọi hạng vé sẽ tạm dừng bán. Đơn hàng và vé đã phát hành không thay đổi.</p></div></div><label>Lý do ẩn <span>*</span><textarea autoFocus rows={4} maxLength={500} value={hideReason} onChange={(event)=>setHideReason(event.target.value)} placeholder="Mô tả sự cố hoặc nội dung đang bảo trì..."/><small>Tối thiểu 5 ký tự. Lý do được lưu để truy vết quản trị.</small></label><footer><button type="button" onClick={()=>setHideTarget(null)}>Hủy</button><button className="primary" disabled={hideReason.trim().length<5} onClick={()=>void confirmHide()}><EyeOff size={15}/> Ẩn sự kiện</button></footer></div></div></div>,document.body)}

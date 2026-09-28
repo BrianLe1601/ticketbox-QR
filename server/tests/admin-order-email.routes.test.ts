@@ -8,7 +8,7 @@ vi.mock('../src/middlewares/authenticate.js', () => ({
         next();
     },
 }));
-const service = vi.hoisted(() => ({ getOrderStats: vi.fn(), getOrderFilterOptions: vi.fn(), listOrders: vi.fn(), getOrderDetail: vi.fn(), cancelOrder: vi.fn(), resendTicketEmail: vi.fn(), retryOrderEmail: vi.fn(), updateRefundStatus: vi.fn() }));
+const service = vi.hoisted(() => ({ getOrderStats: vi.fn(), getOrderFilterOptions: vi.fn(), listOrders: vi.fn(), getOrderDetail: vi.fn(), cancelOrder: vi.fn(), resendTicketEmail: vi.fn(), retryOrderEmail: vi.fn(), updateRefundStatus: vi.fn(), updateEventRefunds: vi.fn() }));
 vi.mock('../src/modules/orders/admin-orders.service.js', () => service);
 import { adminOrdersRouter } from '../src/modules/orders/admin-orders.routes.js';
 const app = express();
@@ -18,6 +18,7 @@ beforeEach(() => {
     vi.resetAllMocks();
     service.retryOrderEmail.mockResolvedValue({ orderId: 1, jobId: 3, queued: true, status: 'pending', message: 'Đã xếp lịch thử gửi lại email.' });
     service.updateRefundStatus.mockResolvedValue({ id: 1, status: 'confirmed', refund: { status: 'processing' } });
+    service.updateEventRefunds.mockResolvedValue({ eventId: 7, transitioned: 2, summary: { processing: 2 }, message: 'Đã cập nhật 2 yêu cầu.' });
     service.getOrderStats.mockResolvedValue({ total: 2, pendingPayment: 1, confirmed: 1, expired: 0, cancelled: 0 });
 });
 it('requires authentication and administrator authorization for retry', async () => {
@@ -54,4 +55,17 @@ it('validates and authorizes simulated Refund transitions', async () => {
     const response = await request(app).patch(path).set('Authorization', 'admin').send({ status: 'failed', failureReason: 'Lỗi mô phỏng hợp lệ' });
     expect(response.status).toBe(200);
     expect(service.updateRefundStatus).toHaveBeenCalledWith(1, { status: 'failed', failureReason: 'Lỗi mô phỏng hợp lệ' });
+});
+
+it('validates and authorizes bulk Refund transitions for one Event', async () => {
+    const path = '/api/admin/orders/events/7/refunds';
+    expect((await request(app).patch(path).send({ status: 'processing' })).status).toBe(401);
+    expect((await request(app).patch(path).set('Authorization', 'staff').send({ status: 'processing' })).status).toBe(403);
+    expect((await request(app).patch('/api/admin/orders/events/0/refunds').set('Authorization', 'admin').send({ status: 'processing' })).status).toBe(400);
+    expect((await request(app).patch(path).set('Authorization', 'admin').send({ status: 'failed' })).status).toBe(400);
+
+    const response = await request(app).patch(path).set('Authorization', 'admin').send({ status: 'processing' });
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({ success: true, data: { eventId: 7, transitioned: 2 } });
+    expect(service.updateEventRefunds).toHaveBeenCalledWith(7, { status: 'processing' });
 });

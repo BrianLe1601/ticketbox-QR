@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Menu, X, Ticket, Search } from "lucide-react";
+import { Menu, X, Search } from "lucide-react";
 import { NavSearch } from "@/components/layout/NavSearch";
 import { cn } from "@/lib/utils";
+import ticketboxLogoDark from "@/assets/brand/ticketbox-logo-dark.svg";
+import ticketboxMascot from "@/assets/brand/ticketbox-mascot.svg";
 
 export function Header() {
     const navigate = useNavigate();
@@ -24,14 +26,14 @@ export function Header() {
         <header className="sticky top-0 z-50 border-b border-white/[0.07] bg-[#0D0B1A]/85 backdrop-blur-xl">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="flex items-center gap-4 h-16">
-                    <button onClick={() => navigate("/")} className="flex items-center gap-2.5 shrink-0">
-                        <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shadow-lg shadow-primary/40">
-                            <Ticket size={15} className="text-white" />
-                        </div>
-                        <span className="font-extrabold text-lg tracking-tight text-foreground" style={{ fontFamily: "Manrope, sans-serif" }}>
-                            Tick<span className="text-primary">Flow</span>
-                        </span>
-                    </button>
+                    <button
+            onClick={() => navigate("/")}
+            className="flex items-center shrink-0 transition-transform duration-200 hover:scale-[1.03] active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#7C5CFC] rounded-lg"
+            aria-label="Về trang chủ TicketBox"
+          >
+            <img className="h-11 w-11 object-contain drop-shadow-[0_2px_12px_rgba(124,92,252,0.35)] sm:hidden" src={ticketboxMascot} alt="TicketBox" aria-hidden="true" />
+            <img className="hidden h-11 sm:h-12 w-auto max-w-[205px] object-contain object-left drop-shadow-[0_2px_14px_rgba(124,92,252,0.25)] sm:block" src={ticketboxLogoDark} alt="TicketBox" />
+          </button>
 
                     <nav className="hidden md:flex items-center gap-1 shrink-0">
                         {[{ label: "Trang chủ", path: "/" }, { label: "Sự kiện", path: "/events" }].map(({ label, path }) => (

@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
-import { getOrderStats, getOrderFilterOptions, listOrders, getOrderDetail, cancelOrder, resendTicketEmail, retryOrderEmail, updateRefundStatus } from './admin-orders.service.js';
+import { getOrderStats, getOrderFilterOptions, listOrders, getOrderDetail, cancelOrder, resendTicketEmail, retryOrderEmail, updateEventRefunds, updateRefundStatus } from './admin-orders.service.js';
 import { sendSuccess, sendPaginated } from '../../utils/response.js';
-import type { ListOrdersQuery, AdminOrderIdParam, RetryEmailParam, RefundTransitionBody } from './admin-orders.schema.js';
+import type { ListOrdersQuery, AdminOrderIdParam, BulkRefundTransitionBody, EventRefundParam, RetryEmailParam, RefundTransitionBody } from './admin-orders.schema.js';
 
 export async function getOrders(req: Request, res: Response, next: NextFunction) {
     try {
@@ -46,6 +46,13 @@ export async function patchRefund(req: Request, res: Response, next: NextFunctio
     try {
         const { id } = req.params as unknown as AdminOrderIdParam;
         sendSuccess(res, await updateRefundStatus(id, req.body as RefundTransitionBody));
+    } catch (error) { next(error); }
+}
+
+export async function patchEventRefunds(req: Request, res: Response, next: NextFunction) {
+    try {
+        const { eventId } = req.params as unknown as EventRefundParam;
+        sendSuccess(res, await updateEventRefunds(eventId, req.body as BulkRefundTransitionBody));
     } catch (error) { next(error); }
 }
 

@@ -14,6 +14,10 @@ export const orderIdParamSchema = z.object({
     id: z.coerce.number().int().positive(),
 });
 
+export const eventRefundParamSchema = z.object({
+    eventId: z.coerce.number().int().positive(),
+});
+
 export const retryEmailParamSchema = z.object({ id: z.coerce.number().int().positive(), logId: z.coerce.number().int().positive() });
 export type RetryEmailParam = z.infer<typeof retryEmailParamSchema>;
 
@@ -29,8 +33,14 @@ export const refundTransitionBodySchema = z.object({
     }
 });
 
+export const bulkRefundTransitionBodySchema = z.object({
+    status: z.enum(['processing', 'completed']),
+}).strict();
+
 export const cancelOrderBodySchema = z.object({}).strict();
 
 export type ListOrdersQuery = z.infer<typeof listOrdersQuerySchema>;
 export type AdminOrderIdParam = z.infer<typeof orderIdParamSchema>;
 export type RefundTransitionBody = z.infer<typeof refundTransitionBodySchema>;
+export type EventRefundParam = z.infer<typeof eventRefundParamSchema>;
+export type BulkRefundTransitionBody = z.infer<typeof bulkRefundTransitionBodySchema>;

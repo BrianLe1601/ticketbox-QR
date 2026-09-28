@@ -10,19 +10,20 @@ const repo = vi.hoisted(() => ({
   findOrderStats: vi.fn(), findOrdersList: vi.fn(), findOrderDetail: vi.fn(), findOrderItems: vi.fn(),
   findOrderTickets: vi.fn(), findOrderPayments: vi.fn(), findOrderEmailLogs: vi.fn(), findOrderRefund: vi.fn(),
   findAdminOrderEventOptions: vi.fn(), cancelPendingOrder: vi.fn(), findRefundForUpdate: vi.fn(), transitionRefund: vi.fn(),
+  lockConfirmedOrdersForEvent: vi.fn(), transitionEventRefunds: vi.fn(), findEventRefundSummary: vi.fn(),
 }));
 vi.mock('../src/modules/checkout/checkout.repository.js', () => checkout);
 vi.mock('../src/modules/orders/admin-orders.repository.js', () => repo);
 vi.mock('../src/modules/tickets/ticket-email.repository.js', () => ({ enqueueTicketEmail: vi.fn() }));
 
-import { cancelOrder, getOrderStats, updateRefundStatus } from '../src/modules/orders/admin-orders.service.js';
+import { cancelOrder, getOrderStats, updateEventRefunds, updateRefundStatus } from '../src/modules/orders/admin-orders.service.js';
 
 const connection = {};
 beforeEach(() => {
   vi.resetAllMocks();
   checkout.withTransaction.mockImplementation(async (work: (conn: object) => Promise<unknown>) => work(connection));
   checkout.findOrderEventId.mockResolvedValue(3);
-  checkout.lockEventRow.mockResolvedValue({ id: 3 });
+  checkout.lockEventRow.mockResolvedValue({ id: 3, status: 'cancelled' });
   repo.findOrderDetail.mockResolvedValue({
     id: 8, order_code: 'ORDER-8', event_id: 3, event_name: 'Event', buyer_name: 'Buyer', buyer_email: 'buyer@example.com',
     buyer_phone: null, total_quantity: 1, subtotal_amount: '100', discount_amount: '0', total_amount: '100',
@@ -31,6 +32,12 @@ beforeEach(() => {
   repo.findOrderItems.mockResolvedValue([]); repo.findOrderTickets.mockResolvedValue([]); repo.findOrderPayments.mockResolvedValue([]);
   repo.findOrderEmailLogs.mockResolvedValue([]); repo.findOrderRefund.mockResolvedValue(null);
   repo.transitionRefund.mockResolvedValue(true);
+  repo.lockConfirmedOrdersForEvent.mockResolvedValue([8]);
+  repo.transitionEventRefunds.mockResolvedValue(1);
+  repo.findEventRefundSummary.mockResolvedValue({
+    event_id: 3, event_name: 'Cancelled Event', event_status: 'cancelled', total: 1,
+    not_required: 0, pending: 0, processing: 1, completed: 0, failed: 0,
+  });
 });
 
 it('cancels only pending_payment Orders and locks Event before Order', async () => {
@@ -57,6 +64,21 @@ it('enforces the simulated Refund state machine while preserving the confirmed O
   repo.findRefundForUpdate.mockResolvedValue({ id: 6, order_id: 8, status: 'processing' });
   await updateRefundStatus(8, { status: 'failed', failureReason: 'Mô phỏng lỗi nhà cung cấp' });
   expect(repo.transitionRefund).toHaveBeenLastCalledWith(connection, 6, 'processing', 'failed', 'Mô phỏng lỗi nhà cung cấp');
+
+  checkout.lockEventRow.mockResolvedValueOnce({ id: 3, status: 'ongoing' });
+  await expect(updateRefundStatus(8, { status: 'processing' })).rejects.toMatchObject({ statusCode: 409, code: 'REFUND_EVENT_NOT_CANCELLED' });
+});
+
+it('updates Refunds in bulk only after locking a cancelled Event and its confirmed Orders', async () => {
+  const result = await updateEventRefunds(3, { status: 'processing' });
+  expect(checkout.lockEventRow).toHaveBeenCalledWith(connection, 3);
+  expect(repo.lockConfirmedOrdersForEvent).toHaveBeenCalledWith(connection, 3);
+  expect(repo.transitionEventRefunds).toHaveBeenCalledWith(connection, 3, 'processing');
+  expect(result).toMatchObject({ eventId: 3, transitioned: 1, summary: { processing: 1 } });
+
+  checkout.lockEventRow.mockResolvedValueOnce({ id: 4, status: 'ongoing' });
+  await expect(updateEventRefunds(4, { status: 'processing' })).rejects.toMatchObject({ statusCode: 409, code: 'REFUND_EVENT_NOT_CANCELLED' });
+  expect(repo.transitionEventRefunds).toHaveBeenCalledOnce();
 });
 
 it('passes the stable Event scope to Order aggregate counts', async () => {

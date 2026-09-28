@@ -3,9 +3,10 @@ import { withTransaction, findOrderByIdForUpdate, findOrderEventId, lockEventRow
 import {
     findOrderStats, findOrdersList, findOrderDetail, findOrderItems, findOrderTickets,
     findOrderPayments, findOrderEmailLogs, findOrderRefund, findAdminOrderEventOptions,
-    cancelPendingOrder, findRefundForUpdate, transitionRefund,
+    cancelPendingOrder, findRefundForUpdate, transitionRefund, lockConfirmedOrdersForEvent,
+    transitionEventRefunds, findEventRefundSummary,
 } from './admin-orders.repository.js';
-import type { ListOrdersQuery, RefundTransitionBody } from './admin-orders.schema.js';
+import type { BulkRefundTransitionBody, ListOrdersQuery, RefundTransitionBody } from './admin-orders.schema.js';
 import { enqueueTicketEmail } from '../tickets/ticket-email.repository.js';
 
 export async function listOrders(query: ListOrdersQuery) {
@@ -16,6 +17,7 @@ export async function listOrders(query: ListOrdersQuery) {
             orderCode: o.order_code,
             eventId: o.event_id,
             eventName: o.event_name,
+            eventStatus: o.event_status,
             buyerName: o.buyer_name,
             buyerEmail: o.buyer_email,
             totalQuantity: o.total_quantity,
@@ -24,6 +26,7 @@ export async function listOrders(query: ListOrdersQuery) {
             createdAt: o.created_at,
             expiresAt: o.expires_at,
             confirmedAt: o.confirmed_at,
+            refundStatus: o.refund_status,
         })),
         meta: { total, page: query.page, limit: query.limit },
     };
@@ -46,6 +49,7 @@ export async function getOrderDetail(orderId: number) {
         orderCode: order.order_code,
         eventId: order.event_id,
         eventName: order.event_name,
+        eventStatus: order.event_status,
         buyerName: order.buyer_name,
         buyerEmail: order.buyer_email,
         buyerPhone: order.buyer_phone,
@@ -134,11 +138,48 @@ export async function cancelOrder(orderId: number) {
     return getOrderDetail(orderId);
 }
 
+export async function updateEventRefunds(eventId: number, input: BulkRefundTransitionBody) {
+    const transitioned = await withTransaction(async (conn) => {
+        const event = await lockEventRow(conn, eventId);
+        if (!event) throw AppError.notFound('Không tìm thấy sự kiện');
+        if (event.status !== 'cancelled') {
+            throw new AppError(409, 'Chỉ được hoàn tiền hàng loạt cho sự kiện đã hủy', 'REFUND_EVENT_NOT_CANCELLED');
+        }
+
+        await lockConfirmedOrdersForEvent(conn, eventId);
+        return transitionEventRefunds(conn, eventId, input.status);
+    });
+
+    const summary = await findEventRefundSummary(eventId);
+    if (!summary) throw AppError.notFound('Không tìm thấy sự kiện');
+    return {
+        eventId: summary.event_id,
+        eventName: summary.event_name,
+        eventStatus: summary.event_status,
+        transitioned,
+        summary: {
+            total: Number(summary.total),
+            notRequired: Number(summary.not_required),
+            pending: Number(summary.pending),
+            processing: Number(summary.processing),
+            completed: Number(summary.completed),
+            failed: Number(summary.failed),
+        },
+        message: transitioned > 0
+            ? `Đã cập nhật ${transitioned} yêu cầu hoàn tiền mô phỏng sang “${input.status === 'processing' ? 'Đang xử lý' : 'Hoàn tất'}”.`
+            : 'Không có yêu cầu hoàn tiền mô phỏng phù hợp để cập nhật.',
+    };
+}
+
 export async function updateRefundStatus(orderId: number, input: RefundTransitionBody) {
     await withTransaction(async (conn) => {
         const eventId = await findOrderEventId(conn, orderId);
         if (eventId === null) throw AppError.notFound('Không tìm thấy đơn hàng');
-        await lockEventRow(conn, eventId);
+        const event = await lockEventRow(conn, eventId);
+        if (!event) throw AppError.notFound('Không tìm thấy sự kiện');
+        if (event.status !== 'cancelled') {
+            throw new AppError(409, 'Chỉ xử lý hoàn tiền cho đơn thuộc sự kiện đã hủy', 'REFUND_EVENT_NOT_CANCELLED');
+        }
         const order = await findOrderByIdForUpdate(conn, orderId);
         if (!order) throw AppError.notFound('Không tìm thấy đơn hàng');
         if (order.status !== 'confirmed') {
@@ -178,5 +219,17 @@ export async function retryOrderEmail(orderId: number, logId: number) {
 }
 export async function getOrderStats(eventId?: number) { return findOrderStats(eventId); }
 export async function getOrderFilterOptions() {
-    return { events: (await findAdminOrderEventOptions()).map((event) => ({ id: event.id, name: event.name })) };
+    return { events: (await findAdminOrderEventOptions()).map((event) => ({
+        id: event.id,
+        name: event.name,
+        status: event.status,
+        refundSummary: {
+            total: Number(event.refund_total),
+            notRequired: Number(event.refund_not_required),
+            pending: Number(event.refund_pending),
+            processing: Number(event.refund_processing),
+            completed: Number(event.refund_completed),
+            failed: Number(event.refund_failed),
+        },
+    })) };
 }

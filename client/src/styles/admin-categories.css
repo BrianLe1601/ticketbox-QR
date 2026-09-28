@@ -720,3 +720,32 @@
     grid-column: auto;
   }
 }
+
+@media (min-width: 801px) {
+  .categories-page { gap: 8px; }
+  .categories-header { gap: 10px; }
+  .categories-header h2 { margin: 1px 0; font-size: 20px; }
+  .categories-header p { font-size: 10px; }
+  .categories-metrics-grid { gap: 7px; }
+  .cat-metric-card { min-height: 62px; border-radius: 10px; padding: 7px 10px; }
+  .cat-metric-top { margin-bottom: 3px; }
+  .cat-metric-label { font-size: 9px; }
+  .cat-metric-icon { width: 28px; height: 28px; border-radius: 7px; }
+  .cat-metric-val { font-size: 17px; }
+  .cat-metric-sub { margin-top: 1px; font-size: 8.5px; }
+  .categories-toolbar { gap: 8px; border-radius: 10px; padding: 7px 9px; }
+  .cat-search-box { height: 34px; font-size: 11px; }
+  .categories-grid { grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 8px; }
+  .category-admin-card { border-radius: 11px; padding: 10px; }
+  .cat-card-header { gap: 8px; margin-bottom: 7px; }
+  .cat-badge { padding: 2px 7px; font-size: 9px; }
+  .cat-slug { margin-top: 3px; font-size: 9px; }
+  .category-admin-card h3 { margin-top: 3px; font-size: 14px; }
+  .category-admin-card p.cat-desc { min-height: 28px; margin: 6px 0 8px; font-size: 10.5px; line-height: 1.35; }
+  .cat-meta-grid { gap: 6px; margin-bottom: 8px; }
+  .cat-meta-item { border-radius: 7px; padding: 5px 7px; }
+  .cat-meta-label { font-size: 8px; }
+  .cat-meta-val { margin-top: 2px; font-size: 10.5px; }
+  .category-admin-card footer { gap: 5px; padding-top: 7px; }
+  .category-admin-card button { height: 29px; padding-inline: 8px; border-radius: 7px; font-size: 10px; }
+}
