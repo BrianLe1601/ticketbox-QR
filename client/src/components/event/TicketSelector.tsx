@@ -46,13 +46,13 @@ export function TicketSelector({
             </div>
 
             <div className="divide-y divide-white/[0.07]">
+                {tickets.length === 0 && <p role="status" className="p-5 text-sm text-muted-foreground">Chưa có loại vé để hiển thị.</p>}
                 {tickets.map((ticket) => {
                     const qty = quantities[ticket.id] ?? 0;
-                    const isLow = ticket.available > 0 && ticket.available <= 20;
-                    const isSoldOut = ticket.available === 0;
+                    const isSoldOut = ticket.saleStatus === "sold-out";
                     const isComingSoon = ticket.saleStatus === "coming-soon";
                     const isClosed = ticket.saleStatus === "closed";
-                    const disabled = isSoldOut || isComingSoon || isClosed || eventStatus !== "on-sale";
+                    const disabled = ticket.saleStatus !== "on-sale" || eventStatus !== "on-sale";
 
                     return (
                         <div key={ticket.id} className={cn("p-5 transition-colors", qty > 0 && "bg-primary/5")}>
@@ -60,8 +60,6 @@ export function TicketSelector({
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap">
                                         <span className="font-bold text-sm text-foreground" style={{ fontFamily: "Manrope, sans-serif" }}>{ticket.name}</span>
-                                        {ticket.name === "VIP" && <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/20 font-semibold">POPULAR</span>}
-                                        {ticket.name === "Premium" && <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-400 border border-purple-500/20 font-semibold">EXCLUSIVE</span>}
                                     </div>
                                     <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{ticket.description}</p>
                                     {isComingSoon && (
@@ -76,17 +74,17 @@ export function TicketSelector({
                                     )}
                                     <div className="flex items-center gap-3 mt-2">
                                         <span className="font-extrabold text-sm text-primary" style={{ fontFamily: "JetBrains Mono, monospace" }}>{formatPrice(ticket.price)}</span>
-                                        {isLow && !isSoldOut && !isComingSoon && <span className="text-[10px] text-amber-400 font-semibold">Còn {ticket.available} vé</span>}
+                                        {ticket.saleStatus === "on-sale" && <span className="text-[10px] text-amber-400 font-semibold">Còn {ticket.available} vé</span>}
                                         {isSoldOut && <span className="text-[10px] text-red-400 font-semibold">Hết vé</span>}
                                         {isComingSoon && <span className="text-[10px] text-amber-400 font-semibold">Chưa mở bán</span>}
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0">
-                                    <button onClick={() => updateQty(ticket.id, -1, ticket.available)} disabled={qty === 0 || disabled} className="w-7 h-7 rounded-lg border border-white/[0.1] flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-white/20 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+                                    <button aria-label={`Giảm số lượng ${ticket.name}`} onClick={() => updateQty(ticket.id, -1, ticket.available)} disabled={qty === 0 || disabled} className="w-7 h-7 rounded-lg border border-white/[0.1] flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-white/20 disabled:opacity-30 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-primary">
                                         <Minus size={13} />
                                     </button>
                                     <span className="w-6 text-center text-sm font-bold text-foreground tabular-nums" style={{ fontFamily: "JetBrains Mono, monospace" }}>{qty}</span>
-                                    <button onClick={() => updateQty(ticket.id, 1, ticket.available)} disabled={qty >= ticket.available || disabled} className="w-7 h-7 rounded-lg border border-white/[0.1] flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-primary/50 hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+                                    <button aria-label={`Tăng số lượng ${ticket.name}`} onClick={() => updateQty(ticket.id, 1, ticket.available)} disabled={qty >= ticket.available || disabled} className="w-7 h-7 rounded-lg border border-white/[0.1] flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-primary/50 hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-primary">
                                         <Plus size={13} />
                                     </button>
                                 </div>
@@ -107,7 +105,7 @@ export function TicketSelector({
                     onClick={handleCheckout}
                     disabled={!canPurchase}
                     className={cn(
-                        "w-full py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all duration-200",
+                        "w-full py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-transform duration-200 motion-reduce:transition-none motion-reduce:transform-none focus-visible:outline-2 focus-visible:outline-primary",
                         canPurchase ? "bg-primary text-white hover:bg-primary/90 shadow-lg shadow-primary/30 hover:shadow-primary/40 active:scale-[0.98]" : "bg-secondary text-muted-foreground cursor-not-allowed"
                     )}
                 >

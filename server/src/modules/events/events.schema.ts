@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+export const publicStatsQuerySchema = z.object({}).strict();
+
 export const listEventsQuerySchema = z.object({
     q: z.string().optional(),
     category: z.string().trim().min(2).max(100).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).optional(),

@@ -1,7 +1,17 @@
 import type { Event, CategorySlug, EventLifecycleStatus, TicketSaleStatus } from "@/types/event.types";
-import { computeAvailable, computeMinPrice, computeTotalCapacity } from "@/constants/eventconstants";
+import { computeMinPrice, computeTotalCapacity } from "@/constants/eventconstants";
 import { formatDisplayDate, formatTimeLabel } from "@/lib/utils";
-import { apiGet } from "./api";
+import { apiGet, ApiRequestError } from "./api";
+
+export interface PublicStats {
+    eventsThisYear: number;
+    buyers: number;
+    checkinRate: number | null;
+}
+
+export async function getPublicStats(): Promise<PublicStats> {
+    return (await apiGet<PublicStats>('/events/stats')).data;
+}
 
 // ---- Kiểu dữ liệu THÔ trả về từ BE (khớp mapEventSummary / getEventDetail) ----
 interface ApiEventSummary {
@@ -105,7 +115,7 @@ function mapDetailToEvent(row: ApiEventDetail): Event {
         capacity: t.capacity,
         reservedQuantity: t.reservedQuantity,
         soldQuantity: t.soldQuantity,
-        available: t.available ?? computeAvailable(t),
+        available: t.available,
         maxPerOrder: t.maxPerOrder,
         salesStartAt: t.salesStartAt,
         salesEndAt: t.salesEndAt,
@@ -168,11 +178,12 @@ export async function fetchEventList(params: EventListParams = {}): Promise<{ ev
     return { events: data.map(mapSummaryToEvent), total: meta?.total ?? data.length };
 }
 
-export async function fetchEventById(id: string): Promise<Event | null> {
+export async function fetchEventById(id: string, reportErrors = false): Promise<Event | null> {
     try {
         const { data } = await apiGet<ApiEventDetail>(`/events/${id}`);
         return mapDetailToEvent(data);
-    } catch {
+    } catch (error) {
+        if (reportErrors && !(error instanceof ApiRequestError && error.status === 404)) throw error;
         return null;
     }
 }

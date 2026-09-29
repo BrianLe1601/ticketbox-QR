@@ -9,9 +9,9 @@ import { useNavigate } from "react-router-dom";
 export function EventCard({ event }: { event: Event }) {
     const navigate = useNavigate();
     return (
-        <article className="group bg-card border border-white/[0.08] rounded-2xl overflow-hidden hover:border-primary/40 hover:shadow-xl hover:shadow-primary/10 transition-all duration-300 flex flex-col">
+        <article className="group bg-card border border-white/[0.08] rounded-2xl overflow-hidden hover:border-primary/40 hover:shadow-xl hover:shadow-primary/10 flex flex-col">
             <div className="relative overflow-hidden bg-secondary aspect-[16/10]">
-                <img src={event.image ?? event.coverImage} alt={event.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                {(event.image || event.coverImage) ? <img src={event.image || event.coverImage} alt={event.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 motion-reduce:transition-none motion-reduce:transform-none" /> : <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Chưa có ảnh sự kiện</div>}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
                 <div className="absolute top-3 left-3"><StatusBadge status={event.saleStatus} /></div>
                 <div className="absolute top-3 right-3">
@@ -41,9 +41,9 @@ export function EventCard({ event }: { event: Event }) {
                         <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Giá từ</p>
                         <p className="text-base font-extrabold text-foreground" style={{ fontFamily: "JetBrains Mono, monospace" }}>{formatPrice(event.minPrice)}</p>
                     </div>
-                    <button onClick={() => navigate(`/events/${event.id}`)} className="flex items-center gap-1.5 text-sm font-semibold text-primary hover:text-primary/80 transition-colors group/btn">
+                    <button aria-label={`Xem chi tiết ${event.name}`} onClick={() => navigate(`/events/${event.id}`)} className="flex items-center gap-1.5 text-sm font-semibold text-primary hover:text-primary/80 focus-visible:outline-2 focus-visible:outline-primary group/btn">
                         Xem chi tiết
-                        <ChevronRight size={14} className="group-hover/btn:translate-x-0.5 transition-transform" />
+                        <ChevronRight size={14} className="group-hover/btn:translate-x-0.5 transition-transform motion-reduce:transition-none motion-reduce:transform-none" />
                     </button>
                 </div>
             </div>

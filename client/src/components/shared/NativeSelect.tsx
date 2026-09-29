@@ -3,8 +3,9 @@ import type { SelectOption } from "@/types/event.types";
 import { cn } from "@/lib/utils";
 
 export function NativeSelect({
-    value, onChange, options, className,
+    value, onChange, options, className, ariaLabel,
 }: {
+    ariaLabel?: string;
     value: string;
     onChange: (v: string) => void;
     options: SelectOption[];
@@ -13,6 +14,7 @@ export function NativeSelect({
     return (
         <div className={cn("relative", className)}>
             <select
+                aria-label={ariaLabel}
                 value={value}
                 onChange={(e) => onChange(e.target.value)}
                 style={{ colorScheme: "dark" }}
