@@ -1,7 +1,15 @@
 import type { NextFunction, Request, Response } from 'express';
-import { getEventDetail, getEventList } from './events.service.js';
+import { getEventDetail, getEventList, getPublicEventStats } from './events.service.js';
 import { sendPaginated, sendSuccess } from '../../utils/response.js';
 import type { ListEventsQuery } from './events.schema.js';
+
+export async function getEventStats(_req: Request, res: Response, next: NextFunction) {
+    try {
+        const stats = await getPublicEventStats();
+        res.setHeader('Cache-Control', 'public, max-age=60');
+        sendSuccess(res, stats);
+    } catch (error) { next(error); }
+}
 
 export async function listEvents(req: Request, res: Response, next: NextFunction) {
     try {

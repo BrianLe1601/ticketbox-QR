@@ -2,6 +2,34 @@ import { pool } from '../../database/pool.js';
 import type { RowDataPacket } from 'mysql2';
 import type { ListEventsQuery } from './events.schema.ts';
 
+interface PublicStatsRow extends RowDataPacket {
+    events_this_year: number;
+    buyers: number;
+    checked_in: number | string;
+    eligible_tickets: number;
+}
+
+export async function findPublicEventStats() {
+    const [rows] = await pool.query<PublicStatsRow[]>(`
+        SELECT
+            (SELECT COUNT(*) FROM events
+             WHERE status IN ('published', 'ongoing', 'completed')
+               AND visibility = 'visible' AND YEAR(start_time) = YEAR(NOW())) AS events_this_year,
+            (SELECT COUNT(DISTINCT LOWER(buyer_email)) FROM orders
+             WHERE status = 'confirmed') AS buyers,
+            COALESCE(SUM(t.status = 'checked_in'), 0) AS checked_in,
+            COUNT(*) AS eligible_tickets
+        FROM tickets t
+        JOIN order_items oi ON oi.id = t.order_item_id
+        JOIN orders o ON o.id = oi.order_id
+        JOIN events e ON e.id = o.event_id
+        WHERE o.status = 'confirmed'
+          AND e.status IN ('ongoing', 'completed')
+          AND t.status IN ('issued', 'checked_in')
+    `);
+    return rows[0]!;
+}
+
 export interface EventRow extends RowDataPacket {
     id: number;
     name: string;

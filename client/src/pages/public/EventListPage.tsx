@@ -5,7 +5,7 @@ import type { SortKey, Event, CategorySlug } from "@/types/event.types";
 import { fetchEventList } from "@/services/event.service";
 import { fetchCategories } from "@/services/category.service";
 import {
-    CATEGORY_FILTER_OPTIONS, CITY_OPTIONS,
+    CITY_OPTIONS,
     TIME_OPTIONS, SORT_OPTIONS, PAGE_SIZE, EVENT_LIFECYCLE_FALLBACK_REFRESH_MS,
 } from "@/constants/eventconstants";
 import { subscribeToEventLifecycleUpdates } from "@/services/event-realtime.service";
@@ -27,7 +27,9 @@ export function EventListPage() {
     const [selectedTime, setSelectedTime] = useState("all");
     const [sortBy, setSortBy] = useState<SortKey>("upcoming");
     const [filterOpen, setFilterOpen] = useState(false);
-    const [categoryOptions,setCategoryOptions]=useState(CATEGORY_FILTER_OPTIONS);
+    const [categoryOptions,setCategoryOptions]=useState<{ value: string; label: string }[]>([{value:"all",label:"Tất cả"}]);
+    const [categoryError, setCategoryError] = useState('');
+    const [error, setError] = useState('');
 
     const [events, setEvents] = useState<Event[]>([]);
     const [total, setTotal] = useState(0);
@@ -35,12 +37,13 @@ export function EventListPage() {
     const [loading, setLoading] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
 
-    useEffect(()=>{let active=true;void fetchCategories().then(items=>{if(active)setCategoryOptions([{value:"all",label:"Tất cả"},...items.map(item=>({value:item.slug,label:item.name}))]);}).catch(()=>{});return()=>{active=false;};},[]);
+    useEffect(()=>{let active=true;void fetchCategories().then(items=>{if(active)setCategoryOptions([{value:"all",label:"Tất cả"},...items.map(item=>({value:item.slug,label:item.name}))]);}).catch(()=>{if(active)setCategoryError('Không thể tải danh mục.');});return()=>{active=false;};},[]);
 
     const loadPage = useCallback(
         async (targetPage: number, append: boolean) => {
             if (append) setLoadingMore(true);
             else setLoading(true);
+            setError('');
             try {
                 const { events: pageEvents, total: pageTotal } = await fetchEventList({
                     q: query || undefined,
@@ -54,6 +57,7 @@ export function EventListPage() {
                 setTotal(pageTotal);
                 setPage(targetPage);
             } catch {
+                setError('Không thể tải sự kiện. Vui lòng thử lại.');
                 if (!append) { setEvents([]); setTotal(0); }
             } finally {
                 if (append) setLoadingMore(false);
@@ -87,8 +91,9 @@ export function EventListPage() {
                 if (!active) return;
                 setEvents(pages.flatMap((result) => result.events));
                 setTotal(pages[0]?.total ?? 0);
+                setError('');
             } catch {
-                // Keep the last successful list during a transient background refresh failure.
+                if (active) setError('Không thể cập nhật sự kiện. Dữ liệu đang hiển thị có thể đã thay đổi.');
             }
         };
         const unsubscribeRealtime = subscribeToEventLifecycleUpdates(
@@ -135,13 +140,13 @@ export function EventListPage() {
             <div className="flex flex-col sm:flex-row gap-3 mb-4">
                 <div className="relative flex-1">
                     <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-                    <input type="text" placeholder="Tìm kiếm sự kiện, địa điểm, thành phố..." value={query} onChange={(e) => setQuery(e.target.value)} className="w-full pl-11 pr-10 py-3 rounded-xl bg-card border border-white/[0.08] text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all" />
-                    {query && <button onClick={() => setQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1 rounded"><X size={14} /></button>}
+                    <input aria-label="Tìm kiếm sự kiện" type="text" placeholder="Tìm kiếm sự kiện, địa điểm, thành phố..." value={query} onChange={(e) => setQuery(e.target.value)} className="w-full pl-11 pr-10 py-3 rounded-xl bg-card border border-white/[0.08] text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-primary" />
+                    {query && <button aria-label="Xóa tìm kiếm" onClick={() => setQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1 rounded"><X size={14} /></button>}
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
                     <ArrowUpDown size={14} className="text-muted-foreground hidden sm:block" />
-                    <NativeSelect value={sortBy} onChange={(v) => setSortBy(v as SortKey)} options={SORT_OPTIONS} className="min-w-[160px]" />
+                    <NativeSelect ariaLabel="Sắp xếp sự kiện" value={sortBy} onChange={(v) => setSortBy(v as SortKey)} options={SORT_OPTIONS} className="min-w-[160px]" />
                 </div>
 
                 <button onClick={() => setFilterOpen(!filterOpen)} className={cn("flex items-center gap-2 px-4 py-3 rounded-xl border text-sm font-semibold transition-colors sm:hidden", filterOpen || hasActiveFilters ? "bg-primary/15 border-primary/30 text-primary" : "bg-card border-white/[0.08] text-muted-foreground")}>
@@ -153,14 +158,14 @@ export function EventListPage() {
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
                     <div className="flex flex-wrap gap-2 flex-1">
                         {categoryOptions.map(({ value, label }) => (
-                            <button key={value} onClick={() => setSelectedCategory(value)} className={cn("flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold border transition-all", selectedCategory === value ? "bg-primary text-white border-primary shadow-lg shadow-primary/25" : "bg-card text-muted-foreground border-white/[0.08] hover:border-primary/30 hover:text-foreground")}>
+                            <button key={value} onClick={() => setSelectedCategory(value)} className={cn("flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold border motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-primary", selectedCategory === value ? "bg-primary text-white border-primary shadow-lg shadow-primary/25" : "bg-card text-muted-foreground border-white/[0.08] hover:border-primary/30 hover:text-foreground")}>
                                 {value !== "all" && <CategoryIcon category={value} size={11} />} {label}
                             </button>
                         ))}
                     </div>
                     <div className="flex gap-2 shrink-0">
-                        <NativeSelect value={selectedCity} onChange={setSelectedCity} options={CITY_OPTIONS} className="min-w-[160px]" />
-                        <NativeSelect value={selectedTime} onChange={setSelectedTime} options={TIME_OPTIONS} className="min-w-[160px]" />
+                        <NativeSelect ariaLabel="Lọc thành phố" value={selectedCity} onChange={setSelectedCity} options={CITY_OPTIONS} className="min-w-[160px]" />
+                        <NativeSelect ariaLabel="Lọc thời gian" value={selectedTime} onChange={setSelectedTime} options={TIME_OPTIONS} className="min-w-[160px]" />
                     </div>
                 </div>
 
@@ -176,18 +181,20 @@ export function EventListPage() {
                 )}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {categoryError && <p role="alert" className="mb-4 text-sm text-red-400">{categoryError}</p>}
+            {error && <div role="alert" className="mb-4 text-sm text-red-400">{error} <button disabled={loading || loadingMore} onClick={() => void loadPage(1, false)} className="underline focus-visible:outline-2 disabled:opacity-50">Thử lại</button></div>}
+            <div aria-busy={loading || loadingMore} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                 {loading
                     ? Array.from({ length: 6 }).map((_, i) => <EventCardSkeleton key={i} />)
                     : timeFiltered.length > 0
                         ? timeFiltered.map((event) => <EventCard key={event.id} event={event} />)
-                        : <EmptyState query={query} onReset={resetFilters} />}
+                        : !error && <EmptyState query={query} onReset={resetFilters} />}
             </div>
 
-            {!loading && timeFiltered.length > 0 && (
+            {!loading && (events.length > 0 || hasMore) && (
                 <div className="mt-10 flex flex-col items-center gap-4">
                     {hasMore && (
-                        <button disabled={loadingMore} onClick={() => loadPage(page + 1, true)} className="flex items-center gap-2 px-8 py-3 rounded-xl border border-white/[0.08] bg-card text-sm font-semibold text-muted-foreground hover:text-foreground hover:border-primary/30 transition-all disabled:opacity-50">
+                        <button disabled={loadingMore} onClick={() => loadPage(page + 1, true)} className="flex items-center gap-2 px-8 py-3 rounded-xl border border-white/[0.08] bg-card text-sm font-semibold text-muted-foreground hover:text-foreground hover:border-primary/30 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-50">
                             {loadingMore ? "Đang tải..." : `Xem thêm (${total - events.length} sự kiện)`} <ChevronDown size={15} />
                         </button>
                     )}
