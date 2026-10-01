@@ -31,6 +31,7 @@ export async function findPublicEventStats() {
 }
 
 export interface EventRow extends RowDataPacket {
+    sold_count: number;
     id: number;
     name: string;
     slug: string;
@@ -82,6 +83,11 @@ export async function findPublishedEvents(query: ListEventsQuery) {
     const conditions: string[] = [`e.status IN ('published','ongoing','completed')`, `e.visibility = 'visible'`];
     const params: unknown[] = [];
 
+    if (query.sort === 'popular') {
+        conditions.push(`e.status IN ('published','ongoing')`);
+        conditions.push(`EXISTS (SELECT 1 FROM ticket_types active_tt WHERE active_tt.event_id=e.id AND active_tt.is_active=TRUE)`);
+    }
+
     if (q) {
         conditions.push(`(e.name LIKE ? OR e.venue LIKE ? OR e.address LIKE ?)`);
         params.push(`%${q}%`, `%${q}%`, `%${q}%`);
@@ -102,13 +108,20 @@ export async function findPublishedEvents(query: ListEventsQuery) {
             : query.sort === 'price-asc' ? 'min_price ASC'
                 : query.sort === 'price-desc' ? 'min_price DESC'
                     : 'e.start_time ASC'; // upcoming
-    const orderBy = `CASE WHEN e.status='completed' OR e.end_time<=NOW(3) THEN 1 ELSE 0 END ASC, ${selectedOrder}`;
+    const orderBy = query.sort === 'popular' ? 'sold_count DESC, e.start_time ASC'
+        : `CASE WHEN e.status='completed' OR e.end_time<=NOW(3) THEN 1 ELSE 0 END ASC, ${selectedOrder}`;
 
     // has_available: còn ít nhất 1 loại vé active mà (capacity - reserved - sold) > 0.
     // IFNULL bọc ngoài vì event chưa có ticket_types active nào thì LEFT JOIN ra NULL,
     // MAX(...) trên toàn NULL cũng ra NULL chứ không phải 0.
     const sql = `
         SELECT ${EVENT_SELECT},
+            COALESCE((SELECT COUNT(*) FROM tickets sold_t
+             JOIN order_items sold_oi ON sold_oi.id=sold_t.order_item_id
+             JOIN orders sold_o ON sold_o.id=sold_oi.order_id
+             WHERE sold_o.event_id=e.id AND sold_o.status='confirmed'
+               AND sold_t.status IN ('issued','checked_in')
+             GROUP BY sold_o.event_id), 0) AS sold_count,
             MIN(tt.price) AS min_price,
             CASE WHEN e.status='completed' OR e.end_time<=NOW(3) THEN 0 ELSE IFNULL(MAX(CASE
                 WHEN (tt.capacity - tt.reserved_quantity - tt.sold_quantity) > 0 THEN 1

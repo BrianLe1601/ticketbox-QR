@@ -20,6 +20,8 @@ import {
     type ListOrdersFilters,
 } from "@/services/admin-orders.service";
 
+const ORDERS_PAGE_SIZE = 8;
+
 const statuses: AdminOrderStatus[] = ["pending_payment", "confirmed", "expired", "cancelled"];
 
 function formatMoney(value: number) {
@@ -76,7 +78,6 @@ export function AdminOrdersPage() {
     const [buyerEmail, setBuyerEmail] = useState("");
     const [debouncedEmail, setDebouncedEmail] = useState("");
     const [page, setPage] = useState(1);
-    const [pageSize, setPageSize] = useState(10);
     const [refresh, setRefresh] = useState(0);
     const [total, setTotal] = useState(0);
     const [loading, setLoading] = useState(true);
@@ -107,7 +108,7 @@ export function AdminOrdersPage() {
         async function loadOrders() {
             setLoading(true);
             setError("");
-            const filters: ListOrdersFilters = { page, limit: pageSize };
+            const filters: ListOrdersFilters = { page, limit: ORDERS_PAGE_SIZE };
             if (status !== "all") filters.status = status;
             if (eventId && Number(eventId) > 0) filters.eventId = Number(eventId);
             if (debouncedEmail) filters.buyerEmail = debouncedEmail;
@@ -115,7 +116,7 @@ export function AdminOrdersPage() {
                 const response = await listAdminOrders(filters);
                 if (!active) return;
                 const nextTotal = response.meta?.total ?? response.data.length;
-                const lastPage = Math.max(1, Math.ceil(nextTotal / pageSize));
+                const lastPage = Math.max(1, Math.ceil(nextTotal / ORDERS_PAGE_SIZE));
                 setTotal(nextTotal);
                 if (page > lastPage) { setPage(lastPage); return; }
                 setOrders(response.data);
@@ -127,7 +128,7 @@ export function AdminOrdersPage() {
         }
         void loadOrders();
         return () => { active = false; };
-    }, [status, eventId, debouncedEmail, page, pageSize, refresh]);
+    }, [status, eventId, debouncedEmail, page, refresh]);
 
     useEffect(() => {
         let active = true;
@@ -210,9 +211,7 @@ export function AdminOrdersPage() {
         return () => { dialog?.removeEventListener("keydown", keydown); previous?.focus(); };
     }, [bulkRefundTarget, bulkRefundLoading]);
 
-    const pageCount = Math.max(1, Math.ceil(total / pageSize));
-    const firstPageButton = Math.max(1, Math.min(page - 2, pageCount - 4));
-    const pageButtons = Array.from({ length: Math.min(5, pageCount) }, (_, index) => firstPageButton + index);
+    const pageCount = Math.max(1, Math.ceil(total / ORDERS_PAGE_SIZE));
     const filterPending = buyerEmail.trim() !== debouncedEmail;
     const paginationDisabled = loading || filterPending;
     const selectedEvent = eventOptions.find((event) => String(event.id) === eventId) ?? null;
@@ -493,21 +492,17 @@ export function AdminOrdersPage() {
 
             </div>
 
-            <nav aria-label="Phân trang đơn hàng" className="flex flex-wrap items-center justify-between gap-4">
-                <p role="status" className="text-sm text-muted-foreground">Trang {page} / {pageCount} · {total} đơn hàng</p>
-                <label className="flex items-center gap-2 text-sm">Đơn mỗi trang
-                    <select value={pageSize} disabled={loading} onChange={event => { setPageSize(Number(event.target.value)); setPage(1); }} className="rounded-lg border border-white/20 bg-card px-2 py-2 focus-visible:outline-2 focus-visible:outline-primary">
-                        {[10, 20, 50].map(size => <option key={size} value={size}>{size}</option>)}
-                    </select>
-                </label>
-                <div className="flex flex-wrap items-center gap-2">
-                    <button type="button" disabled={page <= 1 || paginationDisabled} onClick={() => setPage(1)} aria-label="Trang đầu" className="rounded-lg border border-white/20 px-3 py-2 text-sm hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-40">Đầu</button>
-                    <button type="button" disabled={page <= 1 || paginationDisabled} onClick={() => setPage(current => Math.max(1, current - 1))} aria-label="Trang trước" className="rounded-lg border border-white/20 p-2 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-40"><ChevronLeft size={18} /></button>
-                    {pageButtons.map(number => <button key={number} type="button" aria-label={`Trang ${number}`} aria-current={page === number ? "page" : undefined} disabled={paginationDisabled || page === number} onClick={() => setPage(number)} className={`min-w-9 rounded-lg border px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-default ${page === number ? "border-primary bg-primary text-white" : "border-white/20 hover:bg-white/10 disabled:opacity-40"}`}>{number}</button>)}
-                    <button type="button" disabled={page >= pageCount || paginationDisabled} onClick={() => setPage(current => Math.min(pageCount, current + 1))} aria-label="Trang sau" className="rounded-lg border border-white/20 p-2 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-40"><ChevronRight size={18} /></button>
-                    <button type="button" disabled={page >= pageCount || paginationDisabled} onClick={() => setPage(pageCount)} aria-label="Trang cuối" className="rounded-lg border border-white/20 px-3 py-2 text-sm hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-40">Cuối</button>
-                </div>
-            </nav>
+            {!loading && total > 0 && pageCount > 1 && (
+                <nav className="events-pagination" aria-label="Phân trang danh sách đơn hàng">
+                    <button type="button" disabled={page <= 1 || paginationDisabled} onClick={() => setPage((value) => Math.max(1, value - 1))}>
+                        <ChevronLeft size={16} /> Trang trước
+                    </button>
+                    <span>Trang <strong>{page}</strong> / {pageCount}</span>
+                    <button type="button" disabled={page >= pageCount || paginationDisabled} onClick={() => setPage((value) => Math.min(pageCount, value + 1))}>
+                        Trang sau <ChevronRight size={16} />
+                    </button>
+                </nav>
+            )}
 
             {detailLoading && createPortal(
                 <div className="events-dialog-backdrop order-dialog-backdrop" role="status" aria-live="polite">

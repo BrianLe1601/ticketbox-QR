@@ -15,6 +15,7 @@ export async function getPublicStats(): Promise<PublicStats> {
 
 // ---- Kiểu dữ liệu THÔ trả về từ BE (khớp mapEventSummary / getEventDetail) ----
 interface ApiEventSummary {
+    soldCount: number;
     id: number;
     name: string;
     slug: string;
@@ -72,12 +73,16 @@ interface ApiEventDetail {
 
 // ---- Mapping: API DTO -> Event (type FE đang dùng khắp component) ----
 
-function mapSummaryToEvent(row: ApiEventSummary): Event {
+export type PublicEventSummary = Event & { soldCount: number; hasAvailable: boolean };
+
+function mapSummaryToEvent(row: ApiEventSummary): PublicEventSummary {
     const fallbackImage = row.coverImageUrl ?? "";
     const tickets = [] as Event["tickets"]; // list view không cần chi tiết vé
 
     return {
         id: String(row.id),
+        soldCount: row.soldCount,
+        hasAvailable: row.hasAvailable,
         name: row.name,
         slug: row.slug,
         shortTitle: row.name,
@@ -163,10 +168,10 @@ export interface EventListParams {
     city?: string;
     page?: number;
     limit?: number;
-    sort?: "upcoming" | "newest" | "price-asc" | "price-desc";
+    sort?: "upcoming" | "newest" | "price-asc" | "price-desc" | "popular";
 }
 
-export async function fetchEventList(params: EventListParams = {}): Promise<{ events: Event[]; total: number }> {
+export async function fetchEventList(params: EventListParams = {}): Promise<{ events: PublicEventSummary[]; total: number }> {
     const { data, meta } = await apiGet<ApiEventSummary[]>("/events", {
         q: params.q,
         category: params.category,
