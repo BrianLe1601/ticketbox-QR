@@ -25,7 +25,11 @@ export function TicketSelector({
     const totalTickets = Object.values(quantities).reduce((sum, q) => sum + q, 0);
     const selectedTicketsAreOpen = Object.entries(quantities)
         .filter(([, quantity]) => quantity > 0)
-        .every(([ticketId]) => tickets.find((ticket) => ticket.id === ticketId)?.saleStatus === "on-sale");
+        .every(([ticketId, quantity]) => {
+            const ticket = tickets.find((item) => item.id === ticketId);
+            return ticket?.saleStatus === "on-sale"
+                && quantity <= Math.min(ticket.available, ticket.maxPerOrder);
+        });
     const canPurchase = eventStatus === "on-sale" && totalTickets > 0 && selectedTicketsAreOpen;
 
     function handleCheckout() {
@@ -53,6 +57,7 @@ export function TicketSelector({
                     const isComingSoon = ticket.saleStatus === "coming-soon";
                     const isClosed = ticket.saleStatus === "closed";
                     const disabled = ticket.saleStatus !== "on-sale" || eventStatus !== "on-sale";
+                    const purchaseLimit = Math.min(ticket.available, ticket.maxPerOrder);
 
                     return (
                         <div key={ticket.id} className={cn("p-5 transition-colors", qty > 0 && "bg-primary/5")}>
@@ -75,16 +80,17 @@ export function TicketSelector({
                                     <div className="flex items-center gap-3 mt-2">
                                         <span className="font-extrabold text-sm text-primary" style={{ fontFamily: "JetBrains Mono, monospace" }}>{formatPrice(ticket.price)}</span>
                                         {ticket.saleStatus === "on-sale" && <span className="text-[10px] text-amber-400 font-semibold">Còn {ticket.available} vé</span>}
+                                        {ticket.saleStatus === "on-sale" && <span className="text-[10px] text-sky-300 font-semibold">Tối đa {ticket.maxPerOrder} vé/đơn</span>}
                                         {isSoldOut && <span className="text-[10px] text-red-400 font-semibold">Hết vé</span>}
                                         {isComingSoon && <span className="text-[10px] text-amber-400 font-semibold">Chưa mở bán</span>}
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0">
-                                    <button aria-label={`Giảm số lượng ${ticket.name}`} onClick={() => updateQty(ticket.id, -1, ticket.available)} disabled={qty === 0 || disabled} className="w-7 h-7 rounded-lg border border-white/[0.1] flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-white/20 disabled:opacity-30 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-primary">
+                                    <button aria-label={`Giảm số lượng ${ticket.name}`} onClick={() => updateQty(ticket.id, -1, purchaseLimit)} disabled={qty === 0 || disabled} className="w-7 h-7 rounded-lg border border-white/[0.1] flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-white/20 disabled:opacity-30 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-primary">
                                         <Minus size={13} />
                                     </button>
                                     <span className="w-6 text-center text-sm font-bold text-foreground tabular-nums" style={{ fontFamily: "JetBrains Mono, monospace" }}>{qty}</span>
-                                    <button aria-label={`Tăng số lượng ${ticket.name}`} onClick={() => updateQty(ticket.id, 1, ticket.available)} disabled={qty >= ticket.available || disabled} className="w-7 h-7 rounded-lg border border-white/[0.1] flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-primary/50 hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-primary">
+                                    <button aria-label={`Tăng số lượng ${ticket.name}`} onClick={() => updateQty(ticket.id, 1, purchaseLimit)} disabled={qty >= purchaseLimit || disabled} className="w-7 h-7 rounded-lg border border-white/[0.1] flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-primary/50 hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-primary">
                                         <Plus size={13} />
                                     </button>
                                 </div>

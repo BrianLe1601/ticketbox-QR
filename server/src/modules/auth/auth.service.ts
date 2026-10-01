@@ -8,10 +8,15 @@ import {
   findGoogleStaffBySub,
   findUserByEmail,
   registerPendingGoogleStaff,
+  lockActiveAdmin,
+  replacePasswordAndRevokeSessions,
+  transaction,
+  updateAdminFullName,
 } from "./auth.repository.js";
 import type { AuthUserRow } from "./auth.repository.js";
 import { verifyGoogleIdentity } from "./google-identity.service.js";
 import type { LoginInput } from "./auth.schema.js";
+import type { ChangeAdminPasswordInput, UpdateAdminProfileInput } from "./auth.schema.js";
 import { createSession, lockSession, pool, replaceSession, revokeSession } from "./auth-session.repository.js";
 import { hashToken, newRefreshToken, parseRefreshToken, refreshExpiry } from "./refresh-token.js";
 
@@ -122,3 +127,23 @@ export async function refreshSession(rawToken:string|undefined,metadata:SessionM
 }
 
 export async function logoutSession(rawToken:string|undefined){const parsed=parseRefreshToken(rawToken);if(parsed)await revokeSession(parsed.id);}
+
+export async function updateAdminProfile(userId: number, input: UpdateAdminProfileInput) {
+  const user = await updateAdminFullName(userId, input.fullName);
+  if (!user) throw AppError.notFound("Không tìm thấy tài khoản Admin.", "ADMIN_NOT_FOUND");
+  return { id: user.id, fullName: user.full_name, email: user.email, role: user.role };
+}
+
+export async function changeAdminPassword(userId: number, input: ChangeAdminPasswordInput) {
+  const nextHash = await bcrypt.hash(input.newPassword, 12);
+  await transaction(async (connection) => {
+    const user = await lockActiveAdmin(connection, userId);
+    if (!user?.password_hash) {
+      throw new AppError(400, "Tài khoản này không hỗ trợ đổi mật khẩu.", "PASSWORD_NOT_AVAILABLE");
+    }
+    if (!await bcrypt.compare(input.currentPassword, user.password_hash)) {
+      throw new AppError(400, "Mật khẩu hiện tại không chính xác.", "CURRENT_PASSWORD_INVALID");
+    }
+    await replacePasswordAndRevokeSessions(connection, userId, nextHash);
+  });
+}

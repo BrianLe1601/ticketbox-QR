@@ -88,7 +88,7 @@ async function createSellableEvent(label: string, capacity: number): Promise<Tes
                  DATE_ADD(DATE_ADD(CURRENT_DATE(), INTERVAL 2 DAY), INTERVAL 22 HOUR),
                  DATE_SUB(NOW(3), INTERVAL 1 DAY),
                  DATE_ADD(DATE_ADD(CURRENT_DATE(), INTERVAL 2 DAY), INTERVAL 17 HOUR),
-                 DATE_ADD(DATE_ADD(CURRENT_DATE(), INTERVAL 2 DAY), INTERVAL 17 HOUR),
+                 DATE_ADD(DATE_ADD(CURRENT_DATE(), INTERVAL 2 DAY), INTERVAL 16 HOUR),
                  DATE_ADD(DATE_ADD(CURRENT_DATE(), INTERVAL 2 DAY), INTERVAL 22 HOUR), ?)`,
         [`Week 4 ${label}`, slug, categoryId, capacity, adminId]
     );
@@ -344,7 +344,17 @@ describe.sequential('Week 4 checkout safety integration', () => {
 
     it('preserves the original QR through enqueue, SMTP failure, retry, check-in and event cancellation', async () => {
         const fixture = await createSellableEvent('original-qr', 5);
-        await pool.query('UPDATE events SET checkin_start_at=DATE_SUB(NOW(3), INTERVAL 1 HOUR) WHERE id=?', [fixture.eventId]);
+        await pool.query(
+            `UPDATE events
+             SET start_time=DATE_ADD(CURRENT_DATE(), INTERVAL 2 HOUR),
+                 end_time=DATE_SUB(DATE_ADD(CURRENT_DATE(), INTERVAL 1 DAY), INTERVAL 1 SECOND),
+                 sales_end_at=DATE_SUB(DATE_ADD(CURRENT_DATE(), INTERVAL 1 DAY), INTERVAL 2 HOUR),
+                 checkin_start_at=CURRENT_DATE(),
+                 checkin_end_at=DATE_SUB(DATE_ADD(CURRENT_DATE(), INTERVAL 1 DAY), INTERVAL 1 SECOND),
+                 status=IF(NOW(3) >= DATE_ADD(CURRENT_DATE(), INTERVAL 2 HOUR), 'ongoing', 'published')
+             WHERE id=?`,
+            [fixture.eventId],
+        );
         const [staff] = await pool.query<RowDataPacket[]>("SELECT id FROM users WHERE email='staff@ticketbox.local'");
         const staffId = Number(staff[0]?.id);
         await pool.query('INSERT INTO event_staff(event_id,staff_id,assigned_by) VALUES (?,?,?)', [fixture.eventId, staffId, adminId]);

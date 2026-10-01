@@ -23,7 +23,13 @@ beforeEach(() => {
   events.length = 0;
   repo.withStaffTransaction.mockImplementation(async (work: (connection: typeof conn) => Promise<unknown>) => work(conn));
   repo.lockStaff.mockResolvedValue({ id: 3, isActive: 1, approvalStatus: "approved" });
-  repo.lockEvent.mockResolvedValue({ id: 8, status: "published", endTime: new Date("2099-01-01T00:00:00.000Z") });
+  repo.lockEvent.mockResolvedValue({
+    id: 8,
+    status: "published",
+    endTime: new Date("2099-01-01T00:00:00.000Z"),
+    checkinStartAt: new Date("2098-12-31T18:00:00.000Z"),
+    checkinEndAt: new Date("2099-01-01T00:00:00.000Z"),
+  });
   repo.revokeAllAssignments.mockImplementation(async () => { events.push("revokeAssignments"); });
   repo.revokeAllSessions.mockImplementation(async () => { events.push("revokeSessions"); });
 });
@@ -51,15 +57,32 @@ it("does not assign pending or disabled Staff", async () => {
 });
 
 it("does not assign a terminal Event", async () => {
-  repo.lockEvent.mockResolvedValue({ id: 8, status: "cancelled", endTime: new Date("2099-01-01T00:00:00.000Z") });
+  repo.lockEvent.mockResolvedValue({ id: 8, status: "cancelled", endTime: new Date("2099-01-01T00:00:00.000Z"), checkinStartAt: new Date("2098-12-31T18:00:00.000Z"), checkinEndAt: new Date("2099-01-01T00:00:00.000Z") });
   await expect(assignStaff(3, 8, 7)).rejects.toMatchObject({ code: "EVENT_CLOSED" });
   expect(repo.lockStaff).not.toHaveBeenCalled();
 });
 
-it("does not assign an Event whose end time has passed", async () => {
-  repo.lockEvent.mockResolvedValue({ id: 8, status: "ongoing", endTime: new Date("2020-01-01T00:00:00.000Z") });
-  await expect(assignStaff(3, 8, 7)).rejects.toMatchObject({ code: "EVENT_ENDED" });
+it("does not assign an Event whose check-in window has closed", async () => {
+  repo.lockEvent.mockResolvedValue({ id: 8, status: "ongoing", endTime: new Date("2099-01-01T00:00:00.000Z"), checkinStartAt: new Date("2020-01-01T00:00:00.000Z"), checkinEndAt: new Date("2020-01-01T01:00:00.000Z") });
+  await expect(assignStaff(3, 8, 7)).rejects.toMatchObject({ code: "EVENT_CHECKIN_CLOSED" });
   expect(repo.lockStaff).not.toHaveBeenCalled();
+});
+
+it("rejects an assignment when another active check-in window overlaps", async () => {
+  conn.execute.mockImplementation(async (sql: string) => {
+    events.push(sql.trim().split(" ")[0] ?? "SQL");
+    if (sql.includes("JOIN events target")) return [[{ id: 99 }]];
+    if (sql.includes("INSERT INTO event_staff")) return [{ insertId: 42 }];
+    return [[]];
+  });
+
+  await expect(assignStaff(3, 8, 7)).rejects.toMatchObject({
+    code: "STAFF_SCHEDULE_CONFLICT",
+  });
+  expect(conn.execute).not.toHaveBeenCalledWith(
+    expect.stringContaining("INSERT INTO event_staff"),
+    expect.anything(),
+  );
 });
 
 it("creates an assignment only for approved Staff and an open Event", async () => {
@@ -67,4 +90,10 @@ it("creates an assignment only for approved Staff and an open Event", async () =
   expect(result).toEqual({ assignmentId: 42, staffId: 3, eventId: 8 });
   expect(repo.lockEvent).toHaveBeenCalledWith(conn, 8);
   expect(repo.lockStaff).toHaveBeenCalledWith(conn, 3);
+  const overlapSql = conn.execute.mock.calls
+    .map(([sql]) => String(sql))
+    .find((sql) => sql.includes("JOIN events target"));
+  expect(overlapSql).toContain("target.checkin_start_at <= e.checkin_end_at");
+  expect(overlapSql).toContain("target.checkin_end_at >= e.checkin_start_at");
+  expect(overlapSql).not.toContain("target.start_time");
 });

@@ -24,6 +24,8 @@ export async function listAdminStaff() {
       eventStatus: assignment.eventStatus,
       startTime: assignment.startTime,
       endTime: assignment.endTime,
+      checkinStartAt: assignment.checkinStartAt,
+      checkinEndAt: assignment.checkinEndAt,
       assignedAt: assignment.assignedAt,
       assignedBy: assignment.assignedBy,
       revokedAt: assignment.revokedAt,
@@ -101,8 +103,8 @@ export async function assignStaff(staffId: number, eventId: number, adminId: num
       if (!["draft", "published", "ongoing"].includes(event.status)) {
         throw new AppError(409, "Event đã đóng", "EVENT_CLOSED");
       }
-      if (event.endTime <= new Date()) {
-        throw new AppError(409, "Event đã qua thời gian kết thúc", "EVENT_ENDED");
+      if (event.checkinEndAt <= new Date()) {
+        throw new AppError(409, "Khung giờ check-in của Event đã kết thúc", "EVENT_CHECKIN_CLOSED");
       }
       const staff = await lockStaff(conn, staffId);
       if (!staff) throw AppError.notFound("Không tìm thấy Staff", "STAFF_NOT_FOUND");
@@ -120,7 +122,8 @@ export async function assignStaff(staffId: number, eventId: number, adminId: num
          JOIN events target ON target.id = ?
          WHERE es.staff_id = ? AND es.is_active = TRUE
            AND e.status IN ('draft', 'published', 'ongoing')
-           AND target.start_time < e.end_time AND target.end_time > e.start_time
+           AND target.checkin_start_at <= e.checkin_end_at
+           AND target.checkin_end_at >= e.checkin_start_at
          LIMIT 1`, [eventId, staffId],
       );
       if (rows.length) {

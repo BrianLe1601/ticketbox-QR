@@ -11,7 +11,7 @@ import { deliverTicketEmailJob, prepareTicketEmail } from '../src/services/ticke
 import type { TicketEmailJob } from '../src/modules/tickets/ticket-email.repository.js';
 const token = 'b'.repeat(64);
 const job = { id: 1, order_id: 2, recipient: 'buyer@example.com', email_type: 'ticket_resent', status: 'processing', attempt_count: 1 } as TicketEmailJob;
-function ticket() { return { ticket_code: 'T1', ticket_type_name: 'VIP', qr_token_hash: crypto.createHash('sha256').update(token).digest('hex'), qr_token_encrypted: encryptQrToken(token, 'T1'), event_name: 'Event', event_status: 'published', venue: 'Hall', start_time: new Date(Date.now() + 60_000), end_time: new Date(Date.now() + 3_600_000) }; }
+function ticket() { return { ticket_code: 'T1', ticket_type_name: 'VIP', qr_token_hash: crypto.createHash('sha256').update(token).digest('hex'), qr_token_encrypted: encryptQrToken(token, 'T1'), event_name: 'Event', event_status: 'published', event_visibility: 'visible', venue: 'Hall', start_time: new Date(Date.now() + 60_000), end_time: new Date(Date.now() + 3_600_000) }; }
 beforeEach(() => {
     vi.clearAllMocks(); mock.order.mockResolvedValue({ status: 'confirmed', buyer_email: job.recipient, buyer_name: 'Buyer', order_code: 'O1' });
     mock.tickets.mockResolvedValue([ticket()]); mock.qr.mockResolvedValue('original-qr');
@@ -39,6 +39,8 @@ it('refuses ticket delivery after the Event has ended or reached a terminal life
     mock.tickets.mockResolvedValue([{ ...ticket(), end_time: new Date(Date.now() - 1) }]);
     await expect(prepareTicketEmail(2)).rejects.toMatchObject({ code: 'EVENT_NOT_AVAILABLE_FOR_TICKET_EMAIL' });
     mock.tickets.mockResolvedValue([{ ...ticket(), event_status: 'completed' }]);
+    await expect(prepareTicketEmail(2)).rejects.toMatchObject({ code: 'EVENT_NOT_AVAILABLE_FOR_TICKET_EMAIL' });
+    mock.tickets.mockResolvedValue([{ ...ticket(), event_visibility: 'hidden' }]);
     await expect(prepareTicketEmail(2)).rejects.toMatchObject({ code: 'EVENT_NOT_AVAILABLE_FOR_TICKET_EMAIL' });
     expect(mock.send).not.toHaveBeenCalled();
 });

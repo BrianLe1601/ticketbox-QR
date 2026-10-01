@@ -40,6 +40,7 @@ function sectionForPath(pathname: string) {
   if (pathname.startsWith("/admin/staff")) return "operations";
   if (pathname.startsWith("/admin/checkins")) return "gateway";
   if (pathname.startsWith("/admin/reports")) return "analytics";
+  if (pathname.startsWith("/admin/settings")) return "settings";
   return "command";
 }
 
@@ -50,9 +51,9 @@ export function AdminLayout() {
   const location = useLocation();
   const activeSection = sectionForPath(location.pathname);
 
-  const currentLabel = navigation.find((item) =>
+  const currentLabel = (location.pathname.startsWith("/admin/settings") ? "Cài đặt" : navigation.find((item) =>
     item.end ? location.pathname === item.to : location.pathname.startsWith(item.to),
-  )?.label ?? "Trung tâm quản trị";
+  )?.label) ?? "Trung tâm quản trị";
 
   function handleLogout() {
     logout();
@@ -86,7 +87,7 @@ export function AdminLayout() {
         </nav>
 
         <div className="admin-sidebar-footer">
-          <button className="admin-nav-link" type="button"><Settings size={18} /><span>Cài đặt</span></button>
+          <NavLink to="/admin/settings" onClick={() => setSidebarOpen(false)} className={({ isActive }) => `admin-nav-link ${isActive ? "is-active" : ""}`}><Settings size={18}/><span>Cài đặt</span><ChevronLeft className="admin-nav-arrow" size={14}/></NavLink>
           <button className="admin-nav-link danger" type="button" onClick={handleLogout}><LogOut size={18} /><span>Đăng xuất</span></button>
         </div>
       </aside>

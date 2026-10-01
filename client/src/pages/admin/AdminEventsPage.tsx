@@ -7,6 +7,7 @@ import { listAdminCategories, type AdminCategory } from "@/services/admin-catego
 import { EventCoverUploader } from "@/components/admin/EventCoverUploader";
 import { EVENT_LIFECYCLE_FALLBACK_REFRESH_MS } from "@/constants/eventconstants";
 import { subscribeToEventLifecycleUpdates } from "@/services/event-realtime.service";
+import { digitsOnly } from "@/lib/utils";
 
 type PublishMode = "manual" | "scheduled";
 type ViewMode = "grid" | "list";
@@ -172,7 +173,7 @@ export function AdminEventsPage() {
     if (form.checkinStartAt && form.endTime && new Date(form.checkinStartAt) > new Date(form.endTime)) next.push("Thời gian bắt đầu check-in không được sau khi sự kiện kết thúc.");
     if (form.checkinEndAt && form.endTime && new Date(form.checkinEndAt) > new Date(form.endTime)) next.push("Không được kết thúc check-in sau khi sự kiện kết thúc.");
     if (form.checkinStartAt && form.startTime && form.checkinStartAt.slice(0, 10) !== form.startTime.slice(0, 10)) next.push("Thời gian bắt đầu check-in phải cùng ngày bắt đầu sự kiện.");
-    if (form.checkinStartAt && form.startTime && new Date(form.checkinStartAt).getTime() > new Date(form.startTime).getTime() - 30 * 60_000) next.push("Phải mở check-in sớm ít nhất 30 phút trước khi sự kiện bắt đầu.");
+    if (form.checkinStartAt && form.startTime && new Date(form.checkinStartAt).getTime() > new Date(form.startTime).getTime() - 2 * 60 * 60_000) next.push("Phải mở check-in sớm ít nhất 2 giờ trước khi sự kiện bắt đầu.");
     if (form.publishMode === "scheduled" && !form.scheduledPublishAt) next.push("Vui lòng chọn thời gian tự động công bố.");
     if (form.scheduledPublishAt && form.startTime && new Date(form.scheduledPublishAt) >= new Date(form.startTime)) next.push("Thời gian tự động công bố phải trước khi sự kiện bắt đầu.");
     if (editingEvent && editingEvent.activeStaffCount > 0) {
@@ -527,7 +528,7 @@ export function AdminEventsPage() {
             <fieldset className="events-form-section"><legend>Thông tin sự kiện</legend><div className="events-form-grid">
               <label className="wide">Tên sự kiện <span>*</span><input required maxLength={200} value={form.name} onChange={(e) => setForm({...form, name:e.target.value})} /></label>
               <label>Danh mục <span>*</span><select value={form.category} onChange={(e) => setForm({...form, category:e.target.value})}>{categories.length > 0 ? (<>{!categories.some((c) => c.slug === form.category) && form.category && (<option value={form.category}>{form.category}</option>)}{categories.map((item) => (<option key={item.id} value={item.slug}>{item.name}</option>))}</>) : ([{value:"music",label:"Âm nhạc"},{value:"conference",label:"Hội nghị"},{value:"food",label:"Ẩm thực"},{value:"sports",label:"Thể thao"},{value:"art",label:"Nghệ thuật"}].map((item) => <option key={item.value} value={item.value}>{item.label}</option>))}</select></label>
-              <label>Sức chứa địa điểm <span>*</span><input required type="number" min={editingEvent?.status!=="draft"?(editingEvent?.venueCapacity??1):1} step="1" placeholder="Ví dụ: 1000" value={form.venueCapacity} onChange={(e) => setForm({...form, venueCapacity:e.target.value})} /><small>{editingEvent?.status!=="draft"?"Chỉ được tăng sau khi công bố.":"Số người tối đa tại địa điểm."}</small></label>
+              <label>Sức chứa địa điểm <span>*</span><input required type="text" inputMode="numeric" pattern="[0-9]*" maxLength={10} placeholder="Ví dụ: 1000" value={form.venueCapacity} onChange={(e) => setForm({...form, venueCapacity:digitsOnly(e.target.value, 10)})} /><small>{editingEvent?.status!=="draft"?"Chỉ được tăng sau khi công bố.":"Số người tối đa tại địa điểm."}</small></label>
               <label className="wide">Mô tả<textarea rows={3} maxLength={5000} placeholder="Mô tả sự kiện, điểm nổi bật và trải nghiệm người tham dự..." value={form.description} onChange={(e) => setForm({...form, description:e.target.value})} /></label>
               <div className="wide"><EventCoverUploader eventName={form.name} value={{url:form.coverImageUrl,publicId:form.coverImagePublicId,alt:form.coverImageAlt}} onChange={(image)=>setForm({...form,coverImageUrl:image.url,coverImagePublicId:image.publicId,coverImageAlt:image.alt})}/></div>
             </div></fieldset>
@@ -560,7 +561,7 @@ export function AdminEventsPage() {
             </div></fieldset>
 
             <fieldset className="events-form-section"><legend>Khung giờ check-in</legend><p>Nhân viên chỉ được quét vé trong khung giờ vận hành này.</p><div className="events-form-grid">
-              <label>Bắt đầu check-in <span>*</span><input required type="datetime-local" min={form.startTime ? `${form.startTime.slice(0, 10)}T00:00` : undefined} max={form.startTime ? toDateTimeLocal(new Date(new Date(form.startTime).getTime() - 30 * 60_000)) : form.endTime || undefined} value={form.checkinStartAt} onChange={(e) => setForm({...form, checkinStartAt:e.target.value})} /><small>Phải cùng ngày bắt đầu sự kiện và sớm ít nhất 30 phút.</small></label>
+              <label>Bắt đầu check-in <span>*</span><input required type="datetime-local" min={form.startTime ? `${form.startTime.slice(0, 10)}T00:00` : undefined} max={form.startTime ? toDateTimeLocal(new Date(new Date(form.startTime).getTime() - 2 * 60 * 60_000)) : form.endTime || undefined} value={form.checkinStartAt} onChange={(e) => setForm({...form, checkinStartAt:e.target.value})} /><small>Phải cùng ngày bắt đầu sự kiện và sớm ít nhất 2 giờ.</small></label>
               <label>Kết thúc check-in <span>*</span><input required type="datetime-local" min={form.checkinStartAt || undefined} max={form.endTime || undefined} value={form.checkinEndAt} onChange={(e) => setForm({...form, checkinEndAt:e.target.value})} /><small>Không được sau khi sự kiện kết thúc.</small></label>
             </div></fieldset>
           </div>

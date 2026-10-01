@@ -13,7 +13,7 @@ export async function prepareTicketEmail(orderId: number) {
     if (!order || order.status !== 'confirmed') throw AppError.badRequest('Order is not confirmed', 'ORDER_NOT_CONFIRMED');
     const rows = await findTicketsForResend(orderId);
     if (!rows.length) throw AppError.badRequest('No unused tickets remain', 'NO_ACTIVE_TICKETS');
-    if (rows.some(row => !isEventAvailableForTicketDelivery(row.event_status, row.end_time))) {
+    if (rows.some(row => row.event_visibility !== 'visible' || !isEventAvailableForTicketDelivery(row.event_status, row.end_time))) {
         throw new AppError(409, 'Event has ended or is no longer available for ticket delivery', 'EVENT_NOT_AVAILABLE_FOR_TICKET_EMAIL');
     }
     const tickets = await Promise.all(rows.map(async row => {

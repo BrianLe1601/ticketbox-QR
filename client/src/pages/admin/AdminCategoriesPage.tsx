@@ -17,6 +17,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { ApiRequestError } from "@/services/api";
+import { digitsOnly } from "@/lib/utils";
 import {
   createAdminCategory,
   deleteAdminCategory,
@@ -167,13 +168,19 @@ export function AdminCategoriesPage() {
     setFormError("");
 
     const isSlugLocked = Boolean(editingItem && editingItem.eventCount > 0);
+    const sortOrder = form.sortOrder === "" ? 0 : Number(form.sortOrder);
+    if (!Number.isInteger(sortOrder) || sortOrder < 0 || sortOrder > 10000) {
+      setFormError("Thứ tự hiển thị phải là số nguyên từ 0 đến 10000.");
+      setBusy(false);
+      return;
+    }
 
     const payload = {
       name: form.name.trim(),
       slug: isSlugLocked && editingItem ? editingItem.slug : form.slug.trim().toLowerCase(),
       description: form.description.trim() || null,
       icon: form.icon.trim() || null,
-      sortOrder: Number(form.sortOrder) || 0,
+      sortOrder,
       isActive: form.isActive,
     };
 
@@ -613,11 +620,12 @@ export function AdminCategoriesPage() {
                 <label>
                   Thứ tự hiển thị
                   <input
-                    type="number"
-                    min="0"
-                    max="10000"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={5}
                     value={form.sortOrder}
-                    onChange={(e) => setForm({ ...form, sortOrder: e.target.value })}
+                    onChange={(e) => setForm({ ...form, sortOrder: digitsOnly(e.target.value, 5) })}
                   />
                 </label>
 

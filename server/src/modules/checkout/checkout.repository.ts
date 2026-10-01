@@ -28,6 +28,7 @@ export interface EventForOrderRow extends RowDataPacket {
 export interface LockedEventRow extends RowDataPacket {
     id: number;
     status: 'draft' | 'published' | 'ongoing' | 'completed' | 'cancelled';
+    visibility: 'visible' | 'hidden';
     end_time: Date;
 }
 
@@ -208,7 +209,7 @@ export async function findOrderEventId(conn: PoolConnection, orderId: number) {
 
 export async function lockEventRow(conn: PoolConnection, eventId: number) {
     const [rows] = await conn.query<LockedEventRow[]>(
-        `SELECT id, status, end_time FROM events WHERE id = ? LIMIT 1 FOR UPDATE`,
+        `SELECT id, status, visibility, end_time FROM events WHERE id = ? LIMIT 1 FOR UPDATE`,
         [eventId]
     );
     return rows[0] ?? null;

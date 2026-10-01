@@ -44,7 +44,7 @@ function requestMatchesExistingOrder(
     body: CreateOrderBody,
 ): boolean {
     const requestedItems = [...body.items].sort((a, b) => a.ticketTypeId - b.ticketTypeId);
-    const normalizedPhone = body.buyer.phone?.trim() || null;
+    const normalizedPhone = body.buyer.phone.trim();
     return order.event_id === body.eventId
         && order.buyer_name === body.buyer.name
         && order.buyer_email === body.buyer.email
@@ -181,7 +181,7 @@ export async function createOrder(body: CreateOrderBody, idempotencyKey: string,
                     eventId: body.eventId,
                     buyerName: body.buyer.name,
                     buyerEmail: body.buyer.email,
-                    buyerPhone: body.buyer.phone?.trim() ? body.buyer.phone.trim() : null,
+                    buyerPhone: body.buyer.phone.trim(),
                     totalQuantity,
                     subtotalAmount: subtotal,
                     lookupTokenHash,

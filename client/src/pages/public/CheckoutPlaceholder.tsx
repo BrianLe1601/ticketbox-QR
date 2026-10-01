@@ -6,7 +6,7 @@ import type { TicketSelection } from "@/types/order.types";
 import { fetchEventById } from "@/services/event.service";
 import { confirmEmailVerification, createOrder, requestEmailVerification } from "@/services/order.service";
 import { ApiRequestError } from "@/services/api";
-import { formatPrice } from "@/lib/utils";
+import { digitsOnly, formatPrice } from "@/lib/utils";
 
 import { useRecaptcha } from "@/hooks/useRecaptcha";
 import { useEmailCooldown } from "@/hooks/useEmailCooldown";
@@ -67,6 +67,18 @@ export function CheckoutPlaceholder() {
 
     const totalAmount = lines.reduce((sum, l) => sum + l.lineTotal, 0);
     const totalQuantity = lines.reduce((sum, l) => sum + l.quantity, 0);
+    const selectionError = useMemo(() => {
+        if (!event) return null;
+        for (const selection of selections) {
+            const ticket = event.tickets.find((item) => item.id === selection.ticketTypeId);
+            if (!ticket) return "Hạng vé đã chọn không còn tồn tại. Vui lòng chọn lại vé.";
+            if (!Number.isInteger(selection.quantity) || selection.quantity <= 0) return "Số lượng vé không hợp lệ.";
+            if (ticket.saleStatus !== "on-sale") return `Hạng vé “${ticket.name}” hiện không mở bán.`;
+            if (selection.quantity > ticket.maxPerOrder) return `Hạng vé “${ticket.name}” chỉ cho phép tối đa ${ticket.maxPerOrder} vé mỗi đơn.`;
+            if (selection.quantity > ticket.available) return `Hạng vé “${ticket.name}” không còn đủ số lượng đã chọn.`;
+        }
+        return null;
+    }, [event, selections]);
 
     if (!id || notFoundId === id) return <Navigate to="/events" replace />;
 
@@ -83,7 +95,12 @@ export function CheckoutPlaceholder() {
     async function handleSubmit(e: FormEvent) {
         e.preventDefault();
         if (!event || totalQuantity === 0 || submitting || !captcha.ready) return;
+        if (selectionError) { setError(selectionError); return; }
         if (!verificationToken) { setError("Vui lòng xác minh email trước khi tiếp tục"); return; }
+        if (!/^0[35789][0-9]{8}$/.test(phone)) {
+            setError("Số điện thoại phải gồm 10 chữ số và đúng định dạng Việt Nam");
+            return;
+        }
         setSubmitting(true);
         setError(null);
         try {
@@ -93,7 +110,7 @@ export function CheckoutPlaceholder() {
                 emailVerificationToken: verificationToken,
                 checkoutSession: checkoutSession.current,
                 items: selections,
-                buyer: { name: name.trim(), email: email.trim(), phone: phone.trim() || undefined },
+                buyer: { name: name.trim(), email: email.trim(), phone },
             });
             sessionStorage.setItem(`ticketbox-order-${order.id}`, order.lookupToken);
             navigate(`/orders/${order.id}`, { state: { token: order.lookupToken } });
@@ -106,7 +123,7 @@ export function CheckoutPlaceholder() {
     }
 
     async function handleSendCode() {
-        if (sendingCode || remaining || !captcha.ready) return;
+        if (sendingCode || remaining || !captcha.ready || selectionError) return;
         setSendingCode(true); setError(null); setVerificationToken("");
         try {
             await requestEmailVerification(email.trim(), await captcha.getToken("checkout_email"), checkoutSession.current);
@@ -150,7 +167,7 @@ export function CheckoutPlaceholder() {
                         <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Email nhận vé</label>
                         <div className="flex gap-2">
                             <input aria-label="Email nhận vé" required type="email" value={email} disabled={Boolean(verificationToken) || sendingCode || verifyingCode} onChange={(e) => { setEmail(e.target.value); setCodeSent(false); setVerificationToken(""); }} placeholder="ban@example.com" className="min-w-0 flex-1 px-3.5 py-2.5 rounded-xl bg-card border border-white/[0.08] text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 disabled:opacity-70" />
-                            <button type="button" onClick={handleSendCode} disabled={!captcha.ready || sendingCode || remaining > 0 || Boolean(verificationToken) || !email} className="px-3 rounded-xl border border-primary/30 text-primary text-xs font-bold disabled:opacity-50">{sendingCode ? "Đang gửi..." : remaining > 0 ? `Gửi lại sau ${remaining}s` : "Gửi mã"}</button>
+                            <button type="button" onClick={handleSendCode} disabled={!captcha.ready || sendingCode || remaining > 0 || Boolean(verificationToken) || !email || Boolean(selectionError)} className="px-3 rounded-xl border border-primary/30 text-primary text-xs font-bold disabled:opacity-50">{sendingCode ? "Đang gửi..." : remaining > 0 ? `Gửi lại sau ${remaining}s` : "Gửi mã"}</button>
                         </div>
                         {!captcha.ready && !captcha.error && <p role="status" className="mt-2 text-xs">Đang tải xác minh reCAPTCHA...</p>}
                         {captcha.error && <div className="mt-2 text-xs"><p role="alert">{captcha.error}</p><button type="button" onClick={captcha.retry} className="underline hover:text-primary focus-visible:outline-2">Thử tải lại xác minh</button></div>}
@@ -161,13 +178,14 @@ export function CheckoutPlaceholder() {
                         {verificationToken && <p className="mt-2 text-xs text-emerald-400 flex items-center gap-1"><MailCheck size={13} /> email đã được xác minh</p>}
                     </div>
                     <div>
-                        <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Số điện thoại <span className="text-muted-foreground/60 font-normal">(không bắt buộc)</span></label>
-                        <input aria-label="Số điện thoại" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="09xxxxxxxx" className="w-full px-3.5 py-2.5 rounded-xl bg-card border border-white/[0.08] text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all" />
+                        <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Số điện thoại <span className="text-red-400">*</span></label>
+                        <input aria-label="Số điện thoại" required type="tel" inputMode="numeric" pattern="0[35789][0-9]{8}" maxLength={10} value={phone} onChange={(e) => setPhone(digitsOnly(e.target.value, 10))} placeholder="0912345678" className="w-full px-3.5 py-2.5 rounded-xl bg-card border border-white/[0.08] text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all" />
+                        <p className="mt-1.5 text-[11px] text-muted-foreground">Nhập 10 chữ số, bắt đầu bằng 03, 05, 07, 08 hoặc 09.</p>
                     </div>
 
-                    {error && <p role="alert" className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>}
+                    {(selectionError || error) && <p role="alert" className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{selectionError ?? error}</p>}
 
-                    <button type="submit" disabled={!captcha.ready || submitting || !verificationToken} className="w-full py-3.5 rounded-xl bg-primary text-white font-bold text-sm flex items-center justify-center gap-2 hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed shadow-lg shadow-primary/30 transition-all">
+                    <button type="submit" disabled={!captcha.ready || submitting || !verificationToken || Boolean(selectionError)} className="w-full py-3.5 rounded-xl bg-primary text-white font-bold text-sm flex items-center justify-center gap-2 hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed shadow-lg shadow-primary/30 transition-all">
                         {submitting && <Loader2 size={15} className="animate-spin" />}
                         {submitting ? "Đang giữ vé..." : "Tiếp tục"}
                     </button>

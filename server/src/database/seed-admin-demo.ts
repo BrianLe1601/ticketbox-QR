@@ -63,8 +63,12 @@ interface TicketFixture {
   salesEnd?: Date;
 }
 
+// Keep all relative fixtures on one exact clock reference. Calling Date.now()
+// separately can make a nominal two-hour lead a few milliseconds too short.
+const seedReferenceTime = Date.now();
+
 function fromNow(days: number, hours = 0): Date {
-  return new Date(Date.now() + days * 86_400_000 + hours * 3_600_000);
+  return new Date(seedReferenceTime + days * 86_400_000 + hours * 3_600_000);
 }
 
 const categories: CategoryFixture[] = [
@@ -174,7 +178,7 @@ const events: EventFixture[] = [
     end: fromNow(30, 4),
     salesStart: fromNow(1),
     salesEnd: fromNow(30, 3),
-    checkinStart: fromNow(29, 23),
+    checkinStart: fromNow(29, 22),
     checkinEnd: fromNow(30, 4),
     cover: false,
   },
@@ -188,7 +192,7 @@ const events: EventFixture[] = [
     end: fromNow(20, 6),
     salesStart: fromNow(-1),
     salesEnd: fromNow(20, 5),
-    checkinStart: fromNow(19, 23),
+    checkinStart: fromNow(19, 22),
     checkinEnd: fromNow(20, 6),
     cover: true,
     scheduledPublishAt: fromNow(2),
@@ -203,7 +207,7 @@ const events: EventFixture[] = [
     end: fromNow(14, 5),
     salesStart: fromNow(-2),
     salesEnd: fromNow(14, 4),
-    checkinStart: fromNow(13, 23),
+    checkinStart: fromNow(13, 22),
     checkinEnd: fromNow(14, 5),
     cover: true,
   },
@@ -217,7 +221,7 @@ const events: EventFixture[] = [
     end: fromNow(45, 4),
     salesStart: fromNow(7),
     salesEnd: fromNow(45, 3),
-    checkinStart: fromNow(44, 23),
+    checkinStart: fromNow(44, 22),
     checkinEnd: fromNow(45, 4),
     cover: true,
   },
@@ -231,7 +235,7 @@ const events: EventFixture[] = [
     end: fromNow(25, 3),
     salesStart: fromNow(-1),
     salesEnd: fromNow(25, 2),
-    checkinStart: fromNow(24, 23),
+    checkinStart: fromNow(24, 22),
     checkinEnd: fromNow(25, 3),
     cover: true,
   },
@@ -245,7 +249,7 @@ const events: EventFixture[] = [
     end: fromNow(0, 4),
     salesStart: fromNow(-10),
     salesEnd: fromNow(0, 3),
-    checkinStart: fromNow(0, -2),
+    checkinStart: fromNow(0, -3),
     checkinEnd: fromNow(0, 4),
     cover: true,
   },
@@ -259,7 +263,7 @@ const events: EventFixture[] = [
     end: fromNow(-5, 3),
     salesStart: fromNow(-20),
     salesEnd: fromNow(-5, 2),
-    checkinStart: fromNow(-5, -1),
+    checkinStart: fromNow(-5, -2),
     checkinEnd: fromNow(-5, 3),
     cover: true,
   },
@@ -273,7 +277,7 @@ const events: EventFixture[] = [
     end: fromNow(35, 4),
     salesStart: fromNow(-2),
     salesEnd: fromNow(35, 3),
-    checkinStart: fromNow(34, 23),
+    checkinStart: fromNow(34, 22),
     checkinEnd: fromNow(35, 4),
     cover: true,
   },

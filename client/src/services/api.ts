@@ -1,11 +1,22 @@
-import { refreshSessionRequest } from "@/services/auth.service";
+import {
+    AUTH_SESSION_EXPIRED_EVENT,
+    clearStoredToken,
+    getStoredToken,
+    refreshSessionRequest,
+} from "@/services/auth.service";
 
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000/api";
 
-interface ApiSuccess<T> {
+export interface PaginationMeta {
+    total: number;
+    page: number;
+    limit: number;
+}
+
+interface ApiSuccess<T, M = PaginationMeta> {
     success: true;
     data: T;
-    meta?: { total: number; page: number; limit: number };
+    meta?: M;
 }
 
 interface ApiError {
@@ -28,7 +39,7 @@ export class ApiRequestError extends Error {
     }
 }
 
-export async function apiGet<T>(path: string, params?: Record<string, string | number | undefined>): Promise<{ data: T; meta?: ApiSuccess<T>["meta"] }> {
+export async function apiGet<T>(path: string, params?: Record<string, string | number | undefined>): Promise<{ data: T; meta?: PaginationMeta }> {
     const url = new URL(`${API_BASE_URL}${path}`);
     if (params) {
         Object.entries(params).forEach(([key, value]) => {
@@ -68,18 +79,28 @@ export async function apiPost<T>(path: string, body: unknown, headers?: HeadersI
 async function authenticatedFetch(path: string, options: RequestInit, token?: string | null): Promise<Response> {
     const headers = new Headers(options.headers);
     if (options.body) headers.set("Content-Type", "application/json");
-    if (token) headers.set("Authorization", `Bearer ${token}`);
+    // AuthContext giữ identity để render; access token mới nhất nằm trong memory
+    // sau mỗi lần refresh. Ưu tiên token này để không gửi lại JWT đã hết hạn.
+    const currentToken = getStoredToken() ?? token;
+    if (currentToken) headers.set("Authorization", `Bearer ${currentToken}`);
     let res = await fetch(`${API_BASE_URL}${path}`, { ...options, headers, credentials:"include" });
     if(res.status===401 && !path.startsWith("/auth/")){
-      try{const renewed=await refreshSessionRequest();headers.set("Authorization",`Bearer ${renewed.accessToken}`);res=await fetch(`${API_BASE_URL}${path}`,{...options,headers,credentials:"include"});}catch{/* handled by original response below */}
+      try{
+        const renewed=await refreshSessionRequest();
+        headers.set("Authorization",`Bearer ${renewed.accessToken}`);
+        res=await fetch(`${API_BASE_URL}${path}`,{...options,headers,credentials:"include"});
+      }catch{
+        clearStoredToken();
+        window.dispatchEvent(new Event(AUTH_SESSION_EXPIRED_EVENT));
+      }
     }
     return res;
 }
 
-export async function apiRequest<T>(path: string, options: RequestInit = {}, token?: string | null): Promise<{ data: T; meta?: ApiSuccess<T>["meta"] }> {
+export async function apiRequest<T, M = PaginationMeta>(path: string, options: RequestInit = {}, token?: string | null): Promise<{ data: T; meta?: M }> {
     const res = await authenticatedFetch(path, options, token);
     if (res.status === 204) return { data: undefined as T };
-    const json = (await res.json()) as ApiSuccess<T> | ApiError;
+    const json = (await res.json()) as ApiSuccess<T, M> | ApiError;
     if (!res.ok || !json.success) {
         throw new ApiRequestError("message" in json ? json.message : `Request failed (${res.status})`, res.status, "code" in json ? json.code : undefined, "retryAfterSeconds" in json ? json.retryAfterSeconds : undefined);
     }

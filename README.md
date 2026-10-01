@@ -525,7 +525,8 @@ Event -> Orders theo id tăng dần -> Ticket Types theo id tăng dần -> Ticke
 
 - Category có Event không được xóa; hãy inactive Category.
 - Event public phải có ít nhất một active Ticket Type hợp lệ.
-- Thời gian bắt đầu check-in phải cùng ngày bắt đầu Event theo giờ Việt Nam và sớm ít nhất 30 phút; thời gian kết thúc check-in phải sau thời gian bắt đầu check-in và không vượt quá lúc Event kết thúc.
+- Thời gian bắt đầu check-in phải cùng ngày bắt đầu Event theo giờ Việt Nam và sớm ít nhất 2 giờ; thời gian kết thúc check-in phải sau thời gian bắt đầu check-in và không vượt quá lúc Event kết thúc/đóng cổng.
+- Lịch làm việc của Staff lấy đúng khoảng đóng `[Bắt đầu check-in, Kết thúc check-in]`, không lấy giờ bắt đầu/kết thúc Event. Admin không thể tạo phân công nếu khoảng này giao nhau hoặc chạm biên với một ca check-in đang hoạt động khác của cùng Staff.
 - Tổng capacity các tier không vượt venue capacity.
 - Giá vé không đổi sau khi đã reserved/sold; mở tier mới nếu cần giá mới.
 - Order Item là snapshot tên tier, đơn giá và số lượng tại lúc mua, không phải dữ liệu dư thừa.

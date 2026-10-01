@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   CalendarClock,
+  ChevronDown,
   ChevronRight,
   Edit3,
   Eye,
@@ -20,6 +21,7 @@ import {
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { digitsOnly } from "@/lib/utils";
 
 import { listAdminEvents, type AdminEvent } from "@/services/admin-events.service";
 import {
@@ -309,6 +311,7 @@ export function AdminTicketTypesPage() {
     if (!Number.isFinite(price) || price < 0) next.push("Giá vé không được là số âm.");
     if (!Number.isInteger(capacity) || capacity < 1) next.push("Sức chứa phải là số nguyên dương.");
     if (!Number.isInteger(max) || max < 1) next.push("Số vé tối đa mỗi đơn phải ít nhất là 1.");
+    if (max > 100) next.push("Số vé tối đa mỗi đơn không được vượt quá 100.");
     if (
       form.customSales &&
       (!form.salesStart || !form.salesEnd)
@@ -956,11 +959,14 @@ export function AdminTicketTypesPage() {
                   Giá vé (VNĐ) <span className="text-rose-400">*</span>
                   <input
                     required
+                    type="text"
                     disabled={priceLocked}
                     inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={10}
                     placeholder="Ví dụ: 250000"
                     value={form.price}
-                    onChange={(e) => setForm({ ...form, price: e.target.value })}
+                    onChange={(e) => setForm({ ...form, price: digitsOnly(e.target.value, 10) })}
                   />
                 </label>
 
@@ -979,48 +985,50 @@ export function AdminTicketTypesPage() {
                     Sức chứa (Tổng số vé phát hành) <span className="text-rose-400">*</span>
                     <input
                       required
+                      type="text"
                       inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={10}
                       placeholder="Ví dụ: 500"
                       value={form.capacity}
-                      onChange={(e) => setForm({ ...form, capacity: e.target.value })}
+                      onChange={(e) => setForm({ ...form, capacity: digitsOnly(e.target.value, 10) })}
                     />
                     <small className="text-slate-400 text-[11px] mt-1 block">
                       Còn {remaining.toLocaleString("vi-VN")} chỗ trống địa điểm chưa phân bổ.
                     </small>
                   </label>
 
-                  {/* Percentage shortcuts */}
-                  <div className="ticket-capacity-shortcuts">
-                    <button
-                      type="button"
-                      className="ticket-capacity-btn"
-                      onClick={() => applyCapacityPercent(25)}
-                    >
-                      25% còn lại
-                    </button>
-                    <button
-                      type="button"
-                      className="ticket-capacity-btn"
-                      onClick={() => applyCapacityPercent(50)}
-                    >
-                      50% còn lại
-                    </button>
-                    <button
-                      type="button"
-                      className="ticket-capacity-btn"
-                      onClick={() => applyCapacityPercent(100)}
-                    >
-                      Tối đa (100%)
-                    </button>
-                  </div>
+                  <details className="ticket-capacity-menu">
+                    <summary className="ticket-capacity-btn">
+                      Chọn nhanh theo sức chứa còn lại <ChevronDown size={14} />
+                    </summary>
+                    <div className="ticket-capacity-options" role="menu" aria-label="Chọn tỷ lệ sức chứa còn lại">
+                      {[25, 50, 75, 100].map((percent) => (
+                        <button
+                          key={percent}
+                          type="button"
+                          role="menuitem"
+                          onClick={(event) => {
+                            applyCapacityPercent(percent);
+                            event.currentTarget.closest("details")?.removeAttribute("open");
+                          }}
+                        >
+                          {percent === 100 ? "Tối đa (100%)" : `${percent}% còn lại`}
+                        </button>
+                      ))}
+                    </div>
+                  </details>
                 </div>
 
                 <label className="wide">
                   Số vé tối đa mỗi đơn hàng
                   <input
+                    type="text"
                     inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={3}
                     value={form.maxPerOrder}
-                    onChange={(e) => setForm({ ...form, maxPerOrder: e.target.value })}
+                    onChange={(e) => setForm({ ...form, maxPerOrder: digitsOnly(e.target.value, 3) })}
                   />
                 </label>
 

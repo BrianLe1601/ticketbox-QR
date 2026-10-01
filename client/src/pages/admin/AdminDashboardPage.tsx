@@ -1,9 +1,7 @@
 import {
-  Activity,
   AlertCircle,
   AlertTriangle,
   ArrowRight,
-  Bot,
   CalendarDays,
   CheckCircle2,
   CreditCard,
@@ -15,10 +13,20 @@ import {
   TrendingUp,
   UserCheck,
   Users,
-  Zap,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -41,6 +49,36 @@ function formatDateTimeShort(isoStr: string | null): string {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function formatCompactNumber(value: number): string {
+  return new Intl.NumberFormat("vi-VN", {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
+function formatTrendDate(value: string): string {
+  const [, month, day] = value.split("-");
+  return `${day}/${month}`;
+}
+
+interface DashboardTooltipProps {
+  active?: boolean;
+  label?: string;
+  payload?: Array<{ value?: number }>;
+  kind: "revenue" | "tickets";
+}
+
+function DashboardChartTooltip({ active, label, payload, kind }: DashboardTooltipProps) {
+  if (!active || !payload?.length || !label) return null;
+  const value = Number(payload[0]?.value ?? 0);
+  return (
+    <div className="admin-chart-tooltip">
+      <span>Ngày {formatTrendDate(label)}</span>
+      <strong>{kind === "revenue" ? formatVND(value) : `${value.toLocaleString("vi-VN")} vé`}</strong>
+    </div>
+  );
 }
 
 export function AdminDashboardPage() {
@@ -100,6 +138,9 @@ export function AdminDashboardPage() {
       summary.alerts.scheduledPublishFailedEvents.length > 0 ||
       summary.staff.pendingApproval > 0 ||
       summary.refunds.pendingCount > 0);
+  const salesTrend = summary?.salesTrend ?? [];
+  const periodRevenue = salesTrend.reduce((sum, point) => sum + point.revenue, 0);
+  const periodTickets = salesTrend.reduce((sum, point) => sum + point.ticketsSold, 0);
 
   return (
     <div className={`admin-dashboard ${hasAlerts ? "has-alerts" : ""}`}>
@@ -581,100 +622,61 @@ export function AdminDashboardPage() {
         </section>
       )}
 
-      {/* 5. Control Center & Quick Actions */}
+      {/* 5. Revenue & ticket-sales charts */}
       <section className="admin-panel-grid">
-        {/* System Health Radar Panel */}
-        <article className="admin-command-panel">
+        <article className="admin-command-panel admin-chart-panel">
           <div className="admin-panel-heading">
             <div>
-              <span>VẬN HÀNH HỆ THỐNG</span>
-              <h3>Trạng thái dịch vụ nền tảng</h3>
+              <span>DOANH THU 7 NGÀY</span>
+              <h3>Thanh toán mô phỏng đã xác nhận</h3>
             </div>
-            <Activity size={20} />
+            <DollarSign size={20} />
           </div>
-
-          <div className="admin-robot-console">
-            <div className="admin-radar">
-              <span className="admin-radar-sweep" />
-              <div className="admin-robot-core">
-                <Bot size={48} />
-              </div>
-            </div>
-
-            <div className="admin-system-list">
-              <div>
-                <span>
-                  <i className="online" /> Cổng API & Routing
-                </span>
-                <strong>HOẠT ĐỘNG</strong>
-              </div>
-              <div>
-                <span>
-                  <i className="online" /> Cơ sở dữ liệu MySQL (Connection Pool)
-                </span>
-                <strong>KẾT NỐI</strong>
-              </div>
-              <div>
-                <span>
-                  <i className="online" /> Khóa bảo mật QR Token (SHA-256)
-                </span>
-                <strong>AN TOÀN</strong>
-              </div>
-              <div>
-                <span>
-                  <i className="online" /> Trình quét cổng & Check-in Gate
-                </span>
-                <strong>SẴN SÀNG</strong>
-              </div>
-              <div>
-                <span>
-                  <i className={summary?.staff.pendingApproval ? "" : "online"} />{" "}
-                  Phê duyệt quyền nhân sự
-                </span>
-                <strong>
-                  {summary?.staff.pendingApproval
-                    ? `${summary.staff.pendingApproval} CHỜ DUYỆT`
-                    : "HOÀN TẤT"}
-                </strong>
-              </div>
-            </div>
+          <div className="admin-chart-summary">
+            <strong>{loading ? "..." : formatVND(periodRevenue)}</strong>
+            <span>Tổng giá trị đơn confirmed trong 7 ngày gần nhất</span>
+          </div>
+          <div className="admin-chart-body" aria-label="Biểu đồ doanh thu 7 ngày gần nhất">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={salesTrend} margin={{ top: 10, right: 8, left: -14, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="dashboardRevenueFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#34d399" stopOpacity={0.42} />
+                    <stop offset="100%" stopColor="#34d399" stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid stroke="rgba(148, 163, 184, 0.09)" vertical={false} />
+                <XAxis dataKey="date" tickFormatter={formatTrendDate} tickLine={false} axisLine={false} />
+                <YAxis tickFormatter={(value: number) => formatCompactNumber(value)} tickLine={false} axisLine={false} width={50} />
+                <Tooltip content={<DashboardChartTooltip kind="revenue" />} cursor={{ stroke: "rgba(52, 211, 153, .3)" }} />
+                <Area type="monotone" dataKey="revenue" stroke="#34d399" strokeWidth={2} fill="url(#dashboardRevenueFill)" />
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
         </article>
 
-        {/* Quick Action Grid */}
-        <article className="admin-command-panel">
+        <article className="admin-command-panel admin-chart-panel">
           <div className="admin-panel-heading">
             <div>
-              <span>LỆNH NHANH</span>
-              <h3>Điều hướng thao tác</h3>
+              <span>VÉ BÁN RA 7 NGÀY</span>
+              <h3>Số vé trong đơn đã xác nhận</h3>
             </div>
-            <Zap size={20} />
+            <Ticket size={20} />
           </div>
-
-          <div className="admin-quick-grid">
-            <button type="button" onClick={() => navigate("/admin/events")}>
-              <CalendarDays size={20} />
-              <span>Quản lý sự kiện</span>
-              <small>Tạo mới, chỉnh sửa và công bố sự kiện</small>
-            </button>
-
-            <button type="button" onClick={() => navigate("/admin/ticket-types")}>
-              <Ticket size={20} />
-              <span>Cấu hình hạng vé</span>
-              <small>Phân bổ hạn mức, giá bán và mở bán</small>
-            </button>
-
-            <button type="button" onClick={() => navigate("/admin/staff")}>
-              <Users size={20} />
-              <span>Phân công nhân viên</span>
-              <small>Bố trí nhân sự soát vé tại các cổng</small>
-            </button>
-
-            <button type="button" onClick={() => navigate("/admin/reports")}>
-              <Activity size={20} />
-              <span>Báo cáo thanh toán mô phỏng & check-in</span>
-              <small>Theo dõi tỷ lệ soát vé và số tiền mô phỏng</small>
-            </button>
+          <div className="admin-chart-summary violet">
+            <strong>{loading ? "..." : `${periodTickets.toLocaleString("vi-VN")} vé`}</strong>
+            <span>Không tính đơn chờ thanh toán, hết hạn hoặc đã hủy</span>
+          </div>
+          <div className="admin-chart-body" aria-label="Biểu đồ vé bán ra 7 ngày gần nhất">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={salesTrend} margin={{ top: 10, right: 8, left: -22, bottom: 0 }}>
+                <CartesianGrid stroke="rgba(148, 163, 184, 0.09)" vertical={false} />
+                <XAxis dataKey="date" tickFormatter={formatTrendDate} tickLine={false} axisLine={false} />
+                <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={42} />
+                <Tooltip content={<DashboardChartTooltip kind="tickets" />} cursor={{ fill: "rgba(167, 139, 250, .08)" }} />
+                <Bar dataKey="ticketsSold" fill="#a78bfa" radius={[5, 5, 1, 1]} maxBarSize={34} />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </article>
       </section>
