@@ -8,7 +8,7 @@ export const listEventsQuerySchema = z.object({
     city: z.enum(['hcm', 'hn', 'dn']).optional(),
     page: z.coerce.number().int().min(1).default(1),
     limit: z.coerce.number().int().min(1).max(50).default(12),
-    sort: z.enum(['upcoming', 'newest', 'price-asc', 'price-desc']).default('upcoming'),
+    sort: z.enum(['upcoming', 'newest', 'price-asc', 'price-desc', 'popular']).default('upcoming'),
 });
 
 export const eventIdParamSchema = z.object({

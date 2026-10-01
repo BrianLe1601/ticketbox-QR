@@ -41,6 +41,7 @@ function mapEventSummary(row: Awaited<ReturnType<typeof findPublishedEvents>>['r
         status,
         minPrice: row.min_price !== null ? Number(row.min_price) : 0,
         hasAvailable: Boolean(row.has_available),
+        soldCount: Number(row.sold_count),
         saleStatus: row.sale_status,
     };
 }
