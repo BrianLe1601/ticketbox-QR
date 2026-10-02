@@ -10,6 +10,7 @@ const API_BASE_URL =
 
 let memoryAccessToken: string | null = null;
 let refreshPromise: Promise<LoginResult> | null = null;
+export const AUTH_SESSION_EXPIRED_EVENT = "ticketbox:auth-session-expired";
 
 async function readJson(response: Response): Promise<unknown> {
   try {

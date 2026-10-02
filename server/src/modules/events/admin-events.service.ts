@@ -6,6 +6,8 @@ import { deleteDraftEvent, findAdminEvent, findDueScheduledEvents, insertAdminEv
 import { deriveEventLifecycleStatus } from "./event-lifecycle.service.js";
 import { publishEventStatusChanges } from "./event-status.publisher.js";
 
+const CHECKIN_LEAD_TIME_MS = 2 * 60 * 60 * 1000;
+
 function slugify(name:string){
   const base=name.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,180)||"event";
   return `${base}-${crypto.randomBytes(4).toString("hex")}`;
@@ -35,7 +37,7 @@ export function validateEventTimes(input:CreateAdminEventInput|UpdateAdminEventI
   if(input.checkinStartAt&&input.endTime&&new Date(input.checkinStartAt)>new Date(input.endTime))throw AppError.badRequest("Thời gian bắt đầu check-in không được sau khi sự kiện kết thúc","CHECKIN_START_AFTER_EVENT_END");
   if(input.checkinEndAt&&input.endTime&&new Date(input.checkinEndAt)>new Date(input.endTime))throw AppError.badRequest("Check-in cannot end after the event ends","CHECKIN_AFTER_EVENT_END");
   if(input.checkinStartAt&&input.startTime&&eventCalendarDay(input.checkinStartAt)!==eventCalendarDay(input.startTime))throw AppError.badRequest("Thời gian bắt đầu check-in phải cùng ngày bắt đầu sự kiện","CHECKIN_START_WRONG_DAY");
-  if(input.checkinStartAt&&input.startTime&&new Date(input.checkinStartAt).getTime()>new Date(input.startTime).getTime()-30*60*1000)throw AppError.badRequest("Check-in must start at least 30 minutes before the Event","CHECKIN_TOO_LATE");
+  if(input.checkinStartAt&&input.startTime&&new Date(input.checkinStartAt).getTime()>new Date(input.startTime).getTime()-CHECKIN_LEAD_TIME_MS)throw AppError.badRequest("Check-in phải bắt đầu sớm ít nhất 2 giờ trước khi Event bắt đầu","CHECKIN_TOO_LATE");
   if(input.scheduledPublishAt&&input.startTime&&new Date(input.scheduledPublishAt)>=new Date(input.startTime))throw AppError.badRequest("Scheduled publishing must occur before event start","INVALID_PUBLISH_SCHEDULE");
 }
 
@@ -60,7 +62,7 @@ function getReadiness(row:NonNullable<Awaited<ReturnType<typeof findAdminEvent>>
   if(row.checkin_start_at&&eventCalendarDay(row.checkin_start_at)!==eventCalendarDay(row.start_time))missing.push("CHECKIN_START_WRONG_DAY");
   if(row.checkin_start_at&&row.checkin_start_at>row.end_time)missing.push("CHECKIN_START_AFTER_EVENT_END");
   if(row.checkin_end_at&&row.checkin_end_at>row.end_time)missing.push("CHECKIN_END_AFTER_EVENT_END");
-  if(row.checkin_start_at&&row.checkin_start_at.getTime()>row.start_time.getTime()-30*60*1000)missing.push("CHECKIN_TOO_LATE");
+  if(row.checkin_start_at&&row.checkin_start_at.getTime()>row.start_time.getTime()-CHECKIN_LEAD_TIME_MS)missing.push("CHECKIN_TOO_LATE");
   if(Number(row.valid_ticket_type_count)<1)missing.push("VALID_TICKET_TYPE_REQUIRED");
   if(row.venue_capacity&&Number(row.allocated_capacity)>row.venue_capacity)missing.push("TICKET_CAPACITY_EXCEEDS_VENUE");
   return {ready:missing.length===0,missing};

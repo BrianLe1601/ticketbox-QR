@@ -23,5 +23,5 @@ it('requires an Event before running report queries', async () => {
 it('returns an Admin report with no-store caching', async () => {
   const res = await request(app).get('/reports?eventId=1').set('Authorization', 'admin');
   expect(res.status).toBe(200); expect(res.headers['cache-control']).toBe('no-store');
-  expect(service.getReport).toHaveBeenCalledWith({ eventId: 1 });
+  expect(service.getReport).toHaveBeenCalledWith({ eventId: 1, groupBy: 'day' });
 });

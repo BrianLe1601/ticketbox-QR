@@ -39,7 +39,7 @@
 - A first Google login creates a `staff` record with approval `pending` and `is_active = FALSE`; it must not issue a TicketBox access/refresh session. Only an Admin can approve, reject, deactivate or reactivate. Approval does not auto-assign an Event. Password login remains for existing local Admin and seeded development accounts; Google-only Staff have no local password.
 - Google client IDs are environment configuration, not Staff credentials. Never trust a frontend-supplied role, email, score or approval status. Keep Google token verification and role/approval decisions on the backend. Do not add Google access tokens or raw ID tokens to application logs.
 - When a Staff member leaves, revoke every active `event_staff` row before setting `users.is_active = FALSE` (required by the trigger); invalidate their sessions and retain their account, assignments and `checkin_logs` for audit. Reactivation and reassignment may reuse the same account; never delete/recreate it merely because an Event or employment period ends.
-- Assignment must reject inactive Staff, terminal Events, Events whose `end_time` has passed, duplicate active Staff/Event pairs and overlapping Event schedules for the same Staff account. Preserve `assigned_by`, `assigned_at` and `revoked_at`; revoke then create a new row instead of rewriting assignment identity. Event schedule changes require resolving active assignments first.
+- Assignment must reject inactive Staff, terminal Events, Events whose `checkin_end_at` has passed, duplicate active Staff/Event pairs and overlapping check-in work windows for the same Staff account. Compute conflicts from the closed intervals `[checkin_start_at, checkin_end_at]`, not Event start/end; even touching boundaries conflict. Preserve `assigned_by`, `assigned_at` and `revoked_at`; revoke then create a new row instead of rewriting assignment identity. Event or check-in schedule changes require resolving active assignments first.
 - `checkin_logs.staff_id` must identify the person operating the gate. Shared credentials defeat individual accountability and are not the default; any emergency exception needs explicit approval, a limited scope and credential rotation. Do not change Tài's QR or Khôi's check-in contract to implement Admin Staff.
 
 ## Commands before handoff
@@ -143,6 +143,7 @@ users -> auth_sessions
 - Refund and Email delivery have retryable states; immutable identity/amount/recipient fields must not be overwritten during retry.
 - Completing a Refund records a **simulated** outcome and `completed_at`; failure records a safe `failure_reason`. It never calls a bank/payment provider, never promises money reached the customer, and never changes a successful Payment row. Reports subtract only simulated Refunds whose status is `completed`.
 - Availability is always `capacity - reserved_quantity - sold_quantity`; all three values are changed in the same transaction as the related Order state.
+- The inventory competition boundary is Order creation after verified email/OTP and a valid buyer phone, not payment. Creating a `pending_payment` Order must lock the Event and selected Ticket Types and reserve inventory atomically; a concurrent loser receives `409 SOLD_OUT`. Payment may still lock Event/Order for idempotent settlement, but it must only convert that Order's existing `reserved_quantity` to `sold_quantity`, never reserve fresh capacity.
 - Public sale state is derived on the server from Event lifecycle/visibility, effective Event/Tier sales window, tier active state and remaining inventory.
 
 ### Local workflow fixtures
@@ -166,7 +167,7 @@ users -> auth_sessions
 - Public APIs may retain visible completed Events as read-only history, but must always derive `saleStatus='closed'`; cancelled Events remain hidden and terminal.
 - Draft without orders may be permanently deleted. Draft is not cancelled.
 - Publishing and showing a published/ongoing Event require at least one active, valid Ticket Type.
-- `checkin_start_at` must be on the same Vietnam calendar date as `events.start_time` and at least 30 minutes before Event start; `checkin_end_at` must be after check-in start and no later than Event end. Enforce this in Admin UI, backend service validation and the schema constraint—never rely on the browser alone.
+- `checkin_start_at` must be on the same Vietnam calendar date as `events.start_time` and at least 2 hours before Event start; `checkin_end_at` must be after check-in start and no later than Event end. Staff assignment and conflict detection use this actual check-in window, not the Event presentation window. Enforce this in Admin UI, backend service validation and the schema constraint—never rely on the browser alone.
 - A visible published/ongoing Event must never lose its final active valid Ticket Type. Hide the Event or activate a replacement tier first.
 - Hiding controls public visibility only; it does not erase orders or automatically mutate Ticket Type intent.
 - Ticket capacity must not exceed venue capacity. It cannot fall below reserved + sold inventory.

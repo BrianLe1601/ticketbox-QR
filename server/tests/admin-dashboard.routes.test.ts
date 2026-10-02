@@ -56,6 +56,7 @@ beforeEach(() => {
     staff: { activeOnDuty: 4, pendingApproval: 2 },
     orders: { confirmed: 10, pending: 2, totalRevenue: 1500000 },
     refunds: { pendingCount: 1, pendingAmount: 150000 },
+    salesTrend: [{ date: "2026-10-01", revenue: 1500000, ticketsSold: 10 }],
     alerts: { unstaffedUpcomingEvents: [], scheduledPublishFailedEvents: [] },
   });
 });
@@ -82,6 +83,7 @@ it("returns dashboard summary for admin with no-store caching", async () => {
   expect(res.body.success).toBe(true);
   expect(res.body.data.events.active).toBe(3);
   expect(res.body.data.orders.totalRevenue).toBe(1500000);
+  expect(res.body.data.salesTrend[0].ticketsSold).toBe(10);
   expect(mockService.getAdminDashboardSummary).toHaveBeenCalledTimes(1);
 });
 

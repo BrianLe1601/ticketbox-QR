@@ -7,7 +7,7 @@ const baseTimes = {
   endTime: "2026-10-12T15:00:00.000Z",
   salesStartAt: "2026-09-12T01:00:00.000Z",
   salesEndAt: "2026-10-12T11:00:00.000Z",
-  checkinStartAt: "2026-10-12T11:00:00.000Z", // 18:00 cùng ngày
+  checkinStartAt: "2026-10-12T10:00:00.000Z", // 17:00 cùng ngày, sớm đúng 2 giờ
   checkinEndAt: "2026-10-12T14:30:00.000Z",
 };
 
@@ -31,10 +31,17 @@ describe("admin event check-in time validation", () => {
     })).toThrowError(expect.objectContaining({ code: "CHECKIN_START_AFTER_EVENT_END" }));
   });
 
-  it("keeps the existing requirement to open check-in at least 30 minutes early", () => {
+  it("requires check-in to open at least two hours before Event start", () => {
     expect(() => validateEventTimes({
       ...baseTimes,
       checkinStartAt: "2026-10-12T11:45:00.000Z",
     })).toThrowError(expect.objectContaining({ code: "CHECKIN_TOO_LATE" }));
+  });
+
+  it("accepts the exact two-hour boundary", () => {
+    expect(() => validateEventTimes({
+      ...baseTimes,
+      checkinStartAt: "2026-10-12T10:00:00.000Z",
+    })).not.toThrow();
   });
 });

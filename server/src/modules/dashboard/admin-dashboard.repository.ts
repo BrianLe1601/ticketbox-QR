@@ -36,6 +36,12 @@ export interface FailedScheduledEventRow extends RowDataPacket {
   publishFailureReason: string | null;
 }
 
+export interface DashboardSalesTrendRow extends RowDataPacket {
+  reportDate: string;
+  revenue: string;
+  ticketsSold: number;
+}
+
 export async function getDashboardSummaryCounts(): Promise<DashboardCountsRow> {
   const query = `
     SELECT
@@ -105,6 +111,31 @@ export async function getScheduledPublishFailedEvents(limit = 5): Promise<Failed
   `;
 
   const [rows] = await pool.query<FailedScheduledEventRow[]>(query, [limit]);
+  return rows;
+}
+
+export async function getDashboardSalesTrend(days = 7): Promise<DashboardSalesTrendRow[]> {
+  const safeDays = Math.max(1, Math.min(31, Math.trunc(days)));
+  const query = `
+    WITH RECURSIVE date_series AS (
+      SELECT CURRENT_DATE - INTERVAL ${safeDays - 1} DAY AS report_date
+      UNION ALL
+      SELECT report_date + INTERVAL 1 DAY
+      FROM date_series
+      WHERE report_date < CURRENT_DATE
+    )
+    SELECT DATE_FORMAT(ds.report_date, '%Y-%m-%d') AS reportDate,
+           COALESCE(SUM(o.total_amount), 0) AS revenue,
+           COALESCE(SUM(o.total_quantity), 0) AS ticketsSold
+    FROM date_series ds
+    LEFT JOIN orders o
+      ON DATE(o.confirmed_at) = ds.report_date
+     AND o.status = 'confirmed'
+    GROUP BY ds.report_date
+    ORDER BY ds.report_date ASC
+  `;
+
+  const [rows] = await pool.query<DashboardSalesTrendRow[]>(query);
   return rows;
 }
 

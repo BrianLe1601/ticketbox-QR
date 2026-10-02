@@ -32,7 +32,7 @@ export function RecentCheckins({ logs, loading, error, onRefresh }: RecentChecki
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-base font-bold text-slate-100">Lượt quét gần nhất</h3>
-          <p className="text-xs text-slate-400">Hiển thị tối đa 20 lượt quét gần nhất tại sự kiện này</p>
+          <p className="text-xs text-slate-400">Tối đa 20 lượt quét gần nhất do chính bạn thực hiện tại sự kiện này</p>
         </div>
         <button
           type="button"

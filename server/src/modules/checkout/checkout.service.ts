@@ -44,7 +44,7 @@ function requestMatchesExistingOrder(
     body: CreateOrderBody,
 ): boolean {
     const requestedItems = [...body.items].sort((a, b) => a.ticketTypeId - b.ticketTypeId);
-    const normalizedPhone = body.buyer.phone?.trim() || null;
+    const normalizedPhone = body.buyer.phone.trim();
     return order.event_id === body.eventId
         && order.buyer_name === body.buyer.name
         && order.buyer_email === body.buyer.email
@@ -157,8 +157,11 @@ export async function createOrder(body: CreateOrderBody, idempotencyKey: string,
             // tại thời điểm này, không bị request song song nào ghi đè giữa chừng.
             const available = row.capacity - row.reserved_quantity - row.sold_quantity;
             if (item.quantity > available) {
-                throw AppError.badRequest(
-                    available > 0 ? `${row.name} chỉ còn ${available} vé` : `${row.name} đã hết vé`,
+                throw new AppError(
+                    409,
+                    available > 0
+                        ? `Không thể giữ chỗ: ${row.name} chỉ còn ${available} vé`
+                        : `Không thể giữ chỗ: ${row.name} đã hết vé`,
                     'SOLD_OUT'
                 );
             }
@@ -181,7 +184,7 @@ export async function createOrder(body: CreateOrderBody, idempotencyKey: string,
                     eventId: body.eventId,
                     buyerName: body.buyer.name,
                     buyerEmail: body.buyer.email,
-                    buyerPhone: body.buyer.phone?.trim() ? body.buyer.phone.trim() : null,
+                    buyerPhone: body.buyer.phone.trim(),
                     totalQuantity,
                     subtotalAmount: subtotal,
                     lookupTokenHash,
@@ -211,7 +214,13 @@ export async function createOrder(body: CreateOrderBody, idempotencyKey: string,
                 quantity: item.quantity,
                 lineTotal: item.lineTotal,
             });
-            await incrementReserved(conn, item.ticketTypeId, item.quantity);
+            const reserved = await incrementReserved(conn, item.ticketTypeId, item.quantity);
+            if (!reserved) {
+                // Hàng đã được FOR UPDATE khóa nên nhánh này chỉ là lớp bảo vệ cuối
+                // cùng nếu tồn kho thay đổi ngoài quy trình chuẩn. Transaction sẽ
+                // rollback cả Order/Order Item và trả lỗi nghiệp vụ thay vì lỗi 500.
+                throw new AppError(409, `Không thể giữ chỗ: ${item.name} đã hết vé`, 'SOLD_OUT');
+            }
         }
 
         return { orderId: newOrderId, created: true };

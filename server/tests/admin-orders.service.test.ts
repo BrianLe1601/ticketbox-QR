@@ -12,23 +12,27 @@ const repo = vi.hoisted(() => ({
   findAdminOrderEventOptions: vi.fn(), cancelPendingOrder: vi.fn(), findRefundForUpdate: vi.fn(), transitionRefund: vi.fn(),
   lockConfirmedOrdersForEvent: vi.fn(), transitionEventRefunds: vi.fn(), findEventRefundSummary: vi.fn(),
 }));
+const ticketEmail = vi.hoisted(() => ({ enqueueTicketEmail: vi.fn() }));
 vi.mock('../src/modules/checkout/checkout.repository.js', () => checkout);
 vi.mock('../src/modules/orders/admin-orders.repository.js', () => repo);
-vi.mock('../src/modules/tickets/ticket-email.repository.js', () => ({ enqueueTicketEmail: vi.fn() }));
+vi.mock('../src/modules/tickets/ticket-email.repository.js', () => ticketEmail);
 
-import { cancelOrder, getOrderStats, updateEventRefunds, updateRefundStatus } from '../src/modules/orders/admin-orders.service.js';
+import { cancelOrder, getOrderStats, resendTicketEmail, updateEventRefunds, updateRefundStatus } from '../src/modules/orders/admin-orders.service.js';
 
 const connection = {};
+const orderDetail = {
+  id: 8, order_code: 'ORDER-8', event_id: 3, event_name: 'Event', event_status: 'published' as const,
+  event_visibility: 'visible' as const, event_end_time: new Date(Date.now() + 60_000),
+  buyer_name: 'Buyer', buyer_email: 'buyer@example.com', buyer_phone: null, total_quantity: 1,
+  subtotal_amount: '100', discount_amount: '0', total_amount: '100', status: 'pending_payment' as const,
+  expires_at: null, confirmed_at: null, expired_at: null, cancelled_at: null, created_at: new Date(),
+};
 beforeEach(() => {
   vi.resetAllMocks();
   checkout.withTransaction.mockImplementation(async (work: (conn: object) => Promise<unknown>) => work(connection));
   checkout.findOrderEventId.mockResolvedValue(3);
   checkout.lockEventRow.mockResolvedValue({ id: 3, status: 'cancelled' });
-  repo.findOrderDetail.mockResolvedValue({
-    id: 8, order_code: 'ORDER-8', event_id: 3, event_name: 'Event', buyer_name: 'Buyer', buyer_email: 'buyer@example.com',
-    buyer_phone: null, total_quantity: 1, subtotal_amount: '100', discount_amount: '0', total_amount: '100',
-    status: 'pending_payment', expires_at: null, confirmed_at: null, expired_at: null, cancelled_at: null, created_at: new Date(),
-  });
+  repo.findOrderDetail.mockResolvedValue({ ...orderDetail });
   repo.findOrderItems.mockResolvedValue([]); repo.findOrderTickets.mockResolvedValue([]); repo.findOrderPayments.mockResolvedValue([]);
   repo.findOrderEmailLogs.mockResolvedValue([]); repo.findOrderRefund.mockResolvedValue(null);
   repo.transitionRefund.mockResolvedValue(true);
@@ -38,6 +42,7 @@ beforeEach(() => {
     event_id: 3, event_name: 'Cancelled Event', event_status: 'cancelled', total: 1,
     not_required: 0, pending: 0, processing: 1, completed: 0, failed: 0,
   });
+  ticketEmail.enqueueTicketEmail.mockResolvedValue({ jobId: 12, queued: true, status: 'pending' });
 });
 
 it('cancels only pending_payment Orders and locks Event before Order', async () => {
@@ -85,4 +90,20 @@ it('passes the stable Event scope to Order aggregate counts', async () => {
   repo.findOrderStats.mockResolvedValue({ total: 0, pendingPayment: 0, confirmed: 0, expired: 0, cancelled: 0 });
   await getOrderStats(3);
   expect(repo.findOrderStats).toHaveBeenCalledWith(3);
+});
+
+it('queues ticket resend only for a confirmed, visible and non-ended published/ongoing Event', async () => {
+  repo.findOrderDetail.mockResolvedValueOnce({ ...orderDetail, status: 'confirmed' });
+  await expect(resendTicketEmail(8)).resolves.toMatchObject({ orderId: 8, queued: true });
+  expect(ticketEmail.enqueueTicketEmail).toHaveBeenCalledWith(8, 'buyer@example.com', 'ticket_resent');
+
+  repo.findOrderDetail.mockResolvedValueOnce({ ...orderDetail, status: 'confirmed', event_visibility: 'hidden' });
+  await expect(resendTicketEmail(8)).rejects.toMatchObject({ statusCode: 409, code: 'EVENT_NOT_AVAILABLE_FOR_TICKET_EMAIL' });
+
+  repo.findOrderDetail.mockResolvedValueOnce({ ...orderDetail, status: 'confirmed', event_status: 'cancelled' });
+  await expect(resendTicketEmail(8)).rejects.toMatchObject({ statusCode: 409, code: 'EVENT_NOT_AVAILABLE_FOR_TICKET_EMAIL' });
+
+  repo.findOrderDetail.mockResolvedValueOnce({ ...orderDetail, status: 'confirmed', event_end_time: new Date(Date.now() - 1) });
+  await expect(resendTicketEmail(8)).rejects.toMatchObject({ statusCode: 409, code: 'EVENT_NOT_AVAILABLE_FOR_TICKET_EMAIL' });
+  expect(ticketEmail.enqueueTicketEmail).toHaveBeenCalledTimes(1);
 });

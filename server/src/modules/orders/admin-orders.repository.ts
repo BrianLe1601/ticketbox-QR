@@ -7,6 +7,9 @@ export interface AdminOrderListRow extends RowDataPacket {
     event_id: number;
     event_name: string;
     event_status: 'draft' | 'published' | 'ongoing' | 'completed' | 'cancelled';
+    event_visibility: 'visible' | 'hidden';
+    event_end_time: Date;
+    ticket_type_names: string;
     buyer_name: string;
     buyer_email: string;
     total_quantity: number;
@@ -24,6 +27,8 @@ export interface AdminOrderDetailRow extends RowDataPacket {
     event_id: number;
     event_name: string;
     event_status: 'draft' | 'published' | 'ongoing' | 'completed' | 'cancelled';
+    event_visibility: 'visible' | 'hidden';
+    event_end_time: Date;
     buyer_name: string;
     buyer_email: string;
     buyer_phone: string | null;
@@ -105,6 +110,14 @@ export interface AdminOrderEventOptionRow extends RowDataPacket {
     refund_processing: number;
     refund_completed: number;
     refund_failed: number;
+    refund_ticket_quantity: number;
+    refund_amount: string;
+    refund_pending_ticket_quantity: number;
+    refund_pending_amount: string;
+    refund_processing_ticket_quantity: number;
+    refund_processing_amount: string;
+    refund_failed_ticket_quantity: number;
+    refund_failed_amount: string;
 }
 
 export interface EventRefundSummaryRow extends RowDataPacket {
@@ -117,11 +130,19 @@ export interface EventRefundSummaryRow extends RowDataPacket {
     processing: number;
     completed: number;
     failed: number;
+    ticket_quantity: number;
+    amount: string;
+    pending_ticket_quantity: number;
+    pending_amount: string;
+    processing_ticket_quantity: number;
+    processing_amount: string;
+    failed_ticket_quantity: number;
+    failed_amount: string;
 }
 
 export interface ResendTicketRow extends RowDataPacket {
     qr_token_hash: string; qr_token_encrypted: string | null;
-    event_name: string; event_status: 'draft' | 'published' | 'ongoing' | 'completed' | 'cancelled'; start_time: Date; end_time: Date; venue: string;
+    event_name: string; event_status: 'draft' | 'published' | 'ongoing' | 'completed' | 'cancelled'; event_visibility: 'visible' | 'hidden'; start_time: Date; end_time: Date; venue: string;
     id: number;
     order_item_id: number;
     ticket_code: string;
@@ -149,6 +170,9 @@ export async function findOrdersList(filters: {
 
     const [rows] = await pool.query<AdminOrderListRow[]>(
         `SELECT o.id, o.order_code, o.event_id, e.name AS event_name, e.status AS event_status,
+                e.visibility AS event_visibility, e.end_time AS event_end_time,
+                COALESCE((SELECT GROUP_CONCAT(oi.ticket_type_name ORDER BY oi.id SEPARATOR ', ')
+                          FROM order_items oi WHERE oi.order_id = o.id), '—') AS ticket_type_names,
                 o.buyer_name, o.buyer_email, o.total_quantity, o.total_amount,
                 o.status, o.created_at, o.expires_at, o.confirmed_at, r.status AS refund_status
          FROM orders o
@@ -172,6 +196,7 @@ export async function findOrdersList(filters: {
 export async function findOrderDetail(orderId: number) {
     const [rows] = await pool.query<AdminOrderDetailRow[]>(
         `SELECT o.id, o.order_code, o.event_id, e.name AS event_name, e.status AS event_status,
+                e.visibility AS event_visibility, e.end_time AS event_end_time,
                 o.buyer_name, o.buyer_email, o.buyer_phone,
                 o.total_quantity, o.subtotal_amount, o.discount_amount, o.total_amount,
                 o.status, o.expires_at, o.confirmed_at, o.expired_at, o.cancelled_at, o.created_at
@@ -239,7 +264,15 @@ export async function findAdminOrderEventOptions() {
                 COALESCE(SUM(r.status = 'pending'), 0) AS refund_pending,
                 COALESCE(SUM(r.status = 'processing'), 0) AS refund_processing,
                 COALESCE(SUM(r.status = 'completed'), 0) AS refund_completed,
-                COALESCE(SUM(r.status = 'failed'), 0) AS refund_failed
+                COALESCE(SUM(r.status = 'failed'), 0) AS refund_failed,
+                COALESCE(SUM(CASE WHEN r.status <> 'not_required' THEN o.total_quantity ELSE 0 END), 0) AS refund_ticket_quantity,
+                COALESCE(SUM(CASE WHEN r.status <> 'not_required' THEN r.amount ELSE 0 END), 0) AS refund_amount,
+                COALESCE(SUM(CASE WHEN r.status = 'pending' THEN o.total_quantity ELSE 0 END), 0) AS refund_pending_ticket_quantity,
+                COALESCE(SUM(CASE WHEN r.status = 'pending' THEN r.amount ELSE 0 END), 0) AS refund_pending_amount,
+                COALESCE(SUM(CASE WHEN r.status = 'processing' THEN o.total_quantity ELSE 0 END), 0) AS refund_processing_ticket_quantity,
+                COALESCE(SUM(CASE WHEN r.status = 'processing' THEN r.amount ELSE 0 END), 0) AS refund_processing_amount,
+                COALESCE(SUM(CASE WHEN r.status = 'failed' THEN o.total_quantity ELSE 0 END), 0) AS refund_failed_ticket_quantity,
+                COALESCE(SUM(CASE WHEN r.status = 'failed' THEN r.amount ELSE 0 END), 0) AS refund_failed_amount
          FROM events e
          JOIN orders o ON o.event_id = e.id
          LEFT JOIN refunds r ON r.order_id = o.id
@@ -314,7 +347,15 @@ export async function findEventRefundSummary(eventId: number) {
                 COALESCE(SUM(r.status = 'pending'), 0) AS pending,
                 COALESCE(SUM(r.status = 'processing'), 0) AS processing,
                 COALESCE(SUM(r.status = 'completed'), 0) AS completed,
-                COALESCE(SUM(r.status = 'failed'), 0) AS failed
+                COALESCE(SUM(r.status = 'failed'), 0) AS failed,
+                COALESCE(SUM(CASE WHEN r.status <> 'not_required' THEN o.total_quantity ELSE 0 END), 0) AS ticket_quantity,
+                COALESCE(SUM(CASE WHEN r.status <> 'not_required' THEN r.amount ELSE 0 END), 0) AS amount,
+                COALESCE(SUM(CASE WHEN r.status = 'pending' THEN o.total_quantity ELSE 0 END), 0) AS pending_ticket_quantity,
+                COALESCE(SUM(CASE WHEN r.status = 'pending' THEN r.amount ELSE 0 END), 0) AS pending_amount,
+                COALESCE(SUM(CASE WHEN r.status = 'processing' THEN o.total_quantity ELSE 0 END), 0) AS processing_ticket_quantity,
+                COALESCE(SUM(CASE WHEN r.status = 'processing' THEN r.amount ELSE 0 END), 0) AS processing_amount,
+                COALESCE(SUM(CASE WHEN r.status = 'failed' THEN o.total_quantity ELSE 0 END), 0) AS failed_ticket_quantity,
+                COALESCE(SUM(CASE WHEN r.status = 'failed' THEN r.amount ELSE 0 END), 0) AS failed_amount
          FROM events e
          LEFT JOIN orders o ON o.event_id = e.id AND o.status = 'confirmed'
          LEFT JOIN refunds r ON r.order_id = o.id
@@ -328,7 +369,7 @@ export async function findEventRefundSummary(eventId: number) {
 
 export async function findTicketsForResend(orderId: number, conn?: PoolConnection, includeCancelled = false) {
     const [rows] = await (conn ?? pool).query<ResendTicketRow[]>(
-        `SELECT t.id, t.order_item_id, t.ticket_code, t.qr_token_hash, t.qr_token_encrypted, tt.name AS ticket_type_name, t.holder_name, t.holder_email, e.name AS event_name, e.status AS event_status, e.start_time, e.end_time, e.venue
+        `SELECT t.id, t.order_item_id, t.ticket_code, t.qr_token_hash, t.qr_token_encrypted, tt.name AS ticket_type_name, t.holder_name, t.holder_email, e.name AS event_name, e.status AS event_status, e.visibility AS event_visibility, e.start_time, e.end_time, e.venue
          FROM tickets t
          JOIN order_items oi ON oi.id = t.order_item_id
          JOIN ticket_types tt ON tt.id = oi.ticket_type_id

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Calendar, Clock, MapPin, Eye, ScanLine, ChevronLeft, ChevronRight } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { StaffEventDetailDialog } from '@/components/staff/StaffEventDetailDialog';
 import { getStaffAssignments } from '@/services/checkin.service';
@@ -23,13 +23,18 @@ const format = (value: string) => new Date(value).toLocaleString('vi-VN', { time
 export function StaffEventsPage() {
   const { token } = useAuth();
   const navigate = useNavigate();
-  const [segment, setSegment] = useState<AssignmentSegment>('all');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedSegment = searchParams.get('segment');
+  const segment: AssignmentSegment = segments.some((item) => item.value === requestedSegment)
+    ? requestedSegment as AssignmentSegment
+    : 'all';
   const [page, setPage] = useState(1);
   const [events, setEvents] = useState<StaffAssignment[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [detail, setDetail] = useState<StaffAssignment | null>(null);
+  const [reload, setReload] = useState(0);
   const limit = 12;
 
   useEffect(() => {
@@ -39,10 +44,19 @@ export function StaffEventsPage() {
       .catch((cause: unknown) => { if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Không thể tải danh sách phân công.'); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [token, segment, page]);
+  }, [token, segment, page, reload]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setReload((value) => value + 1), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const pages = Math.max(1, Math.ceil(total / limit));
-  const selectSegment = (next: AssignmentSegment) => { setLoading(true); setSegment(next); setPage(1); };
+  const selectSegment = (next: AssignmentSegment) => {
+    setLoading(true);
+    setPage(1);
+    setSearchParams(next === 'all' ? {} : { segment: next });
+  };
 
   return <div className="space-y-5">
     <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-bold text-slate-100">Sự kiện được phân công</h2><p className="mt-1 text-sm text-slate-400">Xem thông tin Event và ca trực cá nhân; lịch sử là dữ liệu chỉ đọc.</p></div><span className="text-xs text-slate-400">{total} phân công</span></div>

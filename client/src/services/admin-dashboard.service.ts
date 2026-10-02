@@ -28,6 +28,11 @@ export interface DashboardSummary {
     pendingCount: number;
     pendingAmount: number;
   };
+  salesTrend: Array<{
+    date: string;
+    revenue: number;
+    ticketsSold: number;
+  }>;
   alerts: {
     unstaffedUpcomingEvents: Array<{
       id: number;

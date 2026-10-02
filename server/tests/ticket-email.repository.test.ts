@@ -18,8 +18,9 @@ beforeEach(() => {
 });
 
 it.each([
-    { status: 'completed', end_time: new Date(Date.now() + 60_000) },
-    { status: 'published', end_time: new Date(Date.now() - 1) },
+    { status: 'completed', visibility: 'visible', end_time: new Date(Date.now() + 60_000) },
+    { status: 'published', visibility: 'visible', end_time: new Date(Date.now() - 1) },
+    { status: 'published', visibility: 'hidden', end_time: new Date(Date.now() + 60_000) },
 ])('rejects enqueue when Event ticket delivery is no longer valid: $status', async event => {
     checkout.lockEventRow.mockResolvedValue(event);
     await expect(enqueueTicketEmail(4, 'buyer@example.com', 'ticket_resent')).rejects.toMatchObject({

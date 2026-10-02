@@ -46,9 +46,9 @@ export function StaffOverviewPage() {
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <button type="button" onClick={() => navigate('/staff/events')} className="staff-summary-card"><span>Tổng phân công</span><strong>{counts.total}</strong></button>
+        <button type="button" onClick={() => navigate('/staff/events?segment=all')} className="staff-summary-card"><span>Tổng phân công</span><strong>{counts.total}</strong></button>
         <button type="button" onClick={() => navigate('/staff/check-in')} className="staff-summary-card is-open"><span>Cổng đang mở</span><strong>{counts.open}</strong></button>
-        <button type="button" onClick={() => navigate('/staff/events')} className="staff-summary-card is-upcoming"><span>Sắp tới / chuẩn bị</span><strong>{counts.upcoming}</strong></button>
+        <button type="button" onClick={() => navigate('/staff/events?segment=upcoming')} className="staff-summary-card is-upcoming"><span>Sắp tới / chuẩn bị</span><strong>{counts.upcoming}</strong></button>
         <button type="button" onClick={() => navigate('/staff/history')} className="staff-summary-card"><span>Lịch sử phân công</span><strong>{counts.history}</strong></button>
       </div>
 
@@ -78,7 +78,7 @@ export function StaffOverviewPage() {
 
       {overview?.nextUpcomingAssignment && <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-cyan-500/20 bg-slate-900/60 p-4">
         <div className="flex items-start gap-3"><CalendarClock className="mt-0.5 text-cyan-300" size={18} /><div><h2 className="font-bold text-slate-100">{overview.nextUpcomingAssignment.operationalState === 'preparing' ? 'Sự kiện đang chuẩn bị' : 'Ca trực kế tiếp'}</h2><p className="mt-1 text-sm text-slate-300">{overview.nextUpcomingAssignment.name} · {format(overview.nextUpcomingAssignment.checkinStartAt)}</p><p className="text-xs text-slate-400">{overview.nextUpcomingAssignment.venue}, {overview.nextUpcomingAssignment.city}</p></div></div>
-        <button type="button" onClick={() => navigate('/staff/events')} className="flex min-h-[38px] items-center gap-2 rounded-lg border border-cyan-500/30 px-3 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/10"><History size={14} />Xem phân công</button>
+        <button type="button" onClick={() => navigate('/staff/events?segment=upcoming')} className="flex min-h-[38px] items-center gap-2 rounded-lg border border-cyan-500/30 px-3 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/10"><History size={14} />Xem phân công</button>
       </section>}
     </div>
   );

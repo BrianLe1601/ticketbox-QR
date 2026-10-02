@@ -282,7 +282,7 @@ export function AdminStaffPage() {
     return events.filter(
       (e) =>
         ["draft", "published", "ongoing"].includes(e.status) &&
-        new Date(e.endTime).getTime() > assignmentReferenceTime &&
+        new Date(e.checkinEndAt).getTime() > assignmentReferenceTime &&
         !activeAssignedIds.has(e.id),
     );
   }, [selectedStaff, events, assignmentReferenceTime]);
@@ -1340,8 +1340,8 @@ export function AdminStaffPage() {
                                 <div className="text-[11px] text-slate-400 flex items-center gap-1.5 mt-0.5">
                                   <Clock size={12} className="text-cyan-400" />
                                   <span>
-                                    {formatDateTime(assignment.startTime)} →{" "}
-                                    {formatDateTime(assignment.endTime)}
+                                    Ca check-in: {formatDateTime(assignment.checkinStartAt)} →{" "}
+                                    {formatDateTime(assignment.checkinEndAt)}
                                   </span>
                                 </div>
                               </div>
@@ -1409,7 +1409,7 @@ export function AdminStaffPage() {
                           <option value="">-- Chọn sự kiện có thể phân công --</option>
                           {assignableEventsForStaff.map((event) => (
                             <option key={event.id} value={event.id}>
-                              {event.name} [{eventStatusLabel(event.status)}] ({formatDateTime(event.startTime)} - {formatDateTime(event.endTime)})
+                              {event.name} [{eventStatusLabel(event.status)}] (Ca check-in: {formatDateTime(event.checkinStartAt)} - {formatDateTime(event.checkinEndAt)})
                             </option>
                           ))}
                         </select>

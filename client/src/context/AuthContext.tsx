@@ -8,6 +8,7 @@ import {
 } from "react";
 
 import {
+  AUTH_SESSION_EXPIRED_EVENT,
   clearStoredToken,
   googleLoginRequest,
   loginRequest,
@@ -24,6 +25,7 @@ interface AuthContextValue {
   login: (credentials: LoginCredentials) => Promise<AuthUser>;
   loginWithGoogle: (idToken: string) => Promise<{ status: "pending" } | { status: "approved"; user: AuthUser }>;
   logout: () => void;
+  updateUser: (user: AuthUser) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -35,6 +37,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true;
+    const expireSession = () => {
+      clearStoredToken();
+      setToken(null);
+      setUser(null);
+    };
+    window.addEventListener(AUTH_SESSION_EXPIRED_EVENT, expireSession);
 
     async function restoreSession() {
       try {
@@ -58,6 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void restoreSession();
     return () => {
       active = false;
+      window.removeEventListener(AUTH_SESSION_EXPIRED_EVENT, expireSession);
     };
   }, []);
 
@@ -85,8 +94,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }
 
+  function updateUser(nextUser: AuthUser): void {
+    setUser(nextUser);
+  }
+
   const value = useMemo(
-    () => ({ user, token, isLoading, login, loginWithGoogle, logout }),
+    () => ({ user, token, isLoading, login, loginWithGoogle, logout, updateUser }),
     [user, token, isLoading],
   );
 

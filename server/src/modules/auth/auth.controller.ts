@@ -1,13 +1,15 @@
 import type { NextFunction, Request, Response } from "express";
 
 import { AppError } from "../../utils/app-error.js";
-import type { LoginInput } from "./auth.schema.js";
+import type { ChangeAdminPasswordInput, LoginInput, UpdateAdminProfileInput } from "./auth.schema.js";
 import {
   getCurrentUser,
   login,
   loginWithGoogle,
   logoutSession,
   refreshSession,
+  updateAdminProfile,
+  changeAdminPassword,
 } from "./auth.service.js";
 import { env } from "../../config/env.js";
 import { REFRESH_COOKIE } from "./refresh-token.js";
@@ -90,3 +92,18 @@ export async function getMeController(
 
 export async function refreshController(req:Request,res:Response,next:NextFunction){try{assertTrustedOrigin(req);const result=await refreshSession(req.cookies?.[REFRESH_COOKIE],metadata(req));res.cookie(REFRESH_COOKIE,result.refreshToken,cookieOptions);res.status(200).json({success:true,message:"Session renewed",data:{accessToken:result.accessToken,user:result.user}});}catch(error){res.clearCookie(REFRESH_COOKIE,{...cookieOptions,maxAge:undefined});next(error);}}
 export async function logoutController(req:Request,res:Response,next:NextFunction){try{assertTrustedOrigin(req);await logoutSession(req.cookies?.[REFRESH_COOKIE]);res.clearCookie(REFRESH_COOKIE,{httpOnly:true,secure:env.NODE_ENV==="production",sameSite:"strict",path:"/api/auth"});res.status(204).send();}catch(error){next(error);}}
+
+export async function updateAdminProfileController(req: Request, res: Response, next: NextFunction) {
+  try {
+    const user = await updateAdminProfile(req.authUser!.id, req.body as UpdateAdminProfileInput);
+    res.status(200).json({ success: true, message: "Đã cập nhật tên hiển thị.", data: { user } });
+  } catch (error) { next(error); }
+}
+
+export async function changeAdminPasswordController(req: Request, res: Response, next: NextFunction) {
+  try {
+    await changeAdminPassword(req.authUser!.id, req.body as ChangeAdminPasswordInput);
+    res.clearCookie(REFRESH_COOKIE, { httpOnly: true, secure: env.NODE_ENV === "production", sameSite: "strict", path: "/api/auth" });
+    res.status(200).json({ success: true, message: "Đã đổi mật khẩu. Vui lòng đăng nhập lại.", data: null });
+  } catch (error) { next(error); }
+}

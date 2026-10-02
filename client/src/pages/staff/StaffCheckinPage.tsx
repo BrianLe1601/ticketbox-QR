@@ -41,6 +41,17 @@ export function StaffCheckinPage() {
     return () => window.clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    if (loading) return;
+    if (events.length === 0) {
+      if (selectedEventId) setSearchParams({}, { replace: true });
+      return;
+    }
+    if (!selectedEventId || !events.some((event) => String(event.id) === selectedEventId)) {
+      setSearchParams({ eventId: String(events[0]!.id) }, { replace: true });
+    }
+  }, [events, loading, selectedEventId, setSearchParams]);
+
   // This endpoint is server-filtered to Events currently inside the check-in window.
   const selectedEvent = events.find((e) => String(e.id) === selectedEventId) ?? events[0];
 

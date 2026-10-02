@@ -1,5 +1,6 @@
 import {
   getDashboardSummaryCounts,
+  getDashboardSalesTrend,
   getScheduledPublishFailedEvents,
   getUnstaffedUpcomingEvents,
 } from "./admin-dashboard.repository.js";
@@ -31,6 +32,11 @@ export interface DashboardSummaryData {
     pendingCount: number;
     pendingAmount: number;
   };
+  salesTrend: Array<{
+    date: string;
+    revenue: number;
+    ticketsSold: number;
+  }>;
   alerts: {
     unstaffedUpcomingEvents: Array<{
       id: number;
@@ -52,8 +58,9 @@ export interface DashboardSummaryData {
 }
 
 export async function getAdminDashboardSummary(): Promise<DashboardSummaryData> {
-  const [counts, unstaffedEvents, failedEvents] = await Promise.all([
+  const [counts, salesTrend, unstaffedEvents, failedEvents] = await Promise.all([
     getDashboardSummaryCounts(),
+    getDashboardSalesTrend(7),
     getUnstaffedUpcomingEvents(5),
     getScheduledPublishFailedEvents(5),
   ]);
@@ -85,6 +92,11 @@ export async function getAdminDashboardSummary(): Promise<DashboardSummaryData> 
       pendingCount: Number(counts?.pendingRefundCount ?? 0),
       pendingAmount: Number(counts?.pendingRefundAmount ?? 0),
     },
+    salesTrend: salesTrend.map((point) => ({
+      date: point.reportDate,
+      revenue: Number(point.revenue ?? 0),
+      ticketsSold: Number(point.ticketsSold ?? 0),
+    })),
     alerts: {
       unstaffedUpcomingEvents: unstaffedEvents.map((e) => ({
         id: Number(e.id),

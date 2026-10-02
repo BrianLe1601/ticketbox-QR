@@ -35,7 +35,7 @@ export interface CreateOrderResult extends Order {
 export interface BuyerInfo {
     name: string;
     email: string;
-    phone?: string;
+    phone: string;
 }
 
 export interface TicketSelection {

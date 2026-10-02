@@ -15,6 +15,14 @@ export interface RefundSummary {
     processing: number;
     completed: number;
     failed: number;
+    ticketQuantity: number;
+    amount: number;
+    pendingTicketQuantity: number;
+    pendingAmount: number;
+    processingTicketQuantity: number;
+    processingAmount: number;
+    failedTicketQuantity: number;
+    failedAmount: number;
 }
 
 export interface AdminOrderListItem {
@@ -23,6 +31,9 @@ export interface AdminOrderListItem {
     eventId: number;
     eventName: string;
     eventStatus: AdminEventStatus;
+    eventVisibility: "visible" | "hidden";
+    eventEndTime: string;
+    ticketTypeNames: string;
     buyerName: string;
     buyerEmail: string;
     totalQuantity: number;
@@ -96,6 +107,8 @@ export interface AdminOrderDetail {
     eventId: number;
     eventName: string;
     eventStatus: AdminEventStatus;
+    eventVisibility: "visible" | "hidden";
+    eventEndTime: string;
     buyerName: string;
     buyerEmail: string;
     buyerPhone: string | null;
