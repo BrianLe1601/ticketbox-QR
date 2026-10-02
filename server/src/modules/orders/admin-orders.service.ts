@@ -8,6 +8,18 @@ import {
 } from './admin-orders.repository.js';
 import type { BulkRefundTransitionBody, ListOrdersQuery, RefundTransitionBody } from './admin-orders.schema.js';
 import { enqueueTicketEmail } from '../tickets/ticket-email.repository.js';
+import { isEventAvailableForTicketDelivery } from '../events/event-sales.js';
+
+function assertTicketEmailAvailable(order: Awaited<ReturnType<typeof findOrderDetail>>) {
+    if (!order) throw AppError.notFound('Không tìm thấy đơn hàng');
+    if (order.status !== 'confirmed') {
+        throw new AppError(409, 'Chỉ đơn đã xác nhận mới có thể gửi lại vé', 'ORDER_NOT_CONFIRMED');
+    }
+    if (order.event_visibility !== 'visible' || !isEventAvailableForTicketDelivery(order.event_status, order.event_end_time)) {
+        throw new AppError(409, 'Chỉ gửi lại vé cho sự kiện công khai đang mở hoặc đang diễn ra', 'EVENT_NOT_AVAILABLE_FOR_TICKET_EMAIL');
+    }
+    return order;
+}
 
 export async function listOrders(query: ListOrdersQuery) {
     const { rows, total } = await findOrdersList(query);
@@ -18,6 +30,9 @@ export async function listOrders(query: ListOrdersQuery) {
             eventId: o.event_id,
             eventName: o.event_name,
             eventStatus: o.event_status,
+            eventVisibility: o.event_visibility,
+            eventEndTime: o.event_end_time,
+            ticketTypeNames: o.ticket_type_names,
             buyerName: o.buyer_name,
             buyerEmail: o.buyer_email,
             totalQuantity: o.total_quantity,
@@ -50,6 +65,8 @@ export async function getOrderDetail(orderId: number) {
         eventId: order.event_id,
         eventName: order.event_name,
         eventStatus: order.event_status,
+        eventVisibility: order.event_visibility,
+        eventEndTime: order.event_end_time,
         buyerName: order.buyer_name,
         buyerEmail: order.buyer_email,
         buyerPhone: order.buyer_phone,
@@ -164,6 +181,14 @@ export async function updateEventRefunds(eventId: number, input: BulkRefundTrans
             processing: Number(summary.processing),
             completed: Number(summary.completed),
             failed: Number(summary.failed),
+            ticketQuantity: Number(summary.ticket_quantity),
+            amount: Number(summary.amount),
+            pendingTicketQuantity: Number(summary.pending_ticket_quantity),
+            pendingAmount: Number(summary.pending_amount),
+            processingTicketQuantity: Number(summary.processing_ticket_quantity),
+            processingAmount: Number(summary.processing_amount),
+            failedTicketQuantity: Number(summary.failed_ticket_quantity),
+            failedAmount: Number(summary.failed_amount),
         },
         message: transitioned > 0
             ? `Đã cập nhật ${transitioned} yêu cầu hoàn tiền mô phỏng sang “${input.status === 'processing' ? 'Đang xử lý' : 'Hoàn tất'}”.`
@@ -205,15 +230,13 @@ export async function updateRefundStatus(orderId: number, input: RefundTransitio
 
 /** Queue delivery of the original QR; never rotate credentials. */
 export async function resendTicketEmail(orderId: number) {
-    const order = await findOrderDetail(orderId);
-    if (!order) throw AppError.notFound('Không tìm thấy đơn hàng');
+    const order = assertTicketEmailAvailable(await findOrderDetail(orderId));
     const queued = await enqueueTicketEmail(orderId, order.buyer_email, 'ticket_resent');
     return { orderId, ...queued, message: 'Đã xếp lịch gửi lại vé.' };
 }
 
 export async function retryOrderEmail(orderId: number, logId: number) {
-    const order = await findOrderDetail(orderId);
-    if (!order) throw AppError.notFound('Không tìm thấy đơn hàng');
+    const order = assertTicketEmailAvailable(await findOrderDetail(orderId));
     const queued = await enqueueTicketEmail(orderId, order.buyer_email, 'ticket_resent', logId);
     return { orderId, ...queued, message: 'Đã xếp lịch thử gửi lại email.' };
 }
@@ -230,6 +253,14 @@ export async function getOrderFilterOptions() {
             processing: Number(event.refund_processing),
             completed: Number(event.refund_completed),
             failed: Number(event.refund_failed),
+            ticketQuantity: Number(event.refund_ticket_quantity),
+            amount: Number(event.refund_amount),
+            pendingTicketQuantity: Number(event.refund_pending_ticket_quantity),
+            pendingAmount: Number(event.refund_pending_amount),
+            processingTicketQuantity: Number(event.refund_processing_ticket_quantity),
+            processingAmount: Number(event.refund_processing_amount),
+            failedTicketQuantity: Number(event.refund_failed_ticket_quantity),
+            failedAmount: Number(event.refund_failed_amount),
         },
     })) };
 }

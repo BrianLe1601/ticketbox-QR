@@ -21,6 +21,8 @@ export interface AssignmentRow extends RowDataPacket {
   eventStatus: string;
   startTime: Date;
   endTime: Date;
+  checkinStartAt: Date;
+  checkinEndAt: Date;
   assignedAt: Date;
   assignedBy: number;
   revokedAt: Date | null;
@@ -41,7 +43,8 @@ export async function listAssignmentRows(): Promise<AssignmentRow[]> {
   const [rows] = await pool.execute<AssignmentRow[]>(
     `SELECT es.id, es.staff_id AS staffId, es.event_id AS eventId,
       e.name AS eventName, e.status AS eventStatus, e.start_time AS startTime,
-      e.end_time AS endTime, es.assigned_at AS assignedAt,
+      e.end_time AS endTime, e.checkin_start_at AS checkinStartAt,
+      e.checkin_end_at AS checkinEndAt, es.assigned_at AS assignedAt,
       es.assigned_by AS assignedBy, es.revoked_at AS revokedAt,
       es.is_active AS isActive
      FROM event_staff es JOIN events e ON e.id = es.event_id
@@ -75,9 +78,11 @@ export async function lockStaff(conn: PoolConnection, staffId: number) {
 
 export async function lockEvent(conn: PoolConnection, eventId: number) {
   const [rows] = await conn.execute<RowDataPacket[]>(
-    `SELECT id, status, end_time AS endTime FROM events WHERE id = ? FOR UPDATE`, [eventId],
+    `SELECT id, status, end_time AS endTime, checkin_start_at AS checkinStartAt,
+      checkin_end_at AS checkinEndAt FROM events WHERE id = ? FOR UPDATE`, [eventId],
   );
-  return rows[0] as { id: number; status: string; endTime: Date } | undefined;
+  return rows[0] as { id: number; status: string; endTime: Date;
+    checkinStartAt: Date; checkinEndAt: Date } | undefined;
 }
 
 export async function revokeAllAssignments(conn: PoolConnection, staffId: number) {

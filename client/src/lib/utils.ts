@@ -9,6 +9,12 @@ export function formatPrice(price: number): string {
     return new Intl.NumberFormat("vi-VN").format(price) + "đ";
 }
 
+/** Giữ state của các trường số ở dạng chuỗi để không mất giá trị rỗng khi nhập. */
+export function digitsOnly(value: string, maxLength?: number): string {
+    const digits = value.replace(/\D/g, "");
+    return maxLength === undefined ? digits : digits.slice(0, maxLength);
+}
+
 export function formatDisplayDate(startIso: string, endIso: string): string {
     const start = new Date(startIso);
     const end = new Date(endIso);

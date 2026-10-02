@@ -24,8 +24,12 @@ interface EventFixture {
   cover?: boolean;
 }
 
+// Keep all relative fixtures on one exact clock reference. Calling Date.now()
+// separately can make a nominal two-hour lead a few milliseconds too short.
+const seedReferenceTime = Date.now();
+
 function fromNow(days: number, hours = 0): Date {
-  return new Date(Date.now() + days * 86_400_000 + hours * 3_600_000);
+  return new Date(seedReferenceTime + days * 86_400_000 + hours * 3_600_000);
 }
 
 function sha256(value: string): string {
@@ -306,7 +310,7 @@ async function seedWorkflows() {
       name: "[QA] Draft — Missing Cover & Ticket", slug: "qa-draft-needs-ticket",
       capacity: 100, start: fromNow(30), end: fromNow(30, 4),
       salesStart: fromNow(1), salesEnd: fromNow(30, 3),
-      checkinStart: fromNow(29, 23), checkinEnd: fromNow(30, 4), cover: false,
+      checkinStart: fromNow(29, 22), checkinEnd: fromNow(30, 4), cover: false,
     });
 
     const onSaleStart = fromNow(20);
@@ -315,7 +319,7 @@ async function seedWorkflows() {
       name: "[QA] Draft — Ready To Publish", slug: "qa-draft-ready",
       capacity: 120, start: onSaleStart, end: onSaleEnd,
       salesStart: fromNow(-1), salesEnd: fromNow(20, 3),
-      checkinStart: fromNow(19, 23), checkinEnd: onSaleEnd,
+      checkinStart: fromNow(19, 22), checkinEnd: onSaleEnd,
     });
     await createTier(connection, draftReady, "General Admission", 150_000, 120);
 
@@ -323,7 +327,7 @@ async function seedWorkflows() {
       name: "[QA] Published — Coming Soon", slug: "qa-published-coming-soon",
       capacity: 80, start: fromNow(45), end: fromNow(45, 3),
       salesStart: fromNow(5), salesEnd: fromNow(45, 2),
-      checkinStart: fromNow(44, 23), checkinEnd: fromNow(45, 3),
+      checkinStart: fromNow(44, 22), checkinEnd: fromNow(45, 3),
     });
     await createTier(connection, comingSoon, "Scheduled Pass", 100_000, 80);
     await publish(connection, comingSoon);
@@ -332,7 +336,7 @@ async function seedWorkflows() {
       name: "[QA] Published — On Sale With Orders", slug: "qa-published-on-sale",
       capacity: 200, start: onSaleStart, end: onSaleEnd,
       salesStart: fromNow(-2), salesEnd: fromNow(20, 3),
-      checkinStart: fromNow(19, 23), checkinEnd: onSaleEnd,
+      checkinStart: fromNow(19, 22), checkinEnd: onSaleEnd,
     });
     const onSaleGeneral = await createTier(connection, onSale, "General Sale", 200_000, 150);
     await createTier(connection, onSale, "Last Minute", 120_000, 50, true, fromNow(18), fromNow(20, 3));
@@ -348,7 +352,7 @@ async function seedWorkflows() {
       name: "[QA] Hidden — All Tiers Paused", slug: "qa-hidden-all-paused",
       capacity: 60, start: fromNow(35), end: fromNow(35, 3),
       salesStart: fromNow(-1), salesEnd: fromNow(35, 2),
-      checkinStart: fromNow(34, 23), checkinEnd: fromNow(35, 3),
+      checkinStart: fromNow(34, 22), checkinEnd: fromNow(35, 3),
     });
     await createTier(connection, hiddenPaused, "Paused Tier", 90_000, 60);
     await publish(connection, hiddenPaused);
@@ -362,7 +366,7 @@ async function seedWorkflows() {
       name: "[QA] Ongoing — Check-in Active", slug: "qa-ongoing-checkin",
       capacity: 50, start: fromNow(0, -1), end: fromNow(0, 3),
       salesStart: fromNow(-10), salesEnd: fromNow(0, 2),
-      checkinStart: fromNow(0, -2), checkinEnd: fromNow(0, 3),
+      checkinStart: fromNow(0, -3), checkinEnd: fromNow(0, 3),
     });
     const ongoingTier = await createTier(connection, ongoing, "Gate Pass", 50_000, 50);
     await publish(connection, ongoing, fromNow(-10));
@@ -377,7 +381,7 @@ async function seedWorkflows() {
       name: "[QA] Completed — Read-only History", slug: "qa-completed-history",
       capacity: 40, start: fromNow(-2), end: fromNow(-1),
       salesStart: fromNow(-20), salesEnd: fromNow(-1, -1),
-      checkinStart: fromNow(-2, -1), checkinEnd: fromNow(-1),
+      checkinStart: fromNow(-2, -2), checkinEnd: fromNow(-1),
     });
     await createTier(connection, completed, "Archived Pass", 75_000, 40);
     await publish(connection, completed, fromNow(-20));
@@ -388,7 +392,7 @@ async function seedWorkflows() {
       name: "[QA] Cancelled — No Orders", slug: "qa-cancelled-no-orders",
       capacity: 30, start: fromNow(50), end: fromNow(50, 2),
       salesStart: fromNow(-1), salesEnd: fromNow(50, 1),
-      checkinStart: fromNow(49, 23), checkinEnd: fromNow(50, 2),
+      checkinStart: fromNow(49, 22), checkinEnd: fromNow(50, 2),
     });
     await createTier(connection, cancelledEmpty, "Cancelled Pass", 60_000, 30);
     await publish(connection, cancelledEmpty);
@@ -406,7 +410,7 @@ async function seedWorkflows() {
       name: "[QA] Cancelled — Orders & Refund", slug: "qa-cancelled-with-orders",
       capacity: 100, start: fromNow(55), end: fromNow(55, 3),
       salesStart: fromNow(-2), salesEnd: fromNow(55, 2),
-      checkinStart: fromNow(54, 23), checkinEnd: fromNow(55, 3),
+      checkinStart: fromNow(54, 22), checkinEnd: fromNow(55, 3),
     });
     const cancelledTier = await createTier(connection, cancelledOrders, "Refundable Pass", 300_000, 100);
     await publish(connection, cancelledOrders);

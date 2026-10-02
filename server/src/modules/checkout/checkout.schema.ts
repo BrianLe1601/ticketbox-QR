@@ -12,7 +12,9 @@ export const createOrderBodySchema = z.object({
     buyer: z.object({
         name: z.string().trim().min(1, 'Vui lòng nhập họ tên'),
         email: z.string().trim().toLowerCase().email('Email không hợp lệ'),
-        phone: z.string().trim().max(20, 'Số điện thoại quá dài').optional(),
+        phone: z.string()
+            .trim()
+            .regex(/^0[35789][0-9]{8}$/, 'Số điện thoại phải gồm 10 chữ số và đúng định dạng Việt Nam'),
     }),
 }).superRefine((body, ctx) => {
     const seen = new Set<number>();

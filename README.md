@@ -514,9 +514,9 @@ Mọi module phải khóa theo cùng thứ tự để tránh deadlock:
 Event -> Orders theo id tăng dần -> Ticket Types theo id tăng dần -> Ticket
 ```
 
-- Checkout: khóa Event và Ticket Types, kiểm tra tồn kho rồi tăng `reserved_quantity` trong một transaction.
+- Checkout: ngay khi khách đã xác minh OTP, nhập số điện thoại hợp lệ và bấm **Tiếp tục mua vé**, API tạo Order sẽ khóa Event và Ticket Types, kiểm tra tồn kho rồi tăng `reserved_quantity` trong một transaction. Nếu hai khách tranh vé cuối cùng, chỉ request lấy lock trước được giữ vé; request còn lại nhận HTTP `409` với mã `SOLD_OUT`.
 - Hết hạn Order: khóa Event và Order, giảm reservation rồi chuyển Order sang `expired`.
-- Thanh toán: khóa Event và Order, chuyển reserved sang sold, xác nhận Order, ghi Payment và phát hành Ticket trong một transaction.
+- Thanh toán: không cạnh tranh tồn kho mới; chỉ khóa Event và Order để chống thanh toán lặp, chuyển phần vé Order đã giữ từ reserved sang sold, xác nhận Order, ghi Payment và phát hành Ticket trong một transaction.
 - Check-in: khóa Event và kiểm tra assignment, sau đó khóa Order/Ticket, đổi Ticket sang `checked_in` và ghi log trong một transaction.
 - Cancel Event: khóa Event cùng toàn bộ Order, đóng bán, nhả giữ chỗ, hủy pending Order/Payment, vô hiệu QR, tạo Refund mô phỏng và queue Email Log trong một transaction. SMTP chạy ngoài transaction; project không gọi provider hoàn tiền thật.
 - Lifecycle theo thời gian: server đồng bộ `published -> ongoing` khi đến `start_time` và `ongoing -> completed` khi qua `end_time` lúc khởi động, mỗi 10 giây và ngay sau seed demo/workflow. Admin/Public làm mới nền mỗi 10 giây; API vẫn suy ra trạng thái hiệu lực theo thời gian tại lúc trả dữ liệu để hai giao diện không lệch nhau.
@@ -525,7 +525,8 @@ Event -> Orders theo id tăng dần -> Ticket Types theo id tăng dần -> Ticke
 
 - Category có Event không được xóa; hãy inactive Category.
 - Event public phải có ít nhất một active Ticket Type hợp lệ.
-- Thời gian bắt đầu check-in phải cùng ngày bắt đầu Event theo giờ Việt Nam và sớm ít nhất 30 phút; thời gian kết thúc check-in phải sau thời gian bắt đầu check-in và không vượt quá lúc Event kết thúc.
+- Thời gian bắt đầu check-in phải cùng ngày bắt đầu Event theo giờ Việt Nam và sớm ít nhất 2 giờ; thời gian kết thúc check-in phải sau thời gian bắt đầu check-in và không vượt quá lúc Event kết thúc/đóng cổng.
+- Lịch làm việc của Staff lấy đúng khoảng đóng `[Bắt đầu check-in, Kết thúc check-in]`, không lấy giờ bắt đầu/kết thúc Event. Admin không thể tạo phân công nếu khoảng này giao nhau hoặc chạm biên với một ca check-in đang hoạt động khác của cùng Staff.
 - Tổng capacity các tier không vượt venue capacity.
 - Giá vé không đổi sau khi đã reserved/sold; mở tier mới nếu cần giá mới.
 - Order Item là snapshot tên tier, đơn giá và số lượng tại lúc mua, không phải dữ liệu dư thừa.

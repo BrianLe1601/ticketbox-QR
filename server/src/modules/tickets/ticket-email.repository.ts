@@ -16,7 +16,7 @@ export async function enqueueTicketEmail(orderId: number, recipient: string, ema
         const eventId = await findOrderEventId(conn, orderId);
         if (eventId === null) throw AppError.notFound('Không tìm thấy đơn hàng');
         const event = await lockEventRow(conn, eventId);
-        if (!event || !isEventAvailableForTicketDelivery(event.status, event.end_time)) {
+        if (!event || event.visibility !== 'visible' || !isEventAvailableForTicketDelivery(event.status, event.end_time)) {
             throw new AppError(409, 'Sự kiện đã kết thúc hoặc không còn khả dụng; không thể gửi lại vé.', 'EVENT_NOT_AVAILABLE_FOR_TICKET_EMAIL');
         }
         const order = await findOrderByIdForUpdate(conn, orderId);

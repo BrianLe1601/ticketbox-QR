@@ -10,7 +10,7 @@ export function sendSuccess<T>(res: Response, data: T, statusCode = 200) {
 export function sendPaginated<T>(
     res: Response,
     data: T[],
-    meta: { total: number; page: number; limit: number }
+    meta: { total: number; page: number; limit: number } & Record<string, unknown>
 ) {
     return res.status(200).json({
         success: true,

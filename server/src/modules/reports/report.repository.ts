@@ -5,11 +5,21 @@ import type { LogQuery, ReportQuery } from './report.schema.js';
 export interface ReportRow extends RowDataPacket {
   id: number; name: string; status: string; confirmedOrders: number; soldTickets: number;
   issuedTickets: number; admissions: number; scans: number; rejectedScans: number;
-  grossRevenue: number; refundedAmount: number; netRevenue: number;
+  capacity: number; grossRevenue: number; refundedAmount: number; netRevenue: number;
+  fillRate: number; attendanceRate: number; revenueSeries: RevenuePoint[];
+}
+export interface RevenuePoint extends RowDataPacket {
+  period: string; grossRevenue: number; refundedAmount: number; netRevenue: number;
+}
+export interface LogStats {
+  total: number; success: number; rejected: number; duplicate: number; invalid: number;
 }
 export interface LogRow extends RowDataPacket {
   id: number; eventId: number; eventName: string; staffId: number; staffName: string;
-  ticketCode: string | null; result: string; scannedCode: string | null; message: string | null; checkedAt: Date;
+  ticketCode: string | null; ticketStatus: string | null; ticketTypeName: string | null;
+  holderName: string | null; holderEmail: string | null; orderCode: string | null;
+  buyerName: string | null; buyerEmail: string | null; buyerPhone: string | null;
+  result: string; scannedCode: string | null; message: string | null; checkedAt: Date;
 }
 
 // A report and its paginated count use one read-only snapshot while gates keep scanning.
@@ -24,7 +34,7 @@ export async function readSnapshot<T>(work: (conn: PoolConnection) => Promise<T>
   } catch (error) { await conn.rollback(); throw error; }
   finally { conn.release(); }
 }
-export function dateFilter(column: string, query: ReportQuery) {
+export function dateFilter(column: string, query: { from?: string | undefined; to?: string | undefined }) {
   const clauses: string[] = [];
   const values: (string | number)[] = [];
   if (query.from) { clauses.push(`${column} >= ?`); values.push(`${query.from} 00:00:00`); }
@@ -55,6 +65,7 @@ export async function report(conn: PoolConnection, query: ReportQuery): Promise<
     (SELECT COUNT(DISTINCT cl.ticket_id) FROM checkin_logs cl WHERE cl.event_id = e.id AND cl.result_code = 'SUCCESS' ${scans.sql}) AS admissions,
     (SELECT COUNT(*) FROM checkin_logs cl WHERE cl.event_id = e.id ${scans.sql}) AS scans,
     (SELECT COUNT(*) FROM checkin_logs cl WHERE cl.event_id = e.id AND cl.result_code <> 'SUCCESS' ${scans.sql}) AS rejectedScans,
+    (SELECT COALESCE(SUM(tt.capacity), 0) FROM ticket_types tt WHERE tt.event_id = e.id) AS capacity,
     (SELECT COALESCE(SUM(p.amount), 0) FROM payments p JOIN orders o ON o.id = p.order_id
       WHERE o.event_id = e.id AND p.status = 'success' ${paid.sql}) AS grossRevenue,
     (SELECT COALESCE(SUM(r.amount), 0) FROM refunds r JOIN orders o ON o.id = r.order_id
@@ -64,16 +75,81 @@ export async function report(conn: PoolConnection, query: ReportQuery): Promise<
     ...paid.values, ...refunds.values, query.eventId,
   ]);
   const row = rows[0];
-  if (row) row.netRevenue = Math.round((Number(row.grossRevenue) - Number(row.refundedAmount)) * 100) / 100;
+  if (row) {
+    row.netRevenue = Math.round((Number(row.grossRevenue) - Number(row.refundedAmount)) * 100) / 100;
+    row.fillRate = Number(row.capacity) > 0
+      ? Math.round((Number(row.soldTickets) / Number(row.capacity)) * 10000) / 100
+      : 0;
+    row.attendanceRate = Number(row.soldTickets) > 0
+      ? Math.round((Number(row.admissions) / Number(row.soldTickets)) * 10000) / 100
+      : 0;
+    row.revenueSeries = await revenueSeries(conn, query);
+  }
   return row;
+}
+
+async function revenueSeries(conn: PoolConnection, query: ReportQuery): Promise<RevenuePoint[]> {
+  const format = query.groupBy === 'year' ? '%Y' : query.groupBy === 'month' ? '%Y-%m' : '%Y-%m-%d';
+  const paid = dateFilter('p.paid_at', query);
+  const refunds = dateFilter('r.completed_at', query);
+  const [rows] = await conn.execute<RevenuePoint[]>(`SELECT period,
+      COALESCE(SUM(grossRevenue), 0) AS grossRevenue,
+      COALESCE(SUM(refundedAmount), 0) AS refundedAmount,
+      COALESCE(SUM(grossRevenue), 0) - COALESCE(SUM(refundedAmount), 0) AS netRevenue
+    FROM (
+      SELECT DATE_FORMAT(p.paid_at, '${format}') AS period, SUM(p.amount) AS grossRevenue, 0 AS refundedAmount
+      FROM payments p JOIN orders o ON o.id = p.order_id
+      WHERE o.event_id = ? AND p.status = 'success' ${paid.sql}
+      GROUP BY DATE_FORMAT(p.paid_at, '${format}')
+      UNION ALL
+      SELECT DATE_FORMAT(r.completed_at, '${format}') AS period, 0 AS grossRevenue, SUM(r.amount) AS refundedAmount
+      FROM refunds r JOIN orders o ON o.id = r.order_id
+      WHERE o.event_id = ? AND r.status = 'completed' ${refunds.sql}
+      GROUP BY DATE_FORMAT(r.completed_at, '${format}')
+    ) totals
+    GROUP BY period ORDER BY period ASC`, [
+    query.eventId, ...paid.values,
+    query.eventId, ...refunds.values,
+  ]);
+  return rows.map((point) => ({
+    ...point,
+    grossRevenue: Number(point.grossRevenue),
+    refundedAmount: Number(point.refundedAmount),
+    netRevenue: Number(point.netRevenue),
+  }));
 }
 export function logFilter(query: LogQuery) {
   const dates = dateFilter('cl.checked_at', query);
   let sql = `cl.event_id = ?${dates.sql}`;
   const values: (string | number)[] = [query.eventId, ...dates.values];
   if (query.staffId) { sql += ' AND cl.staff_id = ?'; values.push(query.staffId); }
-  if (query.result) { sql += ' AND cl.result_code = ?'; values.push(query.result); }
+  if (query.result === 'FAILED') sql += " AND cl.result_code <> 'SUCCESS'";
+  else if (query.result) { sql += ' AND cl.result_code = ?'; values.push(query.result); }
   return { sql, values };
+}
+
+function logScopeFilter(query: LogQuery) {
+  const dates = dateFilter('cl.checked_at', query);
+  let sql = `cl.event_id = ?${dates.sql}`;
+  const values: (string | number)[] = [query.eventId, ...dates.values];
+  if (query.staffId) { sql += ' AND cl.staff_id = ?'; values.push(query.staffId); }
+  return { sql, values };
+}
+
+export async function logStats(conn: PoolConnection, query: LogQuery): Promise<LogStats> {
+  const filter = logScopeFilter(query);
+  const [rows] = await conn.execute<RowDataPacket[]>(`SELECT
+    COUNT(*) AS total,
+    COALESCE(SUM(cl.result_code = 'SUCCESS'), 0) AS success,
+    COALESCE(SUM(cl.result_code <> 'SUCCESS'), 0) AS rejected,
+    COALESCE(SUM(cl.result_code = 'ALREADY_CHECKED_IN'), 0) AS duplicate,
+    COALESCE(SUM(cl.result_code = 'INVALID'), 0) AS invalid
+    FROM checkin_logs cl WHERE ${filter.sql}`, filter.values);
+  const row = rows[0]!;
+  return {
+    total: Number(row.total), success: Number(row.success), rejected: Number(row.rejected),
+    duplicate: Number(row.duplicate), invalid: Number(row.invalid),
+  };
 }
 export async function countLogs(conn: PoolConnection, query: LogQuery) {
   const filter = logFilter(query);
@@ -84,9 +160,15 @@ export async function logs(conn: PoolConnection, query: LogQuery, limit: number,
   const filter = logFilter(query);
   const [rows] = await conn.query<LogRow[]>(`SELECT cl.id, cl.event_id AS eventId, e.name AS eventName,
     cl.staff_id AS staffId, u.full_name AS staffName, t.ticket_code AS ticketCode,
+    t.status AS ticketStatus, oi.ticket_type_name AS ticketTypeName,
+    t.holder_name AS holderName, t.holder_email AS holderEmail,
+    o.order_code AS orderCode, o.buyer_name AS buyerName,
+    o.buyer_email AS buyerEmail, o.buyer_phone AS buyerPhone,
     cl.result_code AS result, cl.scanned_code_masked AS scannedCode, cl.message, cl.checked_at AS checkedAt
     FROM checkin_logs cl JOIN events e ON e.id = cl.event_id JOIN users u ON u.id = cl.staff_id
     LEFT JOIN tickets t ON t.id = cl.ticket_id
+    LEFT JOIN order_items oi ON oi.id = t.order_item_id
+    LEFT JOIN orders o ON o.id = oi.order_id
     WHERE ${filter.sql} ORDER BY cl.checked_at DESC, cl.id DESC LIMIT ? OFFSET ?`, [...filter.values, limit, offset]);
   return rows;
 }

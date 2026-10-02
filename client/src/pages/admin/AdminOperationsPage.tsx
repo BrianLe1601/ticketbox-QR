@@ -1,145 +1,196 @@
 import {
-  AlertCircle, BarChart3, CalendarDays, CheckCircle2, ChevronLeft,
-  ChevronRight, CircleDollarSign, ClipboardCheck, FileSpreadsheet, Filter, LoaderCircle,
-  RefreshCw, ScanLine, Search, Ticket, UserRound, XCircle,
-} from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
-import { useAuth } from '@/context/AuthContext';
-import { exportOperations, loadAdminLogs, loadReport, searchReportEvents } from '@/services/report.service';
-import type { AdminCheckinLog, EventReport, OperationFilters, ReportEvent } from '@/services/report.service';
+  AlertTriangle, BarChart3, CheckCircle2, Clock3, Download, Filter, RefreshCw,
+  ScanLine, ShieldAlert, TicketCheck, Users, WalletCards, XCircle,
+} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Area, AreaChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis,
+} from "recharts";
 
-const field = 'operations-field';
-const message = (cause: unknown) => cause instanceof Error ? cause.message : 'Không thể kết nối máy chủ.';
-const number = (value: number) => Number(value).toLocaleString('vi-VN');
-const money = (value: number) => `${number(value)} ₫`;
-const time = (value: string) => new Date(value).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
-const results = ['SUCCESS', 'ALREADY_CHECKED_IN', 'WRONG_EVENT', 'CANCELLED', 'UNPAID', 'INVALID', 'EVENT_NOT_AVAILABLE', 'STAFF_NOT_ASSIGNED'];
+import { useAuth } from "@/context/AuthContext";
+import { digitsOnly } from "@/lib/utils";
+import {
+  exportOperations, loadAdminLogs, loadReport, searchReportEvents,
+  type AdminCheckinLog, type CheckinLogStats, type EventReport,
+  type OperationFilters, type ReportEvent,
+} from "@/services/report.service";
+
+const emptyStats: CheckinLogStats = { total: 0, success: 0, rejected: 0, duplicate: 0, invalid: 0 };
 const resultLabels: Record<string, string> = {
-  SUCCESS: 'Thành công', ALREADY_CHECKED_IN: 'Đã check-in trước đó', WRONG_EVENT: 'Sai sự kiện',
-  CANCELLED: 'Vé đã hủy', UNPAID: 'Chưa thanh toán', INVALID: 'Không hợp lệ',
-  EVENT_NOT_AVAILABLE: 'Sự kiện không khả dụng', STAFF_NOT_ASSIGNED: 'Nhân viên chưa được phân công',
+  SUCCESS: "Vào cổng thành công", FAILED: "Tất cả lượt bị từ chối",
+  ALREADY_CHECKED_IN: "Vé đã được sử dụng", WRONG_EVENT: "Vé thuộc sự kiện khác",
+  CANCELLED: "Vé đã bị hủy", UNPAID: "Đơn chưa thanh toán",
+  INVALID: "Mã giả hoặc không hợp lệ", EVENT_NOT_AVAILABLE: "Ngoài thời gian check-in",
+  STAFF_NOT_ASSIGNED: "Nhân viên chưa được phân công",
+};
+const resultOptions = [
+  "SUCCESS", "FAILED", "ALREADY_CHECKED_IN", "WRONG_EVENT", "CANCELLED",
+  "UNPAID", "INVALID", "EVENT_NOT_AVAILABLE", "STAFF_NOT_ASSIGNED",
+];
+
+const formatNumber = (value: number) => Number(value).toLocaleString("vi-VN");
+const formatMoney = (value: number) => new Intl.NumberFormat("vi-VN", {
+  style: "currency", currency: "VND", maximumFractionDigits: 0,
+}).format(Number(value));
+const formatTime = (value: string) => new Date(value).toLocaleString("vi-VN", {
+  timeZone: "Asia/Ho_Chi_Minh", day: "2-digit", month: "2-digit", year: "numeric",
+  hour: "2-digit", minute: "2-digit", second: "2-digit",
+});
+const errorMessage = (cause: unknown) => cause instanceof Error ? cause.message : "Không thể kết nối máy chủ.";
+const statusTone = (result: string) => result === "SUCCESS" ? "success" : result === "ALREADY_CHECKED_IN" ? "warning" : "danger";
+const ticketStatusLabels: Record<string, string> = {
+  issued: "Chưa vào cổng", checked_in: "Đã check-in", cancelled: "Đã hủy",
 };
 
-function percentage(value: number, total: number) { return total > 0 ? Math.min(100, Math.round((value / total) * 100)) : 0; }
-function ResultBadge({ result }: { result: string }) {
-  const isSuccess = result === 'SUCCESS';
-  return <span className={`operations-result-badge ${isSuccess ? 'is-success' : 'is-warning'}`}>
-    {isSuccess ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}{resultLabels[result] ?? result}
-  </span>;
-}
-function MetricCard({ label, value, note, tone = 'cyan', icon: Icon }: {
-  label: string; value: string; note: string; tone?: 'cyan' | 'violet' | 'green' | 'amber'; icon: typeof Ticket;
+function FilterPanel({
+  kind, filters, events, search, searchLoading, eventError, loading, onSearch,
+  onChange, onSubmit, onRetry,
+}: {
+  kind: "reports" | "checkins"; filters: OperationFilters; events: ReportEvent[];
+  search: string; searchLoading: boolean; eventError: string; loading: boolean;
+  onSearch: (value: string) => void;
+  onChange: (key: keyof OperationFilters, value: string) => void;
+  onSubmit: () => void; onRetry: () => void;
 }) {
-  return <article className={`operations-metric is-${tone}`}><div className="operations-metric-icon"><Icon size={18} /></div>
-    <div><p>{label}</p><strong>{value}</strong><small>{note}</small></div></article>;
+  const rangeInvalid = Boolean(filters.from && filters.to && filters.from > filters.to);
+  return <form className="operations-filter-panel" onSubmit={(event) => { event.preventDefault(); if (!rangeInvalid) onSubmit(); }}>
+    <div className="operations-panel-title"><Filter size={16}/><div><strong>Bộ lọc dữ liệu</strong><span>Khoảng ngày được tính theo giờ Việt Nam</span></div></div>
+    <div className="operations-filter-grid">
+      <label><span>Tìm sự kiện</span><input value={search} maxLength={100} onChange={(event) => onSearch(event.target.value)} placeholder="Nhập tên sự kiện..."/></label>
+      <label><span>Sự kiện cần xem</span><select required value={filters.eventId} onChange={(event) => onChange("eventId", event.target.value)}><option value="">Chọn sự kiện</option>{events.map((event) => <option value={event.id} key={event.id}>{event.name}</option>)}</select></label>
+      <label><span>Từ ngày</span><input type="date" value={filters.from} onChange={(event) => onChange("from", event.target.value)}/></label>
+      <label><span>Đến hết ngày</span><input type="date" value={filters.to} onChange={(event) => onChange("to", event.target.value)}/></label>
+      {kind === "reports" ? <label><span>Nhóm biểu đồ theo</span><select value={filters.groupBy ?? "day"} onChange={(event) => onChange("groupBy", event.target.value)}><option value="day">Ngày</option><option value="month">Tháng</option><option value="year">Năm</option></select></label> : <>
+        <label><span>Mã nhân viên (tùy chọn)</span><input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={10} value={filters.staffId ?? ""} onChange={(event) => onChange("staffId", digitsOnly(event.target.value, 10))} placeholder="Ví dụ: 12"/></label>
+        <label><span>Kết quả quét</span><select value={filters.result ?? ""} onChange={(event) => onChange("result", event.target.value)}><option value="">Tất cả kết quả</option>{resultOptions.map((result) => <option key={result} value={result}>{resultLabels[result]}</option>)}</select></label>
+      </>}
+    </div>
+    {searchLoading && <p className="operations-inline-note" role="status">Đang tìm sự kiện…</p>}
+    {eventError && <p className="operations-inline-error" role="alert">{eventError} <button type="button" onClick={onRetry}>Thử lại</button></p>}
+    {!searchLoading && !eventError && events.length === 0 && <p className="operations-inline-note">Không tìm thấy sự kiện phù hợp.</p>}
+    {rangeInvalid && <p className="operations-inline-error" role="alert">Ngày bắt đầu phải trước hoặc bằng ngày kết thúc.</p>}
+    <button className="operations-primary-button" disabled={loading || !filters.eventId || rangeInvalid}>{loading ? <RefreshCw className="animate-spin" size={15}/> : <Filter size={15}/>} Áp dụng bộ lọc</button>
+  </form>;
 }
 
-export function AdminOperationsPage({ kind }: { kind: 'reports' | 'checkins' }) {
+function CheckinView({ logs, stats, total, page, activeResult, onResult, onPage }: {
+  logs: AdminCheckinLog[]; stats: CheckinLogStats; total: number; page: number;
+  activeResult: string; onResult: (result: string) => void; onPage: (page: number) => void;
+}) {
+  const cards = [
+    { key: "", label: "Tổng lượt quét", value: stats.total, icon: ScanLine, tone: "cyan" },
+    { key: "SUCCESS", label: "Vào cổng thành công", value: stats.success, icon: CheckCircle2, tone: "green" },
+    { key: "FAILED", label: "Lượt bị từ chối", value: stats.rejected, icon: XCircle, tone: "red" },
+    { key: "ALREADY_CHECKED_IN", label: "Vé quét trùng", value: stats.duplicate, icon: Clock3, tone: "amber" },
+    { key: "INVALID", label: "Mã giả / không hợp lệ", value: stats.invalid, icon: ShieldAlert, tone: "violet" },
+  ];
+  return <>
+    <div className="operations-metric-grid checkin">{cards.map(({ key, label, value, icon: Icon, tone }) => <button key={label} className={`operations-metric-card ${tone}`} aria-pressed={activeResult === key} onClick={() => onResult(key)}><Icon size={19}/><span>{label}</span><strong>{formatNumber(value)}</strong><small>Nhấn để lọc</small></button>)}</div>
+    <section className="operations-data-panel">
+      <header><div><span className="operations-kicker">AUDIT THEO THỜI GIAN THỰC</span><h3>Chi tiết từng lượt quét</h3></div><span className="operations-count">{formatNumber(total)} kết quả phù hợp</span></header>
+      {logs.length === 0 ? <div className="operations-empty"><ScanLine size={34}/><strong>Không có lượt quét phù hợp</strong><span>Hãy đổi sự kiện, khoảng ngày hoặc trạng thái lọc.</span></div> : <div className="operations-table-wrap"><table className="operations-table">
+        <thead><tr><th>Thời gian chính xác</th><th>Thông tin vé</th><th>Người giữ vé / Đơn hàng</th><th>Nhân viên thực hiện</th><th>Kết quả quét</th></tr></thead>
+        <tbody>{logs.map((log) => <tr key={log.id}>
+          <td><strong>{formatTime(log.checkedAt)}</strong><small>Log #{log.id}</small></td>
+          <td>{log.ticketCode ? <><strong className="operations-code">{log.ticketCode}</strong><small>{log.ticketTypeName ?? "Chưa xác định hạng vé"}</small>{log.ticketStatus && <span className={`operations-ticket-status ${log.ticketStatus}`}>{ticketStatusLabels[log.ticketStatus] ?? log.ticketStatus}</span>}</> : <><strong className="operations-code">{log.scannedCode ?? "Không xác định"}</strong><small>Mã không khớp vé nào; QR gốc không được lưu</small></>}</td>
+          <td>{log.ticketCode ? <><strong>{log.holderName ?? log.buyerName ?? "Chưa cập nhật tên"}</strong><small>{log.holderEmail ?? log.buyerEmail ?? "Chưa cập nhật email"}</small>{log.buyerPhone && <small>Điện thoại: {log.buyerPhone}</small>}{log.orderCode && <small className="operations-code">Đơn: {log.orderCode}</small>}</> : <><strong>Không xác định được vé</strong><small>Không có thông tin người mua hoặc đơn hàng</small></>}</td>
+          <td><strong>{log.staffName}</strong><small>Nhân viên #{log.staffId}</small></td>
+          <td><span className={`operations-result ${statusTone(log.result)}`}>{resultLabels[log.result] ?? log.result}</span><small>{log.message ?? resultLabels[log.result] ?? "—"}</small></td>
+        </tr>)}</tbody>
+      </table></div>}
+      <nav className="operations-pagination" aria-label="Phân trang lịch sử"><button disabled={page <= 1} onClick={() => onPage(page - 1)}>Trang trước</button><span>Trang <strong>{page}</strong> / {Math.max(1, Math.ceil(total / 20))}</span><button disabled={page * 20 >= total} onClick={() => onPage(page + 1)}>Trang sau</button></nav>
+    </section>
+  </>;
+}
+
+function ReportView({ report }: { report: EventReport }) {
+  const cards = [
+    { label: "Tổng thu mô phỏng", value: formatMoney(report.grossRevenue), hint: `${formatNumber(report.confirmedOrders)} đơn xác nhận`, icon: WalletCards, tone: "green" },
+    { label: "Thu ròng mô phỏng", value: formatMoney(report.netRevenue), hint: `Đã hoàn ${formatMoney(report.refundedAmount)}`, icon: BarChart3, tone: "cyan" },
+    { label: "Tỷ lệ lấp đầy", value: `${formatNumber(report.fillRate)}%`, hint: `${formatNumber(report.soldTickets)} / ${formatNumber(report.capacity)} vé`, icon: TicketCheck, tone: "violet" },
+    { label: "Tỷ lệ tham dự", value: `${formatNumber(report.attendanceRate)}%`, hint: `${formatNumber(report.admissions)} / ${formatNumber(report.soldTickets)} vé đã bán`, icon: Users, tone: "amber" },
+  ];
+  return <>
+    <div className="operations-metric-grid reports">{cards.map(({ label, value, hint, icon: Icon, tone }) => <article className={`operations-metric-card ${tone}`} key={label}><Icon size={19}/><span>{label}</span><strong>{value}</strong><small>{hint}</small></article>)}</div>
+    <div className="operations-report-grid">
+      <section className="operations-data-panel operations-chart-panel"><header><div><span className="operations-kicker">ĐỐI SOÁT TÀI CHÍNH</span><h3>Doanh thu theo kỳ</h3></div></header>
+        {report.revenueSeries.length === 0 ? <div className="operations-empty"><BarChart3 size={34}/><strong>Chưa có giao dịch trong kỳ</strong><span>Biểu đồ sẽ xuất hiện khi có thanh toán hoặc hoàn tiền hoàn tất.</span></div> : <div className="operations-chart"><ResponsiveContainer width="100%" height="100%"><AreaChart data={report.revenueSeries} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
+          <defs><linearGradient id="netRevenueFill" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#22d3ee" stopOpacity={0.35}/><stop offset="95%" stopColor="#22d3ee" stopOpacity={0}/></linearGradient></defs>
+          <CartesianGrid stroke="rgba(148,163,184,.12)" vertical={false}/><XAxis dataKey="period" stroke="#607990" tickLine={false}/><YAxis stroke="#607990" tickLine={false} tickFormatter={(value) => new Intl.NumberFormat("vi-VN", { notation: "compact" }).format(value)}/>
+          <Tooltip formatter={(value, name) => [formatMoney(Number(value)), name === "grossRevenue" ? "Đã thu" : name === "refundedAmount" ? "Đã hoàn" : "Thu ròng"]}/><Legend formatter={(value) => value === "grossRevenue" ? "Đã thu" : value === "refundedAmount" ? "Đã hoàn" : "Thu ròng"}/>
+          <Area type="monotone" dataKey="grossRevenue" stroke="#34d399" fillOpacity={0} strokeWidth={2}/><Area type="monotone" dataKey="refundedAmount" stroke="#fb7185" fillOpacity={0} strokeWidth={2}/><Area type="monotone" dataKey="netRevenue" stroke="#22d3ee" fill="url(#netRevenueFill)" strokeWidth={2}/>
+        </AreaChart></ResponsiveContainer></div>}
+      </section>
+      <section className="operations-data-panel operations-reconcile"><header><div><span className="operations-kicker">HIỆU QUẢ SỰ KIỆN</span><h3>Đối chiếu vận hành</h3></div></header><dl>
+        <div><dt>Vé phát hành</dt><dd>{formatNumber(report.issuedTickets)}</dd></div><div><dt>Vé đã vào cổng</dt><dd>{formatNumber(report.admissions)}</dd></div><div><dt>Tổng lượt quét</dt><dd>{formatNumber(report.scans)}</dd></div><div className="danger"><dt>Lượt quét bị từ chối</dt><dd>{formatNumber(report.rejectedScans)}</dd></div>
+      </dl><p><AlertTriangle size={15}/> Số tiền là dữ liệu thanh toán mô phỏng. Thu ròng chỉ trừ các hoàn tiền đã hoàn tất trong kỳ đã chọn.</p></section>
+    </div>
+  </>;
+}
+
+export function AdminOperationsPage({ kind }: { kind: "reports" | "checkins" }) {
   const { token } = useAuth();
-  const isReport = kind === 'reports';
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState("");
   const [events, setEvents] = useState<ReportEvent[]>([]);
-  const [eventError, setEventError] = useState('');
+  const [eventError, setEventError] = useState("");
   const [searchLoading, setSearchLoading] = useState(true);
   const [eventReload, setEventReload] = useState(0);
-  const [filters, setFilters] = useState<OperationFilters>({ eventId: '', from: '', to: '' });
+  const [filters, setFilters] = useState<OperationFilters>({ eventId: "", from: "", to: "", groupBy: "day" });
   const [applied, setApplied] = useState<OperationFilters | null>(null);
   const [report, setReport] = useState<EventReport | null>(null);
   const [logs, setLogs] = useState<AdminCheckinLog[]>([]);
+  const [stats, setStats] = useState<CheckinLogStats>(emptyStats);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [exportError, setExportError] = useState('');
+  const [error, setError] = useState("");
+  const [exportError, setExportError] = useState("");
   const [exporting, setExporting] = useState(false);
   const [reload, setReload] = useState(0);
-  const selectedEvent = useMemo(() => events.find((event) => String(event.id) === filters.eventId), [events, filters.eventId]);
-  const pageCount = Math.max(1, Math.ceil(total / 20));
-  const rangeInvalid = !!(filters.from && filters.to && filters.from > filters.to);
-  const admissionRate = report ? percentage(report.admissions, report.issuedTickets) : 0;
-  const scanSuccessRate = report ? percentage(report.admissions, report.scans) : 0;
 
   useEffect(() => {
     const controller = new AbortController();
     const timer = setTimeout(() => {
       searchReportEvents(search, token, controller.signal).then(({ data }) => {
-        if (!controller.signal.aborted) { setEvents(data); setEventError(''); }
-      }).catch((cause: unknown) => { if (!controller.signal.aborted) setEventError(message(cause)); })
+        if (!controller.signal.aborted) { setEvents(data); setEventError(""); }
+      }).catch((cause: unknown) => { if (!controller.signal.aborted) setEventError(errorMessage(cause)); })
         .finally(() => { if (!controller.signal.aborted) setSearchLoading(false); });
     }, 250);
     return () => { clearTimeout(timer); controller.abort(); };
   }, [search, token, eventReload]);
+
   useEffect(() => {
     if (!applied) return;
     const controller = new AbortController();
-    async function load() {
-      try {
-        if (isReport) {
-          const { data } = await loadReport(applied, token, controller.signal);
-          if (!controller.signal.aborted) setReport(data);
-        } else {
-          const { data, meta } = await loadAdminLogs(applied, page, token, controller.signal);
-          if (!controller.signal.aborted) { setLogs(data); setTotal(meta?.total ?? 0); }
-        }
-        if (!controller.signal.aborted) setError('');
-      } catch (cause) { if (!controller.signal.aborted) setError(message(cause)); }
-      finally { if (!controller.signal.aborted) setLoading(false); }
-    }
-    void load();
+    const request = kind === "reports"
+      ? loadReport(applied, token, controller.signal).then(({ data }) => setReport(data))
+      : loadAdminLogs(applied, page, token, controller.signal).then(({ data, meta }) => { setLogs(data); setTotal(meta?.total ?? 0); setStats(meta?.stats ?? emptyStats); });
+    request.then(() => { if (!controller.signal.aborted) setError(""); })
+      .catch((cause: unknown) => { if (!controller.signal.aborted) setError(errorMessage(cause)); })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [applied, page, token, reload, isReport]);
+  }, [applied, page, token, reload, kind]);
 
+  const selectedEvent = useMemo(() => events.find((event) => String(event.id) === applied?.eventId), [events, applied]);
   function update(key: keyof OperationFilters, value: string) { setFilters((current) => ({ ...current, [key]: value })); }
-  function applyFilters() {
-    if (rangeInvalid) return;
-    setApplied({ ...filters }); setPage(1); setLoading(true); setExportError(''); setReload((value) => value + 1);
-  }
+  function submitFilters() { setLoading(true); setApplied({ ...filters }); setPage(1); setExportError(""); setReload((value) => value + 1); }
+  function filterLogs(result: string) { if (!applied) return; const next = { ...applied, result }; setLoading(true); setFilters((current) => ({ ...current, result })); setApplied(next); setPage(1); }
   async function download() {
     if (!applied || exporting) return;
-    setExporting(true); setExportError('');
+    setExporting(true); setExportError("");
     try {
-      const blob = await exportOperations(kind, applied, token); const url = URL.createObjectURL(blob);
-      const anchor = document.createElement('a'); anchor.href = url; anchor.download = `ticketbox-${kind}-${applied.eventId}.xlsx`;
-      document.body.append(anchor); anchor.click(); anchor.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch (cause) { setExportError(message(cause)); } finally { setExporting(false); }
+      const blob = await exportOperations(kind, applied, token); const url = URL.createObjectURL(blob); const anchor = document.createElement("a");
+      anchor.href = url; anchor.download = `ticketbox-${kind}-${applied.eventId}.xlsx`; document.body.append(anchor); anchor.click(); anchor.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (cause) { setExportError(errorMessage(cause)); } finally { setExporting(false); }
   }
 
-  return <section className="operations-page">
-    <header className="operations-hero">
-      <div className={`operations-hero-icon ${isReport ? 'is-violet' : 'is-cyan'}`}>{isReport ? <BarChart3 size={23} /> : <ScanLine size={23} />}</div>
-      <div><span className="operations-eyebrow">VẬN HÀNH SỰ KIỆN</span><h2>{isReport ? 'Báo cáo sự kiện' : 'Nhật ký check-in'}</h2><p>{isReport ? 'Theo dõi doanh thu mô phỏng, vé và mức độ tham dự theo từng sự kiện.' : 'Tra cứu mọi lượt quét vé, bao gồm kết quả hợp lệ và các lượt bị từ chối.'}</p></div>
-      <div className="operations-hero-status"><span />DỮ LIỆU TỪ HỆ THỐNG</div>
-    </header>
-    <form className="operations-filter-panel" onSubmit={(event) => { event.preventDefault(); applyFilters(); }}>
-      <div className="operations-panel-heading"><div><Filter size={17} /><div><span>BỘ LỌC PHẠM VI</span><h3>Chọn dữ liệu cần xem</h3></div></div><p>Giờ Việt Nam (GMT+7)</p></div>
-      <div className="operations-filter-grid">
-        <label className="operations-filter-search"><span>Tìm sự kiện</span><div><Search size={16} /><input className={field} value={search} maxLength={100} onChange={(event) => { setSearch(event.target.value); setSearchLoading(true); update('eventId', ''); }} placeholder="Nhập tên sự kiện" /></div></label>
-        <label><span>Sự kiện <b>*</b></span><select className={field} required value={filters.eventId} onChange={(event) => update('eventId', event.target.value)}><option value="">Chọn sự kiện</option>{events.map((event) => <option value={event.id} key={event.id}>{event.name}</option>)}</select></label>
-        <label><span>Từ ngày</span><div className="operations-input-with-icon"><CalendarDays size={15} /><input className={field} type="date" value={filters.from} onChange={(event) => update('from', event.target.value)} /></div></label>
-        <label><span>Đến hết ngày</span><div className="operations-input-with-icon"><CalendarDays size={15} /><input className={field} type="date" value={filters.to} onChange={(event) => update('to', event.target.value)} /></div></label>
-        {!isReport && <><label><span>Mã nhân viên</span><div className="operations-input-with-icon"><UserRound size={15} /><input className={field} type="number" min="1" step="1" value={filters.staffId ?? ''} onChange={(event) => update('staffId', event.target.value)} placeholder="Tất cả" /></div></label><label><span>Kết quả quét</span><select className={field} value={filters.result ?? ''} onChange={(event) => update('result', event.target.value)}><option value="">Tất cả kết quả</option>{results.map((result) => <option key={result} value={result}>{resultLabels[result]}</option>)}</select></label></>}
-      </div>
-      <div className="operations-filter-footer"><div className="operations-filter-feedback">
-        {searchLoading && <span role="status"><LoaderCircle size={14} />Đang tìm sự kiện…</span>}
-        {!searchLoading && !eventError && selectedEvent && <span className="is-ready"><CheckCircle2 size={14} />Đã chọn: {selectedEvent.name}</span>}
-        {!searchLoading && !eventError && !events.length && <span><AlertCircle size={14} />Không tìm thấy sự kiện phù hợp.</span>}
-        {events.length === 100 && <span>Hiển thị 100 sự kiện; hãy thu hẹp từ khóa.</span>}
-        {eventError && <span className="is-error" role="alert">{eventError}<button type="button" onClick={() => { setSearchLoading(true); setEventReload((value) => value + 1); }}>Thử lại</button></span>}
-        {rangeInvalid && <span className="is-error" role="alert"><AlertCircle size={14} />Ngày bắt đầu phải trước hoặc bằng ngày kết thúc.</span>}
-      </div><button className="operations-apply-button" disabled={loading || !filters.eventId || rangeInvalid}><Filter size={16} />{loading ? 'Đang tải dữ liệu…' : 'Áp dụng bộ lọc'}</button></div>
-    </form>
-    {loading && <div className="operations-loading" role="status"><LoaderCircle size={20} />Đang đồng bộ dữ liệu vận hành…</div>}
-    {error && <div className="operations-alert is-error" role="alert"><AlertCircle size={19} /><div><strong>Không thể tải dữ liệu</strong><p>{error}</p></div><button type="button" onClick={() => { setLoading(true); setReload((value) => value + 1); }}><RefreshCw size={15} />Thử lại</button></div>}
-    {!applied && !loading && <div className="operations-empty"><div>{isReport ? <BarChart3 size={28} /> : <ScanLine size={28} />}</div><h3>Sẵn sàng xem dữ liệu</h3><p>Chọn một sự kiện, sau đó áp dụng bộ lọc để xem {isReport ? 'báo cáo tổng hợp' : 'lịch sử quét vé'}.</p></div>}
-    {applied && !loading && !error && <div className="operations-results">
-      <div className="operations-results-toolbar"><div><span>{isReport ? 'BẢNG TỔNG HỢP' : 'DÒNG NHẬT KÝ'}</span><h3>{isReport && report ? report.name : 'Kết quả theo bộ lọc'}</h3><p>Sự kiện #{applied.eventId} <i /> {applied.from || 'Từ đầu'} — {applied.to || 'Đến nay'}</p></div><button className="operations-export-button" disabled={exporting} onClick={() => { void download(); }}><FileSpreadsheet size={16} />{exporting ? 'Đang tạo Excel…' : 'Xuất Excel'}</button></div>
-      {exportError && <div className="operations-inline-error" role="alert"><AlertCircle size={14} />{exportError}</div>}
-      {isReport && report && <><div className="operations-section-label"><CircleDollarSign size={15} /><span>HIỆU QUẢ GIAO DỊCH MÔ PHỎNG</span></div><div className="operations-metric-grid">
-        <MetricCard label="Thanh toán mô phỏng" value={money(report.grossRevenue)} note="Giá trị đơn đã xác nhận" icon={CircleDollarSign} /><MetricCard label="Hoàn tiền mô phỏng" value={money(report.refundedAmount)} note="Đã hoàn tất trong kỳ" tone="amber" icon={RefreshCw} /><MetricCard label="Thu ròng mô phỏng" value={money(report.netRevenue)} note="Sau hoàn tiền mô phỏng" tone="violet" icon={BarChart3} /><MetricCard label="Đơn xác nhận" value={number(report.confirmedOrders)} note="Đơn hàng hợp lệ" tone="green" icon={ClipboardCheck} />
-      </div><div className="operations-section-label"><Ticket size={15} /><span>VÉ VÀ LƯỢT VÀO CỔNG</span></div><div className="operations-metric-grid">
-        <MetricCard label="Vé đã bán" value={number(report.soldTickets)} note="Theo ngày xác nhận" icon={Ticket} /><MetricCard label="Vé đã phát hành" value={number(report.issuedTickets)} note="Theo ngày phát hành" tone="violet" icon={Ticket} /><MetricCard label="Vé đã vào cổng" value={number(report.admissions)} note={`${admissionRate}% trên vé phát hành`} tone="green" icon={CheckCircle2} /><MetricCard label="Tổng lần quét" value={number(report.scans)} note="Gồm cả lượt bị từ chối" tone="violet" icon={ScanLine} /><MetricCard label="Lượt quét bị từ chối" value={number(report.rejectedScans)} note={`${scanSuccessRate}% lượt quét thành công`} tone="amber" icon={XCircle} />
-      </div><div className="operations-insight-grid"><article><div className="operations-progress-heading"><span>Tỷ lệ tham dự</span><strong>{admissionRate}%</strong></div><div className="operations-progress"><span style={{ width: `${admissionRate}%` }} /></div><p>{number(report.admissions)} / {number(report.issuedTickets)} vé phát hành đã vào cổng.</p></article><article><div className="operations-progress-heading"><span>Chất lượng quét vé</span><strong>{scanSuccessRate}%</strong></div><div className="operations-progress is-violet"><span style={{ width: `${scanSuccessRate}%` }} /></div><p>{number(report.admissions)} lượt hợp lệ trên {number(report.scans)} lượt quét.</p></article></div><p className="operations-disclaimer">Các số tiền chỉ mô phỏng cho đồ án, không phản ánh giao dịch ngân hàng hoặc cổng thanh toán thật. Thu ròng có thể âm khi hoàn cho đơn mua trước kỳ này; lượt vào giữ lịch sử kể cả sau khi hủy sự kiện.</p></>}
-      {!isReport && <><div className="operations-log-summary"><div><ScanLine size={17} /><span>{number(total)} lượt quét phù hợp</span></div><p>Trang {page} / {pageCount}</p></div>{logs.length === 0 ? <div className="operations-empty is-compact"><div><ScanLine size={25} /></div><h3>Không có lượt quét phù hợp</h3><p>Hãy điều chỉnh ngày, nhân viên hoặc kết quả quét trong bộ lọc.</p></div> : <div className="operations-table-wrap"><table className="operations-log-table"><caption className="sr-only">Lịch sử check-in theo bộ lọc</caption><thead><tr>{['Thời điểm', 'Nhân viên', 'Vé / mã che', 'Kết quả', 'Thông báo'].map((label) => <th scope="col" key={label}>{label}</th>)}</tr></thead><tbody>{logs.map((log) => <tr key={log.id} className={log.result === 'SUCCESS' ? 'is-success' : 'is-warning'}><td data-label="Thời điểm"><time dateTime={log.checkedAt}>{time(log.checkedAt)}</time></td><td data-label="Nhân viên"><span className="operations-staff"><UserRound size={14} /><span>{log.staffName}<small>Nhân viên #{log.staffId}</small></span></span></td><td data-label="Vé / mã che"><code>{log.ticketCode ?? log.scannedCode ?? '—'}</code></td><td data-label="Kết quả"><ResultBadge result={log.result} /></td><td data-label="Thông báo"><span className="operations-log-message">{log.message ?? '—'}</span></td></tr>)}</tbody></table></div>}<nav aria-label="Phân trang lịch sử check-in" className="operations-pagination"><button type="button" disabled={page <= 1} onClick={() => { setLoading(true); setPage((value) => value - 1); }}><ChevronLeft size={16} />Trước</button><span>Trang <strong>{page}</strong> trên {pageCount}</span><button type="button" disabled={page * 20 >= total} onClick={() => { setLoading(true); setPage((value) => value + 1); }}>Sau<ChevronRight size={16} /></button></nav></>}
-    </div>}
+  return <section className="admin-operations-page">
+    <header className="factory-module-hero operations-hero"><div><div className="admin-live-label">{kind === "reports" ? <BarChart3 size={13}/> : <ScanLine size={13}/>} {kind === "reports" ? "EVENT INTELLIGENCE" : "GATE AUDIT CONTROL"}</div><h2>{kind === "reports" ? "Báo cáo & Thống kê" : "Lịch sử vào cổng"}</h2><p>{kind === "reports" ? "Đánh giá doanh thu mô phỏng, tỷ lệ lấp đầy và tỷ lệ tham dự theo từng sự kiện." : "Theo dõi chính xác vé nào được quét, thời điểm, nhân viên thực hiện và mọi lượt bị từ chối."}</p></div><div className="factory-module-core">{kind === "reports" ? <BarChart3 size={28}/> : <ScanLine size={28}/>}</div></header>
+    <FilterPanel kind={kind} filters={filters} events={events} search={search} searchLoading={searchLoading} eventError={eventError} loading={loading} onSearch={(value) => { setSearch(value); setSearchLoading(true); update("eventId", ""); }} onChange={update} onSubmit={submitFilters} onRetry={() => { setSearchLoading(true); setEventReload((value) => value + 1); }}/>
+    {error && <div className="operations-error" role="alert"><AlertTriangle size={18}/><span>{error}</span><button onClick={() => { setLoading(true); setReload((value) => value + 1); }}>Thử lại</button></div>}
+    {!applied && <div className="operations-empty operations-welcome"><Filter size={36}/><strong>Chọn một sự kiện để bắt đầu</strong><span>Dữ liệu chỉ tải sau khi bạn áp dụng bộ lọc.</span></div>}
+    {applied && !error && <><div className="operations-context-bar"><div><span>Đang xem</span><strong>{selectedEvent?.name ?? `Sự kiện #${applied.eventId}`}</strong><small>{applied.from || "Từ đầu"} → {applied.to || "Đến nay"}</small></div><button disabled={exporting || loading} onClick={() => void download()}><Download size={15}/>{exporting ? "Đang tạo file…" : "Xuất Excel"}</button></div>
+      {exportError && <p className="operations-inline-error" role="alert">{exportError}</p>}
+      {loading ? <div className="operations-loading" role="status"><RefreshCw className="animate-spin" size={22}/> Đang tổng hợp dữ liệu…</div> : kind === "reports" ? report && <ReportView report={report}/> : <CheckinView logs={logs} stats={stats} total={total} page={page} activeResult={applied.result ?? ""} onResult={filterLogs} onPage={(next) => { setLoading(true); setPage(next); }}/>}</>}
   </section>;
 }

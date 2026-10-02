@@ -59,6 +59,13 @@ function refundStepClass(status: RefundStatus, step: "pending" | "processing" | 
     return "";
 }
 
+function canResendTicketEmail(order: Pick<AdminOrderListItem, "status" | "eventStatus" | "eventVisibility" | "eventEndTime">) {
+    return order.status === "confirmed"
+        && order.eventVisibility === "visible"
+        && ["published", "ongoing"].includes(order.eventStatus)
+        && new Date(order.eventEndTime).getTime() > Date.now();
+}
+
 export function AdminOrdersPage() {
     const dialogRef = useRef<HTMLDivElement>(null);
     const refundDialogRef = useRef<HTMLDivElement>(null);
@@ -79,6 +86,7 @@ export function AdminOrdersPage() {
     const [detailLoading, setDetailLoading] = useState(false);
     const [refundDetail, setRefundDetail] = useState<AdminOrderDetail | null>(null);
     const [refundLoadingOrderId, setRefundLoadingOrderId] = useState<number | null>(null);
+    const [resendLoadingOrderId, setResendLoadingOrderId] = useState<number | null>(null);
     const [refundFailureReason, setRefundFailureReason] = useState("");
     const [actionLoading, setActionLoading] = useState<"cancel" | "resend" | "retry" | "refresh" | "refund" | null>(null);
     const [notice, setNotice] = useState("");
@@ -207,6 +215,18 @@ export function AdminOrdersPage() {
     const filterPending = buyerEmail.trim() !== debouncedEmail;
     const paginationDisabled = loading || filterPending;
     const selectedEvent = eventOptions.find((event) => String(event.id) === eventId) ?? null;
+    const bulkRefundImpact = selectedEvent && bulkRefundTarget ? bulkRefundTarget === "processing"
+        ? {
+            orders: selectedEvent.refundSummary.pending + selectedEvent.refundSummary.failed,
+            tickets: selectedEvent.refundSummary.pendingTicketQuantity + selectedEvent.refundSummary.failedTicketQuantity,
+            amount: selectedEvent.refundSummary.pendingAmount + selectedEvent.refundSummary.failedAmount,
+        }
+        : {
+            orders: selectedEvent.refundSummary.processing,
+            tickets: selectedEvent.refundSummary.processingTicketQuantity,
+            amount: selectedEvent.refundSummary.processingAmount,
+        }
+        : null;
     async function openDetail(orderId: number) {
         setRefundDetail(null);
         setDetailLoading(true);
@@ -295,7 +315,7 @@ export function AdminOrdersPage() {
     }
 
     async function resendEmail() {
-        if (!detail || detail.status !== "confirmed") return;
+        if (!detail || !canResendTicketEmail(detail)) return;
         setActionLoading("resend");
         setError("");
         setNotice("");
@@ -307,6 +327,21 @@ export function AdminOrdersPage() {
             setError(caught instanceof Error ? caught.message : "Không thể gửi lại email vé.");
         } finally {
             setActionLoading(null);
+        }
+    }
+
+    async function resendEmailFromRow(order: AdminOrderListItem) {
+        if (!canResendTicketEmail(order) || resendLoadingOrderId !== null) return;
+        setResendLoadingOrderId(order.id);
+        setError("");
+        setPageNotice("");
+        try {
+            const result = await resendAdminOrderEmail(order.id);
+            setPageNotice(`${order.orderCode}: ${result.message}`);
+        } catch (caught) {
+            setError(caught instanceof Error ? caught.message : "Không thể gửi lại email vé.");
+        } finally {
+            setResendLoadingOrderId(null);
         }
     }
 
@@ -395,6 +430,8 @@ export function AdminOrdersPage() {
                     <span className="event-status cancelled">ĐÃ HỦY</span>
                 </div>
                 <div className="event-refund-bulk-metrics">
+                    <div className="summary"><span>Tổng vé cần hoàn</span><strong>{selectedEvent.refundSummary.ticketQuantity}</strong></div>
+                    <div className="summary money"><span>Tổng tiền mô phỏng</span><strong>{formatMoney(selectedEvent.refundSummary.amount)}</strong></div>
                     <div><span>Chờ xử lý</span><strong>{selectedEvent.refundSummary.pending}</strong></div>
                     <div><span>Đang xử lý</span><strong>{selectedEvent.refundSummary.processing}</strong></div>
                     <div><span>Thất bại</span><strong>{selectedEvent.refundSummary.failed}</strong></div>
@@ -413,11 +450,12 @@ export function AdminOrdersPage() {
                     <div className="events-empty"><PackageSearch size={38} /><h3>{status === "all" ? "Không tìm thấy đơn hàng" : `Không có đơn ${statusLabel(status).toLowerCase()}`}</h3><p>Hãy thay đổi bộ lọc trạng thái, sự kiện hoặc email người mua.</p></div>
                 ) : <div className="overflow-x-auto"><table className="w-full text-left text-sm">
                     <caption className="sr-only">Danh sách đơn hàng</caption>
-                    <thead><tr>{['Mã đơn', 'Người mua', 'Sự kiện', 'Tổng tiền', 'Trạng thái', 'Ngày tạo', 'Hành động'].map(label => <th key={label} scope="col" className="p-3">{label}</th>)}</tr></thead>
+                    <thead><tr>{['Mã đơn', 'Người mua', 'Sự kiện', 'Hạng vé', 'Tổng tiền', 'Trạng thái', 'Ngày tạo', 'Hành động'].map(label => <th key={label} scope="col" className="p-3">{label}</th>)}</tr></thead>
                     <tbody>{orders.map(order => <tr key={order.id} className="border-t border-white/10">
                         <td className="p-3">{order.orderCode}</td>
                         <td className="p-3">{order.buyerName}<br />{order.buyerEmail}</td>
                         <td className="p-3">{order.eventName}</td>
+                        <td className="p-3"><span className="order-ticket-types" title={order.ticketTypeNames}>{order.ticketTypeNames}</span><small className="order-ticket-quantity">{order.totalQuantity} vé</small></td>
                         <td className="p-3">{formatMoney(order.totalAmount)}</td>
                         <td className="p-3"><span className={`event-status ${orderStatusClass(order.status)}`}>{statusLabel(order.status)}</span></td>
                         <td className="p-3">{formatDate(order.createdAt)}</td>
@@ -426,6 +464,16 @@ export function AdminOrdersPage() {
                                 <button type="button" className="order-table-action" onClick={() => void openDetail(order.id)} aria-label={`Xem chi tiết đơn ${order.orderCode}`}>
                                     <Eye size={15} /><span>Chi tiết</span>
                                 </button>
+                                {canResendTicketEmail(order) && <button
+                                    type="button"
+                                    className="order-table-action email"
+                                    disabled={resendLoadingOrderId !== null}
+                                    onClick={() => void resendEmailFromRow(order)}
+                                    aria-label={`Gửi lại vé qua email cho đơn ${order.orderCode}`}
+                                >
+                                    {resendLoadingOrderId === order.id ? <RefreshCcw className="order-action-spinner" size={15} /> : <Send size={15} />}
+                                    <span>{resendLoadingOrderId === order.id ? "Đang gửi" : "Gửi lại vé"}</span>
+                                </button>}
                                 {order.eventStatus === "cancelled" && order.status === "confirmed" && order.refundStatus && order.refundStatus !== "not_required" && <button
                                     type="button"
                                     className="order-table-action refund"
@@ -492,8 +540,8 @@ export function AdminOrdersPage() {
                                         <p>Lần thử: {log.attemptCount} · {formatDate(log.sentAt ?? log.createdAt)}</p>
                                         {log.nextAttemptAt && <p>{log.status === "processing" ? "Hạn xử lý" : "Thử lại lúc"}: {formatDate(log.nextAttemptAt)}</p>}
                                         {log.errorMessage && <p className="text-red-400">{log.errorMessage}</p>}
-                                        {log.status === "failed" && log.emailType !== "order_cancelled" && <button type="button" aria-label={`Thử gửi lại email số ${log.id}`} className="focus-visible:outline-2 hover:underline disabled:opacity-50"
-                                            disabled={actionLoading !== null || detail.status !== "confirmed" || detail.emailLogs.some(active => active.emailType === log.emailType && ["pending", "processing"].includes(active.status))}
+                                        {log.status === "failed" && log.emailType !== "order_cancelled" && canResendTicketEmail(detail) && <button type="button" aria-label={`Thử gửi lại email số ${log.id}`} className="focus-visible:outline-2 hover:underline disabled:opacity-50"
+                                            disabled={actionLoading !== null || detail.emailLogs.some(active => active.emailType === log.emailType && ["pending", "processing"].includes(active.status))}
                                             onClick={() => void retryEmail(log.id)}>{actionLoading === "retry" ? "Đang xếp lịch..." : "Thử gửi lại"}</button>}
                                     </div>
                                 ))}
@@ -505,7 +553,7 @@ export function AdminOrdersPage() {
 
                             <footer>
                                 <button type="button" disabled={actionLoading !== null} onClick={() => setDetail(null)}>Đóng</button>
-                                <button type="button" disabled={detail.status !== "confirmed" || actionLoading !== null} onClick={() => void resendEmail()}><Send size={14} /> {actionLoading === "resend" ? "Đang xếp lịch..." : "Gửi lại email vé"}</button>
+                                {canResendTicketEmail(detail) && <button type="button" disabled={actionLoading !== null} onClick={() => void resendEmail()}><Send size={14} /> {actionLoading === "resend" ? "Đang xếp lịch..." : "Gửi lại email vé"}</button>}
                                 {detail.status === "pending_payment" && <button className="primary" type="button" disabled={actionLoading !== null} onClick={() => void cancelOrder()}><Ban size={14} /> {actionLoading === "cancel" ? "Đang hủy..." : "Hủy đơn"}</button>}
                             </footer>
                         </form>
@@ -522,8 +570,12 @@ export function AdminOrdersPage() {
                             <div className="refund-simulation-banner"><AlertTriangle size={19} /><div><strong>THAO TÁC HÀNG LOẠT — MÔ PHỎNG</strong><p id="bulk-refund-dialog-description">Chỉ cập nhật workflow nội bộ của Event đã hủy; không gửi lệnh tới ngân hàng hoặc cổng thanh toán.</p></div></div>
                             <section className="bulk-refund-confirm-card">
                                 <span>Sự kiện đã hủy</span><h4>{selectedEvent.name}</h4>
-                                <strong>{bulkRefundTarget === "processing" ? selectedEvent.refundSummary.pending + selectedEvent.refundSummary.failed : selectedEvent.refundSummary.processing}</strong>
-                                <p>{bulkRefundTarget === "processing" ? "yêu cầu đang chờ/thất bại sẽ chuyển sang Đang xử lý" : "yêu cầu đang xử lý sẽ chuyển sang Hoàn tất mô phỏng"}</p>
+                                <div className="bulk-refund-impact-grid">
+                                    <div><strong>{bulkRefundImpact?.orders ?? 0}</strong><span>đơn hàng</span></div>
+                                    <div><strong>{bulkRefundImpact?.tickets ?? 0}</strong><span>vé</span></div>
+                                    <div><strong>{formatMoney(bulkRefundImpact?.amount ?? 0)}</strong><span>tổng tiền mô phỏng</span></div>
+                                </div>
+                                <p>{bulkRefundTarget === "processing" ? "Các yêu cầu đang chờ/thất bại sẽ chuyển sang Đang xử lý" : "Các yêu cầu đang xử lý sẽ chuyển sang Hoàn tất mô phỏng"}</p>
                             </section>
                             <div className="bulk-refund-safety-note"><Check size={17} /><p>Order confirmed, Payment thành công, số tiền và danh tính Refund được giữ nguyên. Bạn có thể xử lý riêng từng đơn nếu cần ghi nhận lỗi.</p></div>
                             <footer>

@@ -206,7 +206,7 @@ CREATE TABLE events (
         sales_start_at < start_time
     ),
     CONSTRAINT chk_events_checkin_starts_early CHECK (
-        checkin_start_at <= start_time - INTERVAL 30 MINUTE
+        checkin_start_at <= start_time - INTERVAL 2 HOUR
     ),
     CONSTRAINT chk_events_scheduled_publish CHECK (
         (scheduled_publish_at IS NULL OR scheduled_publish_at < start_time)
@@ -739,7 +739,9 @@ BEGIN
             SET MESSAGE_TEXT = 'Invalid Event lifecycle transition';
     END IF;
 
-    IF (NEW.start_time <> OLD.start_time OR NEW.end_time <> OLD.end_time)
+    IF (NEW.start_time <> OLD.start_time OR NEW.end_time <> OLD.end_time
+        OR NEW.checkin_start_at <> OLD.checkin_start_at
+        OR NEW.checkin_end_at <> OLD.checkin_end_at)
        AND EXISTS (
             SELECT 1 FROM event_staff
             WHERE event_id = OLD.id AND is_active = TRUE
@@ -861,8 +863,8 @@ BEGIN
         WHERE es.staff_id = NEW.staff_id
           AND es.is_active = TRUE
           AND existing_event.status IN ('draft', 'published', 'ongoing')
-          AND target_event.start_time < existing_event.end_time
-          AND target_event.end_time > existing_event.start_time
+          AND target_event.checkin_start_at <= existing_event.checkin_end_at
+          AND target_event.checkin_end_at >= existing_event.checkin_start_at
         LIMIT 1
     ) THEN
         SIGNAL SQLSTATE '45000'
@@ -906,8 +908,8 @@ BEGIN
               AND es.is_active = TRUE
               AND es.id <> OLD.id
               AND existing_event.status IN ('draft', 'published', 'ongoing')
-              AND target_event.start_time < existing_event.end_time
-              AND target_event.end_time > existing_event.start_time
+              AND target_event.checkin_start_at <= existing_event.checkin_end_at
+              AND target_event.checkin_end_at >= existing_event.checkin_start_at
             LIMIT 1
         ) THEN
             SIGNAL SQLSTATE '45000'

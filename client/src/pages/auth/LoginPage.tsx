@@ -7,7 +7,7 @@ import {
   Sparkles,
   Users,
 } from "lucide-react";
-import { Link, Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 
 import loginBackground from "@/assets/backgrounds/login-gate-inside.webp";
 import ticketboxLogoDark from "@/assets/brand/ticketbox-logo-dark.svg";
@@ -19,6 +19,8 @@ import type { AuthUser } from "@/types/auth";
 export function LoginPage() {
   const { user, isLoading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const notice = (location.state as { notice?: string } | null)?.notice;
 
   function handleLoginSuccess(authenticatedUser: AuthUser, requestedPath: string) {
     const destination =
@@ -128,6 +130,7 @@ export function LoginPage() {
             </header>
 
             {/* Email & Password Login Form */}
+            {notice && <p className="auth-session-notice" role="status">{notice}</p>}
             <LoginForm onLoginSuccess={handleLoginSuccess} />
 
             {/* Google Identity Services for Staff */}
@@ -135,7 +138,7 @@ export function LoginPage() {
 
             <footer className="auth-card-footer">
               <ShieldCheck size={14} className="text-emerald-400" />
-              <span>Phiên đăng nhập được bảo vệ an toàn (JWT &amp; TLS 1.3)</span>
+              <span>JWT ngắn hạn kết hợp phiên làm mới HttpOnly có thể thu hồi</span>
             </footer>
           </div>
         </div>

@@ -9,9 +9,9 @@ export function ProtectedRoute({ allowedRoles }: { allowedRoles: UserRole[] }) {
 
   if (isLoading) {
     return (
-      <div className="tech-loading-screen" aria-label="Authenticating">
+      <div className="tech-loading-screen" aria-label="Đang xác thực phiên đăng nhập">
         <div className="tech-loader-core" />
-        <p>Synchronizing identity...</p>
+        <p>Đang xác thực tài khoản...</p>
       </div>
     );
   }

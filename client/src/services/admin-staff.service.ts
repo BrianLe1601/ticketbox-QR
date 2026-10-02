@@ -9,6 +9,8 @@ export interface StaffAssignment {
   eventStatus: string;
   startTime: string;
   endTime: string;
+  checkinStartAt: string;
+  checkinEndAt: string;
   assignedAt: string;
   assignedBy: number;
   revokedAt: string | null;
@@ -78,6 +80,8 @@ export function formatStaffErrorMessage(error: unknown): string {
         return "Sự kiện này đã kết thúc hoặc đã hủy, không thể tiếp tục phân công.";
       case "EVENT_ENDED":
         return "Sự kiện đã qua thời gian kết thúc, không thể tiếp tục phân công.";
+      case "EVENT_CHECKIN_CLOSED":
+        return "Khung giờ check-in của sự kiện đã kết thúc, không thể tiếp tục phân công.";
       case "STAFF_INACTIVE":
         return "Chỉ có thể phân công cho nhân viên đang hoạt động.";
       case "STAFF_NOT_FOUND":
