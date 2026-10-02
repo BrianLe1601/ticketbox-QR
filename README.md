@@ -514,9 +514,9 @@ Mọi module phải khóa theo cùng thứ tự để tránh deadlock:
 Event -> Orders theo id tăng dần -> Ticket Types theo id tăng dần -> Ticket
 ```
 
-- Checkout: khóa Event và Ticket Types, kiểm tra tồn kho rồi tăng `reserved_quantity` trong một transaction.
+- Checkout: ngay khi khách đã xác minh OTP, nhập số điện thoại hợp lệ và bấm **Tiếp tục mua vé**, API tạo Order sẽ khóa Event và Ticket Types, kiểm tra tồn kho rồi tăng `reserved_quantity` trong một transaction. Nếu hai khách tranh vé cuối cùng, chỉ request lấy lock trước được giữ vé; request còn lại nhận HTTP `409` với mã `SOLD_OUT`.
 - Hết hạn Order: khóa Event và Order, giảm reservation rồi chuyển Order sang `expired`.
-- Thanh toán: khóa Event và Order, chuyển reserved sang sold, xác nhận Order, ghi Payment và phát hành Ticket trong một transaction.
+- Thanh toán: không cạnh tranh tồn kho mới; chỉ khóa Event và Order để chống thanh toán lặp, chuyển phần vé Order đã giữ từ reserved sang sold, xác nhận Order, ghi Payment và phát hành Ticket trong một transaction.
 - Check-in: khóa Event và kiểm tra assignment, sau đó khóa Order/Ticket, đổi Ticket sang `checked_in` và ghi log trong một transaction.
 - Cancel Event: khóa Event cùng toàn bộ Order, đóng bán, nhả giữ chỗ, hủy pending Order/Payment, vô hiệu QR, tạo Refund mô phỏng và queue Email Log trong một transaction. SMTP chạy ngoài transaction; project không gọi provider hoàn tiền thật.
 - Lifecycle theo thời gian: server đồng bộ `published -> ongoing` khi đến `start_time` và `ongoing -> completed` khi qua `end_time` lúc khởi động, mỗi 10 giây và ngay sau seed demo/workflow. Admin/Public làm mới nền mỗi 10 giây; API vẫn suy ra trạng thái hiệu lực theo thời gian tại lúc trả dữ liệu để hai giao diện không lệch nhau.

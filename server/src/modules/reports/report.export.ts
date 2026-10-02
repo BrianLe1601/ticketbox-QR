@@ -61,7 +61,11 @@ export async function logsWorkbook(query: {
   sheet.columns = [
     { header: 'Log ID', key: 'id', width: 12 }, { header: 'Sự kiện', key: 'eventName', width: 40 },
     { header: 'Staff ID', key: 'staffId', width: 12 }, { header: 'Nhân viên', key: 'staffName', width: 26 },
-    { header: 'Mã vé', key: 'ticketCode', width: 25 }, { header: 'Kết quả', key: 'result', width: 26 },
+    { header: 'Mã vé', key: 'ticketCode', width: 25 }, { header: 'Trạng thái vé', key: 'ticketStatus', width: 18 },
+    { header: 'Hạng vé', key: 'ticketTypeName', width: 26 }, { header: 'Người giữ vé', key: 'holderName', width: 26 },
+    { header: 'Email người giữ vé', key: 'holderEmail', width: 32 }, { header: 'Mã đơn hàng', key: 'orderCode', width: 24 },
+    { header: 'Người mua', key: 'buyerName', width: 26 }, { header: 'Email người mua', key: 'buyerEmail', width: 32 },
+    { header: 'Số điện thoại', key: 'buyerPhone', width: 18 }, { header: 'Kết quả', key: 'result', width: 26 },
     { header: 'Mã đã che', key: 'scannedCode', width: 18 }, { header: 'Thông báo', key: 'message', width: 55 },
     { header: 'Thời điểm (UTC+07)', key: 'time', width: 28 },
   ];

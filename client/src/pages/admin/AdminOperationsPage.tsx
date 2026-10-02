@@ -38,6 +38,9 @@ const formatTime = (value: string) => new Date(value).toLocaleString("vi-VN", {
 });
 const errorMessage = (cause: unknown) => cause instanceof Error ? cause.message : "Không thể kết nối máy chủ.";
 const statusTone = (result: string) => result === "SUCCESS" ? "success" : result === "ALREADY_CHECKED_IN" ? "warning" : "danger";
+const ticketStatusLabels: Record<string, string> = {
+  issued: "Chưa vào cổng", checked_in: "Đã check-in", cancelled: "Đã hủy",
+};
 
 function FilterPanel({
   kind, filters, events, search, searchLoading, eventError, loading, onSearch,
@@ -86,13 +89,13 @@ function CheckinView({ logs, stats, total, page, activeResult, onResult, onPage 
     <section className="operations-data-panel">
       <header><div><span className="operations-kicker">AUDIT THEO THỜI GIAN THỰC</span><h3>Chi tiết từng lượt quét</h3></div><span className="operations-count">{formatNumber(total)} kết quả phù hợp</span></header>
       {logs.length === 0 ? <div className="operations-empty"><ScanLine size={34}/><strong>Không có lượt quét phù hợp</strong><span>Hãy đổi sự kiện, khoảng ngày hoặc trạng thái lọc.</span></div> : <div className="operations-table-wrap"><table className="operations-table">
-        <thead><tr><th>Thời gian chính xác</th><th>Vé / mã đã che</th><th>Nhân viên thực hiện</th><th>Trạng thái</th><th>Diễn giải</th></tr></thead>
+        <thead><tr><th>Thời gian chính xác</th><th>Thông tin vé</th><th>Người giữ vé / Đơn hàng</th><th>Nhân viên thực hiện</th><th>Kết quả quét</th></tr></thead>
         <tbody>{logs.map((log) => <tr key={log.id}>
           <td><strong>{formatTime(log.checkedAt)}</strong><small>Log #{log.id}</small></td>
-          <td><strong className="operations-code">{log.ticketCode ?? log.scannedCode ?? "Không xác định"}</strong><small>{log.ticketCode ? "Vé đã xác định" : "Không lưu mã QR gốc"}</small></td>
+          <td>{log.ticketCode ? <><strong className="operations-code">{log.ticketCode}</strong><small>{log.ticketTypeName ?? "Chưa xác định hạng vé"}</small>{log.ticketStatus && <span className={`operations-ticket-status ${log.ticketStatus}`}>{ticketStatusLabels[log.ticketStatus] ?? log.ticketStatus}</span>}</> : <><strong className="operations-code">{log.scannedCode ?? "Không xác định"}</strong><small>Mã không khớp vé nào; QR gốc không được lưu</small></>}</td>
+          <td>{log.ticketCode ? <><strong>{log.holderName ?? log.buyerName ?? "Chưa cập nhật tên"}</strong><small>{log.holderEmail ?? log.buyerEmail ?? "Chưa cập nhật email"}</small>{log.buyerPhone && <small>Điện thoại: {log.buyerPhone}</small>}{log.orderCode && <small className="operations-code">Đơn: {log.orderCode}</small>}</> : <><strong>Không xác định được vé</strong><small>Không có thông tin người mua hoặc đơn hàng</small></>}</td>
           <td><strong>{log.staffName}</strong><small>Nhân viên #{log.staffId}</small></td>
-          <td><span className={`operations-result ${statusTone(log.result)}`}>{resultLabels[log.result] ?? log.result}</span></td>
-          <td>{log.message ?? resultLabels[log.result] ?? "—"}</td>
+          <td><span className={`operations-result ${statusTone(log.result)}`}>{resultLabels[log.result] ?? log.result}</span><small>{log.message ?? resultLabels[log.result] ?? "—"}</small></td>
         </tr>)}</tbody>
       </table></div>}
       <nav className="operations-pagination" aria-label="Phân trang lịch sử"><button disabled={page <= 1} onClick={() => onPage(page - 1)}>Trang trước</button><span>Trang <strong>{page}</strong> / {Math.max(1, Math.ceil(total / 20))}</span><button disabled={page * 20 >= total} onClick={() => onPage(page + 1)}>Trang sau</button></nav>

@@ -115,7 +115,11 @@ export function CheckoutPlaceholder() {
             sessionStorage.setItem(`ticketbox-order-${order.id}`, order.lookupToken);
             navigate(`/orders/${order.id}`, { state: { token: order.lookupToken } });
         } catch (err) {
-            const message = err instanceof ApiRequestError ? err.message : "Đã có lỗi xảy ra, vui lòng thử lại";
+            const message = err instanceof ApiRequestError
+                ? err.code === "SOLD_OUT"
+                    ? `${err.message}. Vé có thể vừa được khách khác giữ trước bạn; vui lòng quay lại chọn vé.`
+                    : err.message
+                : "Đã có lỗi xảy ra, vui lòng thử lại";
             setError(message);
         } finally {
             setSubmitting(false);
@@ -187,9 +191,9 @@ export function CheckoutPlaceholder() {
 
                     <button type="submit" disabled={!captcha.ready || submitting || !verificationToken || Boolean(selectionError)} className="w-full py-3.5 rounded-xl bg-primary text-white font-bold text-sm flex items-center justify-center gap-2 hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed shadow-lg shadow-primary/30 transition-all">
                         {submitting && <Loader2 size={15} className="animate-spin" />}
-                        {submitting ? "Đang giữ vé..." : "Tiếp tục"}
+                        {submitting ? "Đang giữ chỗ..." : "Tiếp tục mua vé"}
                     </button>
-                    <p className="text-[11px] text-center text-muted-foreground">Vé sẽ được giữ trong 10 phút để hoàn tất thanh toán mô phỏng; không có giao dịch tiền thật.</p>
+                    <p className="text-[11px] text-center text-muted-foreground">Khi tiếp tục thành công, vé được giữ riêng cho bạn trong 10 phút để hoàn tất thanh toán mô phỏng; không có giao dịch tiền thật.</p>
                 </form>
 
                 <div className="sm:col-span-2">

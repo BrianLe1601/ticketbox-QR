@@ -16,7 +16,10 @@ export interface LogStats {
 }
 export interface LogRow extends RowDataPacket {
   id: number; eventId: number; eventName: string; staffId: number; staffName: string;
-  ticketCode: string | null; result: string; scannedCode: string | null; message: string | null; checkedAt: Date;
+  ticketCode: string | null; ticketStatus: string | null; ticketTypeName: string | null;
+  holderName: string | null; holderEmail: string | null; orderCode: string | null;
+  buyerName: string | null; buyerEmail: string | null; buyerPhone: string | null;
+  result: string; scannedCode: string | null; message: string | null; checkedAt: Date;
 }
 
 // A report and its paginated count use one read-only snapshot while gates keep scanning.
@@ -157,9 +160,15 @@ export async function logs(conn: PoolConnection, query: LogQuery, limit: number,
   const filter = logFilter(query);
   const [rows] = await conn.query<LogRow[]>(`SELECT cl.id, cl.event_id AS eventId, e.name AS eventName,
     cl.staff_id AS staffId, u.full_name AS staffName, t.ticket_code AS ticketCode,
+    t.status AS ticketStatus, oi.ticket_type_name AS ticketTypeName,
+    t.holder_name AS holderName, t.holder_email AS holderEmail,
+    o.order_code AS orderCode, o.buyer_name AS buyerName,
+    o.buyer_email AS buyerEmail, o.buyer_phone AS buyerPhone,
     cl.result_code AS result, cl.scanned_code_masked AS scannedCode, cl.message, cl.checked_at AS checkedAt
     FROM checkin_logs cl JOIN events e ON e.id = cl.event_id JOIN users u ON u.id = cl.staff_id
     LEFT JOIN tickets t ON t.id = cl.ticket_id
+    LEFT JOIN order_items oi ON oi.id = t.order_item_id
+    LEFT JOIN orders o ON o.id = oi.order_id
     WHERE ${filter.sql} ORDER BY cl.checked_at DESC, cl.id DESC LIMIT ? OFFSET ?`, [...filter.values, limit, offset]);
   return rows;
 }

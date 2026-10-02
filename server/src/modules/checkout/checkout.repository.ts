@@ -121,9 +121,7 @@ export async function incrementReserved(conn: PoolConnection, ticketTypeId: numb
          WHERE id = ? AND reserved_quantity + sold_quantity + ? <= capacity`,
         [quantity, ticketTypeId, quantity]
     );
-    if (result.affectedRows !== 1) {
-        throw new Error(`Không thể giữ ${quantity} vé cho ticket type ${ticketTypeId}: tồn kho đã thay đổi`);
-    }
+    return result.affectedRows === 1;
 }
 
 export async function insertOrder(conn: PoolConnection, data: {

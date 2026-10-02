@@ -60,5 +60,23 @@ it('keeps invalid scans with a null ticket in the XLSX and includes filters', as
   expect(sheet.rowCount).toBe(2);
   expect(sheet.getCell('D2').type).toBe(ExcelJS.ValueType.String);
   expect(sheet.getCell('E2').value).toBeNull();
-  expect(sheet.getCell('I2').value).toContain('07:00:00');
+  expect(sheet.getCell('Q2').value).toContain('07:00:00');
+});
+
+it('exports identified Ticket, holder and Order details without exposing a QR credential', async () => {
+  const buffer = await logsWorkbook({ eventId: 1 }, [{
+    id: 2, eventName: 'Concert', staffId: 3, staffName: 'Gate Staff', ticketCode: 'TKT-001',
+    ticketStatus: 'checked_in', ticketTypeName: 'VIP', holderName: 'Nguyễn Văn A',
+    holderEmail: 'holder@example.com', orderCode: 'ORD-001', buyerName: 'Người mua',
+    buyerEmail: 'buyer@example.com', buyerPhone: '0901234567', result: 'SUCCESS',
+    scannedCode: '***deadbeef', message: 'Check-in thành công', checkedAt: new Date('2026-09-15T00:00:00Z'),
+  } as never]);
+  const book = new ExcelJS.Workbook(); await book.xlsx.load(buffer);
+  const sheet = book.getWorksheet('Lịch sử check-in')!;
+  expect(sheet.getCell('E2').value).toBe('TKT-001');
+  expect(sheet.getCell('G2').value).toBe('VIP');
+  expect(sheet.getCell('H2').value).toBe('Nguyễn Văn A');
+  expect(sheet.getCell('J2').value).toBe('ORD-001');
+  expect(sheet.getCell('P2').value).toBe('Check-in thành công');
+  expect(JSON.stringify(sheet.getRow(2).values)).not.toContain('ticketbox:');
 });

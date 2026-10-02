@@ -143,6 +143,7 @@ users -> auth_sessions
 - Refund and Email delivery have retryable states; immutable identity/amount/recipient fields must not be overwritten during retry.
 - Completing a Refund records a **simulated** outcome and `completed_at`; failure records a safe `failure_reason`. It never calls a bank/payment provider, never promises money reached the customer, and never changes a successful Payment row. Reports subtract only simulated Refunds whose status is `completed`.
 - Availability is always `capacity - reserved_quantity - sold_quantity`; all three values are changed in the same transaction as the related Order state.
+- The inventory competition boundary is Order creation after verified email/OTP and a valid buyer phone, not payment. Creating a `pending_payment` Order must lock the Event and selected Ticket Types and reserve inventory atomically; a concurrent loser receives `409 SOLD_OUT`. Payment may still lock Event/Order for idempotent settlement, but it must only convert that Order's existing `reserved_quantity` to `sold_quantity`, never reserve fresh capacity.
 - Public sale state is derived on the server from Event lifecycle/visibility, effective Event/Tier sales window, tier active state and remaining inventory.
 
 ### Local workflow fixtures

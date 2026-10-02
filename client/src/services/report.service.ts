@@ -8,6 +8,9 @@ export interface EventReport extends ReportEvent {
 }
 export interface AdminCheckinLog {
   id: number; eventName: string; staffId: number; staffName: string; ticketCode: string | null;
+  ticketStatus: string | null; ticketTypeName: string | null;
+  holderName: string | null; holderEmail: string | null; orderCode: string | null;
+  buyerName: string | null; buyerEmail: string | null; buyerPhone: string | null;
   result: string; scannedCode: string | null; message: string | null; checkedAt: string;
 }
 export interface CheckinLogStats { total: number; success: number; rejected: number; duplicate: number; invalid: number }

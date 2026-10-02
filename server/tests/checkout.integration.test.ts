@@ -275,7 +275,11 @@ describe.sequential('Week 4 checkout safety integration', () => {
 
         expect(successes).toHaveLength(1);
         expect(failures).toHaveLength(1);
-        expect((failures[0] as PromiseRejectedResult).reason).toMatchObject({ code: 'SOLD_OUT' });
+        expect((failures[0] as PromiseRejectedResult).reason).toMatchObject({
+            statusCode: 409,
+            code: 'SOLD_OUT',
+            message: expect.stringContaining('đã hết vé'),
+        });
         expect(await countOrdersForEvent(fixture.eventId)).toBe(1);
         expect(await inventory(fixture.ticketTypeId)).toMatchObject({ reserved_quantity: 1, sold_quantity: 0 });
     });
