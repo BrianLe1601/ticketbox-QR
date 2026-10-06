@@ -26,6 +26,24 @@ function style(book: ExcelJS.Workbook) {
 }
 export async function reportWorkbook(query: ReportQuery, report: ReportRow) {
   const book = workbook(query);
+  const statusLabels: Record<string, string> = {
+    draft: 'Bản nháp', published: 'Đã công bố', ongoing: 'Đang diễn ra',
+    completed: 'Đã kết thúc', cancelled: 'Đã hủy',
+  };
+  const info = book.getWorksheet('Bộ lọc')!;
+  info.addRows([
+    ['Tên sự kiện', report.name], ['Trạng thái sự kiện', statusLabels[report.status] ?? report.status],
+    ['Đơn xác nhận / vé đã bán', 'Đơn đã xác nhận theo thời điểm xác nhận; vé đã bán là tổng số lượng trong các đơn đó.'],
+    ['Vé phát hành', 'Số vé theo thời điểm phát hành, gồm vé sau đó bị hủy để giữ lịch sử.'],
+    ['Vé đã vào cổng', 'Số vé khác nhau có lượt xác nhận thành công trong khoảng ngày đã chọn; không phải số người mua duy nhất.'],
+    ['Tỷ lệ lấp đầy', 'Vé đã bán trong bộ lọc / tổng sức chứa các hạng vé của sự kiện. Mẫu số không lọc theo ngày.'],
+    ['Tỷ lệ tham dự', 'Vé đã vào cổng trong bộ lọc / vé đã bán trong bộ lọc. Mẫu số bằng 0 thì hiển thị 0%, giống báo cáo trên màn hình.'],
+    ['Lưu ý khoảng ngày', 'Ngày mua vé và ngày vào cổng có thể khác nhau. Khi lọc ngày, tỷ lệ tham dự có thể vượt 100%; bỏ giới hạn ngày để xem tỷ lệ tổng thể của sự kiện.'],
+    ['Tính cập nhật', 'File lấy dữ liệu mới tại lúc xuất theo bộ lọc đã áp dụng; có thể khác màn hình nếu vừa phát sinh giao dịch.'],
+    ['Xuất lúc (giờ Việt Nam)', new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' })],
+  ]);
+  info.getColumn('value').alignment = { vertical: 'top', wrapText: true };
+  for (let row = 8; row <= info.rowCount; row++) info.getRow(row).height = 44;
   const sheet = book.addWorksheet('Báo cáo sự kiện');
   sheet.columns = [
     { header: 'Sự kiện', key: 'name', width: 45 }, { header: 'Trạng thái', key: 'status', width: 18 },
@@ -37,18 +55,38 @@ export async function reportWorkbook(query: ReportQuery, report: ReportRow) {
     { header: 'Thanh toán mô phỏng (VND)', key: 'grossRevenue', width: 30 }, { header: 'Hoàn tiền mô phỏng (VND)', key: 'refundedAmount', width: 30 },
     { header: 'Thu ròng mô phỏng (VND)', key: 'netRevenue', width: 28 },
   ];
-  sheet.addRow(report);
+  // Excel stores percentages as fractions (40% = 0.4). The API uses 40.
+  // Keep all counts/money numeric so the exported file can be reconciled.
+  const values: Record<string, string | number> = {
+    name: report.name, status: statusLabels[report.status] ?? report.status,
+  };
+  for (const key of [
+    'confirmedOrders', 'soldTickets', 'capacity', 'issuedTickets', 'admissions',
+    'scans', 'rejectedScans', 'grossRevenue', 'refundedAmount', 'netRevenue',
+  ] as const) values[key] = Number(report[key]);
+  values.fillRate = Number(report.fillRate) / 100;
+  values.attendanceRate = Number(report.attendanceRate) / 100;
+  sheet.addRow(values);
+  for (const key of ['fillRate', 'attendanceRate']) sheet.getColumn(key).numFmt = '0.00%';
+  for (const key of ['confirmedOrders', 'soldTickets', 'capacity', 'issuedTickets', 'admissions', 'scans', 'rejectedScans']) sheet.getColumn(key).numFmt = '#,##0';
   for (const key of ['grossRevenue', 'refundedAmount', 'netRevenue']) sheet.getColumn(key).numFmt = '#,##0.00';
   const trend = book.addWorksheet('Doanh thu theo kỳ');
   trend.columns = [
-    { header: 'Kỳ', key: 'period', width: 18 },
+    { header: query.groupBy === 'year' ? 'Kỳ (năm)' : query.groupBy === 'month' ? 'Kỳ (tháng)' : 'Kỳ (ngày)', key: 'period', width: 18 },
     { header: 'Đã thu mô phỏng (VND)', key: 'grossRevenue', width: 28 },
     { header: 'Đã hoàn mô phỏng (VND)', key: 'refundedAmount', width: 30 },
     { header: 'Thu ròng mô phỏng (VND)', key: 'netRevenue', width: 28 },
   ];
-  trend.addRows(report.revenueSeries);
+  trend.addRows(report.revenueSeries.map((point) => ({
+    period: point.period, grossRevenue: Number(point.grossRevenue),
+    refundedAmount: Number(point.refundedAmount), netRevenue: Number(point.netRevenue),
+  })));
   for (const key of ['grossRevenue', 'refundedAmount', 'netRevenue']) trend.getColumn(key).numFmt = '#,##0.00';
   style(book);
+  for (const reportSheet of [sheet, trend]) {
+    reportSheet.getRow(1).height = 42;
+    reportSheet.getRow(1).alignment = { vertical: 'middle', wrapText: true };
+  }
   return book.xlsx.writeBuffer();
 }
 export async function logsWorkbook(query: {

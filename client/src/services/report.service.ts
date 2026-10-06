@@ -18,8 +18,14 @@ export interface CheckinLogMeta { total: number; page: number; limit: number; st
 export interface OperationFilters { eventId: string; from: string; to: string; staffId?: string; result?: string; groupBy?: 'day' | 'month' | 'year' }
 function queryString(filters: OperationFilters, page?: number, includeGroupBy = true) {
   const query = new URLSearchParams();
-  for (const [key, value] of Object.entries(filters)) {
-    if (value && (includeGroupBy || key !== 'groupBy')) query.set(key, value);
+  // Reports and check-in history share a screen but not a filter contract.
+  // Never leak a retained Staff/result filter into the strict report API.
+  const keys: Array<keyof OperationFilters> = includeGroupBy
+    ? ['eventId', 'from', 'to', 'groupBy']
+    : ['eventId', 'from', 'to', 'staffId', 'result'];
+  for (const key of keys) {
+    const value = filters[key];
+    if (value) query.set(key, value);
   }
   if (page !== undefined) { query.set('page', String(page)); query.set('limit', '20'); }
   return query.toString();

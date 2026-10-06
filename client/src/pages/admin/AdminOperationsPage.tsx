@@ -123,7 +123,7 @@ function ReportView({ report }: { report: EventReport }) {
       </section>
       <section className="operations-data-panel operations-reconcile"><header><div><span className="operations-kicker">HIỆU QUẢ SỰ KIỆN</span><h3>Đối chiếu vận hành</h3></div></header><dl>
         <div><dt>Vé phát hành</dt><dd>{formatNumber(report.issuedTickets)}</dd></div><div><dt>Vé đã vào cổng</dt><dd>{formatNumber(report.admissions)}</dd></div><div><dt>Tổng lượt quét</dt><dd>{formatNumber(report.scans)}</dd></div><div className="danger"><dt>Lượt quét bị từ chối</dt><dd>{formatNumber(report.rejectedScans)}</dd></div>
-      </dl><p><AlertTriangle size={15}/> Số tiền là dữ liệu thanh toán mô phỏng. Thu ròng chỉ trừ các hoàn tiền đã hoàn tất trong kỳ đã chọn.</p></section>
+      </dl><p><AlertTriangle size={15}/> Số tiền là dữ liệu thanh toán mô phỏng. Thu ròng chỉ trừ các hoàn tiền đã hoàn tất trong kỳ đã chọn.</p><p>Mỗi chỉ số lọc theo thời điểm riêng: xác nhận đơn, phát hành vé, vào cổng, thanh toán hoặc hoàn tiền. Nếu ngày mua và ngày vào cổng khác nhau, tỷ lệ tham dự trong bộ lọc có thể vượt 100%; bỏ giới hạn ngày để xem tỷ lệ tổng thể.</p></section>
     </div>
   </>;
 }
@@ -163,8 +163,8 @@ export function AdminOperationsPage({ kind }: { kind: "reports" | "checkins" }) 
     if (!applied) return;
     const controller = new AbortController();
     const request = kind === "reports"
-      ? loadReport(applied, token, controller.signal).then(({ data }) => setReport(data))
-      : loadAdminLogs(applied, page, token, controller.signal).then(({ data, meta }) => { setLogs(data); setTotal(meta?.total ?? 0); setStats(meta?.stats ?? emptyStats); });
+      ? loadReport(applied, token, controller.signal).then(({ data }) => { if (!controller.signal.aborted) setReport(data); })
+      : loadAdminLogs(applied, page, token, controller.signal).then(({ data, meta }) => { if (!controller.signal.aborted) { setLogs(data); setTotal(meta?.total ?? 0); setStats(meta?.stats ?? emptyStats); } });
     request.then(() => { if (!controller.signal.aborted) setError(""); })
       .catch((cause: unknown) => { if (!controller.signal.aborted) setError(errorMessage(cause)); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
@@ -172,11 +172,16 @@ export function AdminOperationsPage({ kind }: { kind: "reports" | "checkins" }) 
   }, [applied, page, token, reload, kind]);
 
   const selectedEvent = useMemo(() => events.find((event) => String(event.id) === applied?.eventId), [events, applied]);
+  const hasPendingFilters = applied !== null && (
+    ['eventId', 'from', 'to', ...(kind === 'reports' ? ['groupBy'] : ['staffId', 'result'])] as Array<keyof OperationFilters>
+  ).some((key) => (filters[key] ?? '') !== (applied[key] ?? ''));
+  const exportDisabled = exporting || loading || hasPendingFilters || Boolean(error)
+    || (kind === 'reports' && (!report || report.id !== Number(applied?.eventId)));
   function update(key: keyof OperationFilters, value: string) { setFilters((current) => ({ ...current, [key]: value })); }
   function submitFilters() { setLoading(true); setApplied({ ...filters }); setPage(1); setExportError(""); setReload((value) => value + 1); }
   function filterLogs(result: string) { if (!applied) return; const next = { ...applied, result }; setLoading(true); setFilters((current) => ({ ...current, result })); setApplied(next); setPage(1); }
   async function download() {
-    if (!applied || exporting) return;
+    if (!applied || exportDisabled) return;
     setExporting(true); setExportError("");
     try {
       const blob = await exportOperations(kind, applied, token); const url = URL.createObjectURL(blob); const anchor = document.createElement("a");
@@ -189,7 +194,9 @@ export function AdminOperationsPage({ kind }: { kind: "reports" | "checkins" }) 
     <FilterPanel kind={kind} filters={filters} events={events} search={search} searchLoading={searchLoading} eventError={eventError} loading={loading} onSearch={(value) => { setSearch(value); setSearchLoading(true); update("eventId", ""); }} onChange={update} onSubmit={submitFilters} onRetry={() => { setSearchLoading(true); setEventReload((value) => value + 1); }}/>
     {error && <div className="operations-error" role="alert"><AlertTriangle size={18}/><span>{error}</span><button onClick={() => { setLoading(true); setReload((value) => value + 1); }}>Thử lại</button></div>}
     {!applied && <div className="operations-empty operations-welcome"><Filter size={36}/><strong>Chọn một sự kiện để bắt đầu</strong><span>Dữ liệu chỉ tải sau khi bạn áp dụng bộ lọc.</span></div>}
-    {applied && !error && <><div className="operations-context-bar"><div><span>Đang xem</span><strong>{selectedEvent?.name ?? `Sự kiện #${applied.eventId}`}</strong><small>{applied.from || "Từ đầu"} → {applied.to || "Đến nay"}</small></div><button disabled={exporting || loading} onClick={() => void download()}><Download size={15}/>{exporting ? "Đang tạo file…" : "Xuất Excel"}</button></div>
+    {applied && !error && <><div className="operations-context-bar"><div><span>Đang xem</span><strong>{kind === 'reports' && report?.id === Number(applied.eventId) ? report.name : selectedEvent?.name ?? `Sự kiện #${applied.eventId}`}</strong><small>{applied.from || "Từ đầu"} → {applied.to || "Không giới hạn ngày kết thúc"}</small></div><button disabled={exportDisabled} onClick={() => void download()}><Download size={15}/>{exporting ? "Đang tạo file…" : "Xuất Excel"}</button></div>
+      {hasPendingFilters && <p className="operations-inline-note" role="status">Bạn đã thay đổi bộ lọc. Bấm “Áp dụng bộ lọc” trước khi xuất Excel.</p>}
+      {kind === 'reports' && <p className="operations-inline-note">Excel gồm bộ lọc, báo cáo sự kiện và doanh thu theo ngày/tháng/năm đã chọn. File lấy dữ liệu mới tại lúc xuất; có thể khác màn hình nếu vừa phát sinh giao dịch.</p>}
       {exportError && <p className="operations-inline-error" role="alert">{exportError}</p>}
       {loading ? <div className="operations-loading" role="status"><RefreshCw className="animate-spin" size={22}/> Đang tổng hợp dữ liệu…</div> : kind === "reports" ? report && <ReportView report={report}/> : <CheckinView logs={logs} stats={stats} total={total} page={page} activeResult={applied.result ?? ""} onResult={filterLogs} onPage={(next) => { setLoading(true); setPage(next); }}/>}</>}
   </section>;

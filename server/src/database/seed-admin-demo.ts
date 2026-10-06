@@ -3,6 +3,7 @@ import type { PoolConnection, ResultSetHeader, RowDataPacket } from "mysql2/prom
 import { env } from "../config/env.js";
 import { syncEventLifecycleStatuses } from "../modules/events/event-lifecycle.service.js";
 import { pool } from "./pool.js";
+import { alignDemoCheckinDay, createPresentationFixtures } from "./admin-demo-presentation-fixtures.js";
 
 const DEMO_EVENT_PREFIX = "demo-admin-";
 const COVER_URL = "https://res.cloudinary.com/demo/image/upload/sample.jpg";
@@ -66,6 +67,7 @@ interface TicketFixture {
 // Keep all relative fixtures on one exact clock reference. Calling Date.now()
 // separately can make a nominal two-hour lead a few milliseconds too short.
 const seedReferenceTime = Date.now();
+const presentationFixtures = createPresentationFixtures();
 
 function fromNow(days: number, hours = 0): Date {
   return new Date(seedReferenceTime + days * 86_400_000 + hours * 3_600_000);
@@ -111,6 +113,7 @@ const categories: CategoryFixture[] = [
 ];
 
 const staffFixtures: StaffFixture[] = [
+  ...presentationFixtures.map((fixture) => fixture.staff),
   {
     key: "google-pending",
     fullName: "[DEMO] Google Chờ Duyệt",
@@ -168,6 +171,7 @@ const staffFixtures: StaffFixture[] = [
 ];
 
 const events: EventFixture[] = [
+  ...presentationFixtures.map((fixture) => fixture.event),
   {
     key: "draft-incomplete",
     categoryKey: "music",
@@ -283,7 +287,14 @@ const events: EventFixture[] = [
   },
 ];
 
+// Also keep the original relative scenarios valid when the seed runs at night.
+// Fixed presentation fixtures already satisfy the same-day constraint.
+for (const fixture of events) {
+  Object.assign(fixture, alignDemoCheckinDay(fixture.start, fixture.checkinStart, fixture.key === "ongoing"));
+}
+
 const ticketTypes: TicketFixture[] = [
+  ...presentationFixtures.flatMap((fixture) => fixture.ticketTypes),
   { eventKey: "draft-ready", name: "Community Free", description: "Vé miễn phí để kiểm tra price = 0.", price: 0, capacity: 120, maxPerOrder: 4 },
   { eventKey: "draft-ready", name: "VIP Workshop", description: "Vé trả phí giới hạn số lượng.", price: 450_000, capacity: 80, maxPerOrder: 2 },
   { eventKey: "published-on-sale", name: "General Admission", description: "Tier chính đang mở bán.", price: 200_000, capacity: 180, maxPerOrder: 5 },
@@ -502,6 +513,18 @@ async function applyEventStatesAndAssignments(
   eventIds: Map<string, number>,
   staffIds: Map<string, number>,
 ) {
+  // These simultaneous Events need distinct people, not overlapping assignments
+  // on the existing local Staff account. Publication still uses schema guards.
+  for (const fixture of presentationFixtures) {
+    await createAssignment(
+      connection, requiredId(eventIds, fixture.event.key),
+      requiredId(staffIds, fixture.staff.key), adminId,
+    );
+    await connection.execute(
+      "UPDATE events SET status='published',published_at=? WHERE id=?",
+      [new Date(seedReferenceTime), requiredId(eventIds, fixture.event.key)],
+    );
+  }
   await createAssignment(
     connection, requiredId(eventIds, "completed"), requiredId(staffIds, "google-inactive"),
     adminId, false, fromNow(-12), fromNow(-6),
@@ -636,7 +659,9 @@ async function verifySummary(connection: PoolConnection) {
       WHERE e.slug LIKE ? AND es.is_active=TRUE`,
     [`${DEMO_EVENT_PREFIX}%`],
   );
-  if (categoryCount !== 4 || eventCount !== 8 || staffCount !== 6 || tierCount !== 10 || assignmentCount !== 6) {
+  if (categoryCount !== categories.length || eventCount !== events.length
+    || staffCount !== staffFixtures.length || tierCount !== ticketTypes.length
+    || assignmentCount !== 6 + presentationFixtures.length) {
     throw new Error(
       `Admin demo verification failed: categories=${categoryCount}, events=${eventCount}, `
       + `staff=${staffCount}, ticketTypes=${tierCount}, assignments=${assignmentCount}`,
@@ -645,8 +670,8 @@ async function verifySummary(connection: PoolConnection) {
   if (
     inactiveCategoryCount !== 1 || terminalEventCount !== 2
     || pendingStaffCount !== 1 || rejectedStaffCount !== 1
-    || activeStaffCount !== 2 || inactiveStaffCount !== 2
-    || activeAssignmentCount !== 4
+    || activeStaffCount !== 2 + presentationFixtures.length || inactiveStaffCount !== 2
+    || activeAssignmentCount !== 4 + presentationFixtures.length
   ) {
     throw new Error(
       `Admin demo state verification failed: inactiveCategories=${inactiveCategoryCount}, `
@@ -678,10 +703,12 @@ async function seedAdminDemo() {
     await connection.commit();
     const lifecycle = await syncEventLifecycleStatuses();
 
-    console.log("[seed:admin-demo] completed: 18 primary demo records");
+    console.log(`[seed:admin-demo] completed: ${summary.categoryCount + summary.eventCount + summary.staffCount} primary demo records`);
     console.log(`[seed:admin-demo] Categories: ${summary.categoryCount}; Events: ${summary.eventCount}; Staff: ${summary.staffCount}`);
     console.log(`[seed:admin-demo] Ticket Types: ${summary.tierCount}; Assignments: ${summary.assignmentCount}`);
     console.log(`[seed:admin-demo] Lifecycle sync — started: ${lifecycle.started}; completed: ${lifecycle.completed}`);
+    console.log("[seed:admin-demo] 10 Events on 07/10/2026 (Vietnam UTC+7): sales through 16:30; check-in 13:00–16:30; Event 15:00–17:00.");
+    console.log("[seed:admin-demo] Staff: demo.staff.presentation.01@ticketbox.local through .10@ticketbox.local; local password matches the seeded Admin password hash.");
     console.log(`[seed:admin-demo] Re-run safely replaces only ${DEMO_EVENT_PREFIX}* Events and resets demo.staff.* accounts`);
   } catch (error) {
     await connection.rollback();
