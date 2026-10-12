@@ -27,7 +27,7 @@ export function EventHeader({ event }: { event: Event }) {
                         {getCategoryLabel(event.category)}
                     </span>
                 </div>
-                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-white leading-tight max-w-2xl" style={{ fontFamily: "Manrope, sans-serif" }}>{event.name}</h1>
+                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-foreground leading-tight max-w-2xl" style={{ fontFamily: "Manrope, sans-serif" }}>{event.name}</h1>
             </div>
         </div>
     );

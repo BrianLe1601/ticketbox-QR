@@ -100,6 +100,10 @@ export async function findPublishedEvents(query: ListEventsQuery) {
         conditions.push(`e.city = ?`);
         params.push(city);
     }
+    if (query.time === 'week' || query.time === 'month') {
+        conditions.push(`e.start_time >= NOW(3) AND e.start_time <= DATE_ADD(NOW(3), INTERVAL ? DAY)`);
+        params.push(query.time === 'week' ? 7 : 30);
+    }
 
     const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 

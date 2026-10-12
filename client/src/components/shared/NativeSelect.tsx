@@ -17,8 +17,8 @@ export function NativeSelect({
                 aria-label={ariaLabel}
                 value={value}
                 onChange={(e) => onChange(e.target.value)}
-                style={{ colorScheme: "dark" }}
-                className="w-full appearance-none bg-card border border-white/[0.08] text-sm text-foreground rounded-xl pl-3 pr-9 py-2.5 focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 cursor-pointer transition-all"
+                style={{ colorScheme: "var(--public-color-scheme, dark)" }}
+                className="w-full appearance-none bg-card border border-border text-sm text-foreground rounded-xl pl-3 pr-9 py-2.5 focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 cursor-pointer transition-all"
             >
                 {options.map((o) => (
                     <option key={o.value} value={o.value}>{o.label}</option>

@@ -1,14 +1,15 @@
 import { Link } from "react-router-dom";
 import ticketboxLogoDark from "@/assets/brand/ticketbox-logo-dark.svg";
+import ticketboxLogoLight from "@/assets/brand/ticketbox-logo-light.svg";
 
-export function Footer() {
+export function Footer({ theme }: { theme: "light" | "dark" }) {
     return (
-        <footer className="border-t border-white/[0.07] mt-20">
+        <footer className="border-t border-border mt-20">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-8 lg:gap-12">
                     <div className="lg:col-span-1">
                         <div className="mb-4">
-                            <img className="h-12 w-auto max-w-[210px] object-contain object-left drop-shadow-[0_2px_14px_rgba(124,92,252,0.25)]" src={ticketboxLogoDark} alt="TicketBox" />
+                            <img className="h-12 w-auto max-w-[210px] object-contain object-left drop-shadow-[0_2px_14px_rgba(124,92,252,0.25)]" src={theme === "light" ? ticketboxLogoLight : ticketboxLogoDark} alt="TicketBox" />
                         </div>
                         <p className="text-xs text-muted-foreground leading-relaxed mb-5">
                             Nền tảng bán vé và check-in QR thông minh. Mua vé dễ dàng, check-in nhanh chóng, không cần đăng nhập.
@@ -26,7 +27,7 @@ export function Footer() {
                 </div>
             </div>
 
-            <div className="border-t border-white/[0.07] bg-card/30">
+            <div className="border-t border-border bg-card/30">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-muted-foreground">
                     <span>TicketBoxQR · Dự án mô phỏng bán vé và check-in</span>
 

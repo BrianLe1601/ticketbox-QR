@@ -166,6 +166,7 @@ export interface EventListParams {
     q?: string;
     category?: CategorySlug;
     city?: string;
+    time?: "all" | "week" | "month";
     page?: number;
     limit?: number;
     sort?: "upcoming" | "newest" | "price-asc" | "price-desc" | "popular";
@@ -176,6 +177,7 @@ export async function fetchEventList(params: EventListParams = {}): Promise<{ ev
         q: params.q,
         category: params.category,
         city: params.city,
+        time: params.time,
         page: params.page,
         limit: params.limit,
         sort: params.sort,

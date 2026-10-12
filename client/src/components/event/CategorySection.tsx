@@ -56,7 +56,7 @@ export function CategorySection({ category }: { category: CategorySlug }) {
                     Xem tất cả <ChevronRight size={14} />
                 </button>
             </div>
-            {error && <p role="alert" className="mb-4 text-sm text-red-400">{error}</p>}
+            {error && <p role="alert" className="mb-4 text-sm text-public-error">{error}</p>}
             {!loading && !error && events.length === 0 && <p role="status" className="text-sm text-muted-foreground">Chưa có sự kiện trong danh mục này.</p>}
             <div aria-busy={loading} aria-label={`Sự kiện ${label}`} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 {loading

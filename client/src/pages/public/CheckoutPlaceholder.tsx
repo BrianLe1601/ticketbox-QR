@@ -165,29 +165,29 @@ export function CheckoutPlaceholder() {
                 <form onSubmit={handleSubmit} className="sm:col-span-3 space-y-4">
                     <div>
                         <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Họ và tên</label>
-                        <input aria-label="Họ và tên" required value={name} onChange={(e) => setName(e.target.value)} placeholder="Nguyễn Văn A" className="w-full px-3.5 py-2.5 rounded-xl bg-card border border-white/[0.08] text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all" />
+                        <input aria-label="Họ và tên" required value={name} onChange={(e) => setName(e.target.value)} placeholder="Nguyễn Văn A" className="w-full px-3.5 py-2.5 rounded-xl bg-card border border-border text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all" />
                     </div>
                     <div>
                         <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Email nhận vé</label>
                         <div className="flex gap-2">
-                            <input aria-label="Email nhận vé" required type="email" value={email} disabled={Boolean(verificationToken) || sendingCode || verifyingCode} onChange={(e) => { setEmail(e.target.value); setCodeSent(false); setVerificationToken(""); }} placeholder="ban@example.com" className="min-w-0 flex-1 px-3.5 py-2.5 rounded-xl bg-card border border-white/[0.08] text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 disabled:opacity-70" />
+                            <input aria-label="Email nhận vé" required type="email" value={email} disabled={Boolean(verificationToken) || sendingCode || verifyingCode} onChange={(e) => { setEmail(e.target.value); setCodeSent(false); setVerificationToken(""); }} placeholder="ban@example.com" className="min-w-0 flex-1 px-3.5 py-2.5 rounded-xl bg-card border border-border text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 disabled:opacity-70" />
                             <button type="button" onClick={handleSendCode} disabled={!captcha.ready || sendingCode || remaining > 0 || Boolean(verificationToken) || !email || Boolean(selectionError)} className="px-3 rounded-xl border border-primary/30 text-primary text-xs font-bold disabled:opacity-50">{sendingCode ? "Đang gửi..." : remaining > 0 ? `Gửi lại sau ${remaining}s` : "Gửi mã"}</button>
                         </div>
                         {!captcha.ready && !captcha.error && <p role="status" className="mt-2 text-xs">Đang tải xác minh reCAPTCHA...</p>}
                         {captcha.error && <div className="mt-2 text-xs"><p role="alert">{captcha.error}</p><button type="button" onClick={captcha.retry} className="underline hover:text-primary focus-visible:outline-2">Thử tải lại xác minh</button></div>}
                         {codeSent && !verificationToken && <div className="flex gap-2 mt-2">
-                            <input aria-label="Mã xác minh" autoComplete="one-time-code" value={verificationCode} onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric" placeholder="Nhập mã 6 số" className="min-w-0 flex-1 px-3.5 py-2.5 rounded-xl bg-card border border-white/[0.08] text-sm text-foreground" />
+                            <input aria-label="Mã xác minh" autoComplete="one-time-code" value={verificationCode} onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric" placeholder="Nhập mã 6 số" className="min-w-0 flex-1 px-3.5 py-2.5 rounded-xl bg-card border border-border text-sm text-foreground" />
                             <button type="button" onClick={handleVerifyCode} disabled={verifyingCode || verificationCode.length !== 6} className="px-3 rounded-xl bg-primary text-white text-xs font-bold disabled:opacity-50">{verifyingCode ? "Đang kiểm tra..." : "Xác minh"}</button>
                         </div>}
-                        {verificationToken && <p className="mt-2 text-xs text-emerald-400 flex items-center gap-1"><MailCheck size={13} /> email đã được xác minh</p>}
+                        {verificationToken && <p className="mt-2 text-xs text-public-success flex items-center gap-1"><MailCheck size={13} /> email đã được xác minh</p>}
                     </div>
                     <div>
-                        <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Số điện thoại <span className="text-red-400">*</span></label>
-                        <input aria-label="Số điện thoại" required type="tel" inputMode="numeric" pattern="0[35789][0-9]{8}" maxLength={10} value={phone} onChange={(e) => setPhone(digitsOnly(e.target.value, 10))} placeholder="0912345678" className="w-full px-3.5 py-2.5 rounded-xl bg-card border border-white/[0.08] text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all" />
+                        <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Số điện thoại <span className="text-public-error">*</span></label>
+                        <input aria-label="Số điện thoại" required type="tel" inputMode="numeric" pattern="0[35789][0-9]{8}" maxLength={10} value={phone} onChange={(e) => setPhone(digitsOnly(e.target.value, 10))} placeholder="0912345678" className="w-full px-3.5 py-2.5 rounded-xl bg-card border border-border text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all" />
                         <p className="mt-1.5 text-[11px] text-muted-foreground">Nhập 10 chữ số, bắt đầu bằng 03, 05, 07, 08 hoặc 09.</p>
                     </div>
 
-                    {(selectionError || error) && <p role="alert" className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{selectionError ?? error}</p>}
+                    {(selectionError || error) && <p role="alert" className="text-xs text-public-error bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{selectionError ?? error}</p>}
 
                     <button type="submit" disabled={!captcha.ready || submitting || !verificationToken || Boolean(selectionError)} className="w-full py-3.5 rounded-xl bg-primary text-white font-bold text-sm flex items-center justify-center gap-2 hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed shadow-lg shadow-primary/30 transition-all">
                         {submitting && <Loader2 size={15} className="animate-spin" />}
@@ -197,7 +197,7 @@ export function CheckoutPlaceholder() {
                 </form>
 
                 <div className="sm:col-span-2">
-                    <div className="bg-card border border-white/[0.08] rounded-2xl p-5 space-y-3 sticky top-24">
+                    <div className="bg-card border border-border rounded-2xl p-5 space-y-3 sticky top-24">
                         <h3 className="text-sm font-bold text-foreground" style={{ fontFamily: "Manrope, sans-serif" }}>Đơn hàng</h3>
                         <div className="space-y-2.5">
                             {lines.map((l) => (
@@ -210,7 +210,7 @@ export function CheckoutPlaceholder() {
                                 </div>
                             ))}
                         </div>
-                        <div className="border-t border-white/[0.07] pt-3 flex items-center justify-between">
+                        <div className="border-t border-border pt-3 flex items-center justify-between">
                             <span className="text-xs text-muted-foreground">Tổng cộng ({totalQuantity} vé)</span>
                             <span className="text-sm font-extrabold text-primary" style={{ fontFamily: "JetBrains Mono, monospace" }}>{formatPrice(totalAmount)}</span>
                         </div>
