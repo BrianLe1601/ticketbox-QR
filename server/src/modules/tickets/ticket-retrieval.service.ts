@@ -4,10 +4,19 @@ import { enqueueTicketEmail } from './ticket-email.repository.js';
 import { AppError } from '../../utils/app-error.js';
 import { randomUUID } from 'node:crypto';
 
-export const retrievalMessage = 'Nếu email tồn tại trong hệ thống, chúng tôi đã gửi lại vé qua email.';
+export const retrievalMessage = 'Nếu email có vé hợp lệ, yêu cầu gửi lại vé đã được ghi nhận. Vui lòng kiểm tra hộp thư của bạn.';
 async function deliver(email: string) {
     const orders = await findConfirmedOrdersByEmail(email);
-    for (const order of orders) await enqueueTicketEmail(order.id, email, 'ticket_resent');
+    for (const order of orders) {
+        try {
+            await enqueueTicketEmail(order.id, email, 'ticket_resent');
+        } catch (error) {
+            // The Event can be hidden, cancelled or ended after the initial read.
+            // Keep the public acknowledgement neutral; enqueue still checks under locks.
+            if (error instanceof AppError && error.code === 'EVENT_NOT_AVAILABLE_FOR_TICKET_EMAIL') continue;
+            throw error;
+        }
+    }
 }
 export async function retrieveTickets(email: string, token: string, ip: string, requestId = randomUUID()) {
     await verifyRecaptcha(token, 'ticket_retrieval', ip);

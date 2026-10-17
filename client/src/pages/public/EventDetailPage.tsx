@@ -49,7 +49,7 @@ export function EventDetailPage() {
     }, [id, retry]);
 
     if (!id) return <Navigate to="/events" replace />;
-    if (error?.id === id) return <div className="max-w-7xl mx-auto px-4 py-16"><p role="alert" className="text-red-400">{error.message}</p><button className="mt-4 text-primary underline focus-visible:outline-2" onClick={() => { setError(null); setEvent(undefined); setRetry(value => value + 1); }}>Thử lại</button></div>;
+    if (error?.id === id) return <div className="max-w-7xl mx-auto px-4 py-16"><p role="alert" className="text-public-error">{error.message}</p><button className="mt-4 text-primary underline focus-visible:outline-2" onClick={() => { setError(null); setEvent(undefined); setRetry(value => value + 1); }}>Thử lại</button></div>;
     if (notFoundId === id || event === null) return <div role="status" className="max-w-7xl mx-auto px-4 py-16">Sự kiện không tồn tại hoặc không còn được công bố.</div>;
     if (event === undefined || event.id !== id) {
         return <div role="status" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 text-sm text-muted-foreground">Đang tải...</div>;
@@ -68,7 +68,7 @@ export function EventDetailPage() {
                                 { Icon: MapPin, label: "Địa điểm", value: event.venue, sub: cityLabel },
                                 { Icon: Users, label: "Sức chứa", value: `${event.totalCapacity.toLocaleString("vi-VN")} chỗ`, sub: `${event.tickets.length} loại vé` },
                             ].map(({ Icon, label, value, sub }) => (
-                                <div key={label} className="bg-card border border-white/[0.08] rounded-xl p-4 flex gap-3">
+                                <div key={label} className="bg-card border border-border rounded-xl p-4 flex gap-3">
                                     <div className="w-9 h-9 rounded-lg bg-primary/15 flex items-center justify-center shrink-0"><Icon size={16} className="text-primary" /></div>
                                     <div className="min-w-0">
                                         <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-0.5">{label}</p>
@@ -86,9 +86,9 @@ export function EventDetailPage() {
                             </div>
                         </div>
 
-                        <div className="border-t border-white/[0.07] pt-8">
+                        <div className="border-t border-border pt-8">
                             <h3 className="font-extrabold text-foreground text-base mb-4" style={{ fontFamily: "Manrope, sans-serif" }}>Địa điểm</h3>
-                            <div className="bg-card border border-white/[0.08] rounded-xl overflow-hidden">
+                            <div className="bg-card border border-border rounded-xl overflow-hidden">
                                 <div className="p-4">
                                     <p className="text-sm font-semibold text-foreground">{event.venue}</p>
                                     <p className="text-xs text-muted-foreground mt-0.5">{event.address}, {cityLabel}</p>
@@ -100,12 +100,12 @@ export function EventDetailPage() {
 
                     <div className="lg:sticky lg:top-24 space-y-4">
                         <TicketSelector tickets={event.tickets} eventId={event.id} eventStatus={event.saleStatus} />
-                        <div className="p-4 bg-card border border-white/[0.08] rounded-xl space-y-2.5">
+                        <div className="p-4 bg-card border border-border rounded-xl space-y-2.5">
                             {[
                                 { Icon: CheckCircle2, text: "Vé điện tử gửi qua email sau thanh toán mô phỏng" },
                                 { Icon: Ticket, text: "QR code độc nhất, tra cứu không cần đăng nhập" },
                             ].map(({ Icon, text }, i) => (
-                                <div key={i} className="flex items-start gap-2.5"><Icon size={13} className="text-emerald-400 mt-0.5 shrink-0" /><span className="text-xs text-muted-foreground">{text}</span></div>
+                                <div key={i} className="flex items-start gap-2.5"><Icon size={13} className="text-public-success mt-0.5 shrink-0" /><span className="text-xs text-muted-foreground">{text}</span></div>
                             ))}
                         </div>
                     </div>

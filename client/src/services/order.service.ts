@@ -1,5 +1,5 @@
 import type { CreateOrderResult, Order, BuyerInfo, TicketSelection, PaymentResult } from "@/types/order.types";
-import { apiPost } from "./api";
+import { apiPost, ApiRequestError } from "./api";
 
 export interface CreateOrderPayload {
     eventId: string;
@@ -20,11 +20,12 @@ export async function createOrder(payload: CreateOrderPayload): Promise<CreateOr
     return data;
 }
 
-export async function fetchOrder(orderId: string, token: string): Promise<Order | null> {
+export async function fetchOrder(orderId: string, token: string, reportErrors = false): Promise<Order | null> {
     try {
         const { data } = await apiPost<Order>(`/checkout/orders/${orderId}/lookup`, { token });
         return data;
-    } catch {
+    } catch (error) {
+        if (reportErrors && !(error instanceof ApiRequestError && error.status === 404)) throw error;
         return null;
     }
 }

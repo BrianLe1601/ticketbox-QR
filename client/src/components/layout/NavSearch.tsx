@@ -44,10 +44,10 @@ export function NavSearch() {
     return (
         <div ref={containerRef} className="relative hidden lg:block">
             <div className={cn(
-                "flex items-center h-10 w-[300px] rounded-[10px] border bg-[#1A1730] transition-all duration-200",
-                focused ? "border-[#7C5CFC]/70 shadow-[0_0_0_3px_rgba(124,92,252,0.14)]" : "border-white/[0.12] hover:border-white/[0.22]"
+                "flex items-center h-10 w-[300px] rounded-[10px] border bg-public-search transition-all duration-200",
+                focused ? "border-[#7C5CFC]/70 shadow-[0_0_0_3px_rgba(124,92,252,0.14)]" : "border-border hover:border-primary/30"
             )}>
-                <button type="button" tabIndex={-1} onClick={() => handleSubmit(query)} className="shrink-0 ml-3 text-[#9CA3AF] hover:text-foreground transition-colors">
+                <button type="button" tabIndex={-1} onClick={() => handleSubmit(query)} className="shrink-0 ml-3 text-muted-foreground hover:text-foreground transition-colors">
                     <Search size={15} />
                 </button>
                 <input
@@ -57,21 +57,21 @@ export function NavSearch() {
                         if (e.key === "Escape") { setFocused(false); (e.target as HTMLInputElement).blur(); }
                     }}
                     placeholder="Tìm kiếm sự kiện..."
-                    className="flex-1 h-full bg-transparent px-2.5 text-[13px] text-foreground placeholder:text-[#9CA3AF] focus:outline-none"
+                    className="flex-1 h-full bg-transparent px-2.5 text-[13px] text-foreground placeholder:text-muted-foreground focus:outline-none"
                 />
                 {query && (
-                    <button type="button" tabIndex={-1} onClick={() => setQuery("")} className="shrink-0 mr-2 text-[#9CA3AF] hover:text-foreground transition-colors">
+                    <button type="button" tabIndex={-1} onClick={() => setQuery("")} className="shrink-0 mr-2 text-muted-foreground hover:text-foreground transition-colors">
                         <X size={13} />
                     </button>
                 )}
             </div>
 
             {showDropdown && (
-                <div className="absolute top-[calc(100%+8px)] left-0 w-[360px] rounded-xl border border-white/[0.09] bg-[#1A1730] shadow-2xl shadow-black/50 overflow-hidden z-50">
+                <div className="absolute top-[calc(100%+8px)] left-0 w-[360px] rounded-xl border border-border bg-public-search shadow-2xl shadow-black/50 overflow-hidden z-50">
                     <div className="py-1.5">
                         {suggestions.map((event) => (
-                            <button key={event.id} onMouseDown={(e) => { e.preventDefault(); navigate(`/events/${event.id}`); setQuery(""); setFocused(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/[0.06] transition-colors text-left">
-                                <img src={event.image} alt={event.name} className="w-10 h-10 rounded-lg object-cover shrink-0 border border-white/[0.08]" />
+                            <button key={event.id} onMouseDown={(e) => { e.preventDefault(); navigate(`/events/${event.id}`); setQuery(""); setFocused(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-public-hover transition-colors text-left">
+                                <img src={event.image} alt={event.name} className="w-10 h-10 rounded-lg object-cover shrink-0 border border-border" />
                                 <div className="flex-1 min-w-0">
                                     <p className="text-[13px] font-semibold text-foreground truncate leading-snug">{event.name}</p>
                                     <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{event.displayDate} · {event.city}</p>
@@ -80,7 +80,7 @@ export function NavSearch() {
                             </button>
                         ))}
                     </div>
-                    <div className="border-t border-white/[0.07] px-3 py-2.5">
+                    <div className="border-t border-border px-3 py-2.5">
                         <button onMouseDown={(e) => { e.preventDefault(); handleSubmit(query); }} className="w-full flex items-center gap-2 text-[12px] text-primary hover:text-primary/80 transition-colors font-semibold">
                             <Search size={12} /> Xem tất cả kết quả cho &ldquo;{query}&rdquo;
                         </button>
