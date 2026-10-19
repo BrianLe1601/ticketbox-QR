@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Eye, EyeOff, LoaderCircle, LockKeyhole, Mail, ShieldAlert, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { ArrowBigUp, Eye, EyeOff, LoaderCircle, LockKeyhole, Mail, ShieldAlert } from "lucide-react";
+import { useState, type KeyboardEvent } from "react";
 import { useForm } from "react-hook-form";
 import { useLocation, useNavigate } from "react-router-dom";
 import { z } from "zod";
@@ -17,11 +17,24 @@ type LoginFormData = z.infer<typeof loginSchema>;
 
 interface LoginFormProps {
   onLoginSuccess?: (user: AuthUser, redirectPath: string) => void;
+  emailLabel?: string;
+  emailPlaceholder?: string;
+  submitLabel?: string;
+  /** Shows "Quên mật khẩu?" next to the password label (Admin only); receives the typed email. */
+  onForgotPassword?: (email: string) => void;
 }
 
-export function LoginForm({ onLoginSuccess }: LoginFormProps) {
+export function LoginForm({
+  onLoginSuccess,
+  emailLabel = "Địa chỉ email",
+  emailPlaceholder = "ten@congty.com",
+  submitLabel = "Đăng nhập",
+  onForgotPassword,
+}: LoginFormProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
+  const [capsLock, setCapsLock] = useState(false);
+  const readCaps = (event: KeyboardEvent<HTMLInputElement>) => setCapsLock(event.getModifierState("CapsLock"));
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -29,18 +42,12 @@ export function LoginForm({ onLoginSuccess }: LoginFormProps) {
   const {
     register,
     handleSubmit,
-    setValue,
+    getValues,
     formState: { errors, isSubmitting },
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "", password: "" },
   });
-
-  function fillDemoAdmin() {
-    setValue("email", "admin@ticketbox.local", { shouldValidate: true });
-    setValue("password", "ticketbox@123", { shouldValidate: true });
-    setServerError(null);
-  }
 
   async function onSubmit(values: LoginFormData) {
     setServerError(null);
@@ -63,88 +70,87 @@ export function LoginForm({ onLoginSuccess }: LoginFormProps) {
   }
 
   return (
-    <form className="space-y-4" onSubmit={handleSubmit(onSubmit)} noValidate>
-      {/* 1-Click Demo Fill Button */}
-      <button
-        type="button"
-        className="auth-quick-fill-btn"
-        onClick={fillDemoAdmin}
-        title="Bấm để tự động điền tài khoản Admin thử nghiệm"
-      >
-        <Sparkles size={13} className="text-cyan-400" />
-        <span>Điền nhanh tài khoản Admin mẫu (admin@ticketbox.local)</span>
-      </button>
-
-      <div>
-        <label
-          className="mb-1.5 flex items-center justify-between text-xs font-semibold text-slate-300"
-          htmlFor="email"
-        >
-          <span>Địa chỉ Email</span>
-          <span className="text-[10px] font-normal text-slate-500">Bắt buộc</span>
-        </label>
-        <div className="tech-input-wrap">
-          <Mail size={17} aria-hidden="true" className="text-slate-400" />
+    <form className="login-form" onSubmit={handleSubmit(onSubmit)} noValidate>
+      <div className="login-field">
+        <label htmlFor="email">{emailLabel}</label>
+        <div className="login-input">
+          <Mail size={18} aria-hidden="true" />
           <input
             id="email"
             type="email"
-            autoComplete="email"
-            placeholder="admin@ticketbox.local hoặc staff@ticketbox.local"
+            inputMode="email"
+            autoComplete="username"
+            autoCapitalize="none"
+            spellCheck={false}
+            placeholder={emailPlaceholder}
             disabled={isSubmitting}
+            aria-invalid={Boolean(errors.email)}
+            aria-describedby={errors.email ? "email-error" : undefined}
             {...register("email")}
           />
         </div>
-        {errors.email && <p className="tech-field-error">{errors.email.message}</p>}
+        {errors.email && <p id="email-error" className="login-field-error" role="alert">{errors.email.message}</p>}
       </div>
 
-      <div>
-        <label
-          className="mb-1.5 flex items-center justify-between text-xs font-semibold text-slate-300"
-          htmlFor="password"
-        >
-          <span>Mật khẩu</span>
-          <span className="text-[10px] font-normal text-slate-500">Tối thiểu 8 ký tự</span>
-        </label>
-        <div className="tech-input-wrap">
-          <LockKeyhole size={17} aria-hidden="true" className="text-slate-400" />
+      <div className="login-field">
+        <div className="login-label-row">
+          <label htmlFor="password">Mật khẩu</label>
+          {onForgotPassword && (
+            <button type="button" className="login-link-button" onClick={() => onForgotPassword(getValues("email").trim())} disabled={isSubmitting}>
+              Quên mật khẩu?
+            </button>
+          )}
+        </div>
+        <div className="login-input">
+          <LockKeyhole size={18} aria-hidden="true" />
           <input
             id="password"
             type={showPassword ? "text" : "password"}
             autoComplete="current-password"
-            placeholder="Nhập mật khẩu tài khoản"
+            placeholder="Tối thiểu 8 ký tự"
             disabled={isSubmitting}
-            {...register("password")}
+            aria-invalid={Boolean(errors.password)}
+            aria-describedby={[errors.password && "password-error", capsLock && "password-caps"].filter(Boolean).join(" ") || undefined}
+            onKeyDown={readCaps}
+            onKeyUp={readCaps}
+            {...register("password", { onBlur: () => setCapsLock(false) })}
           />
           <button
             type="button"
-            className="tech-password-toggle"
+            className="login-password-toggle"
             onClick={() => setShowPassword((value) => !value)}
             aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
-            tabIndex={-1}
+            aria-pressed={showPassword}
           >
-            {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+            {showPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
           </button>
         </div>
-        {errors.password && <p className="tech-field-error">{errors.password.message}</p>}
+        {capsLock && (
+          <p id="password-caps" className="login-caps" role="status">
+            <ArrowBigUp size={16} aria-hidden="true" />
+            Caps Lock đang bật
+          </p>
+        )}
+        {errors.password && <p id="password-error" className="login-field-error" role="alert">{errors.password.message}</p>}
       </div>
 
       {serverError && (
-        <div className="tech-login-error flex items-start gap-2.5" role="alert">
-          <ShieldAlert size={17} className="flex-shrink-0 mt-0.5 text-rose-400" />
-          <span className="text-xs leading-relaxed">{serverError}</span>
+        <div className="login-notice danger" role="alert">
+          <ShieldAlert size={18} aria-hidden="true" />
+          <span>{serverError}</span>
         </div>
       )}
 
-      <button className="tech-login-button mt-2" type="submit" disabled={isSubmitting}>
+      <button className="login-submit" type="submit" disabled={isSubmitting}>
         {isSubmitting ? (
           <>
-            <LoaderCircle className="animate-spin text-cyan-300" size={18} />
-            <span>Đang xác thực thông tin...</span>
+            <LoaderCircle className="animate-spin" size={18} aria-hidden="true" />
+            <span>Đang xác thực…</span>
           </>
         ) : (
           <>
-            <LockKeyhole size={17} />
-            <span>Đăng nhập hệ thống</span>
+            <LockKeyhole size={18} aria-hidden="true" />
+            <span>{submitLabel}</span>
           </>
         )}
       </button>

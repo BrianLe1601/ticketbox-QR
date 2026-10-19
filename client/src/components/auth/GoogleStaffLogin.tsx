@@ -1,7 +1,8 @@
-import { Clock, Info, LoaderCircle, ShieldAlert } from "lucide-react";
+import { Info, LoaderCircle, ShieldAlert } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { useAuth } from "@/context/AuthContext";
+import type { ThemeMode } from "@/lib/ticketbox-theme";
 import type { AuthUser } from "@/types/auth";
 
 interface GoogleIdentityApi {
@@ -23,16 +24,24 @@ declare global {
   }
 }
 
+/**
+ * Google sign-in for gate Staff. A first login (or one still awaiting approval) answers
+ * `pending`: the credential is handed to the page, kept in memory only, so the waiting card can
+ * re-check the same identity without another Google prompt.
+ */
 export function GoogleStaffLogin({
   onLoginSuccess,
+  onPending,
+  theme,
 }: {
   onLoginSuccess: (user: AuthUser, requestedPath: string) => void;
+  onPending: (credential: string) => void;
+  theme: ThemeMode;
 }) {
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
   const container = useRef<HTMLDivElement>(null);
   const busyRef = useRef(false);
   const [busy, setBusy] = useState(false);
-  const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { loginWithGoogle } = useAuth();
   const submitRef = useRef<(credential: string) => Promise<void>>(async () => {});
@@ -46,7 +55,7 @@ export function GoogleStaffLogin({
       try {
         const result = await loginWithGoogle(credential);
         if (result.status === "pending") {
-          setPending(true);
+          onPending(credential);
         } else {
           onLoginSuccess(result.user, "/staff");
         }
@@ -57,7 +66,7 @@ export function GoogleStaffLogin({
         setBusy(false);
       }
     };
-  }, [loginWithGoogle, onLoginSuccess]);
+  }, [loginWithGoogle, onLoginSuccess, onPending]);
 
   useEffect(() => {
     if (!clientId) return;
@@ -74,11 +83,12 @@ export function GoogleStaffLogin({
         auto_select: false,
       });
       window.google.accounts.id.renderButton(container.current, {
-        theme: "filled_black",
+        theme: theme === "dark" ? "filled_black" : "outline",
         size: "large",
-        text: "signin_with",
-        shape: "rectangular",
-        width: 320,
+        text: "continue_with",
+        shape: "pill",
+        logo_alignment: "left",
+        width: 300,
       });
     };
 
@@ -110,65 +120,29 @@ export function GoogleStaffLogin({
       script.removeEventListener("load", render);
       script.removeEventListener("error", onError);
     };
-  }, [clientId]);
+  }, [clientId, theme]);
 
   return (
-    <div className="w-full" aria-label="Đăng nhập Staff bằng Google">
-      <div className="auth-divider">
-        <span>Hoặc đăng nhập với Google</span>
-      </div>
-
-      <div className="mb-2 text-center">
-        <p className="text-[11px] text-slate-400">
-          Dành riêng cho nhân sự soát vé (Staff). Lần đầu đăng nhập cần Admin phê duyệt.
-        </p>
-      </div>
-
+    <div className="login-google" aria-label="Đăng nhập Nhân viên cổng bằng Google">
       {clientId ? (
-        <div
-          ref={container}
-          className="flex min-h-[44px] justify-center"
-          aria-label="Nút đăng nhập với Google"
-          aria-busy={busy}
-        />
+        <div ref={container} className="login-google-button" aria-busy={busy} />
       ) : (
-        <div className="rounded-xl border border-cyan-500/20 bg-cyan-950/20 p-3 text-center">
-          <p className="flex items-center justify-center gap-1.5 text-xs text-slate-300">
-            <Info size={14} className="text-cyan-400 flex-shrink-0" />
-            <span>Staff Google Sign-in sẵn sàng khi cấu hình Google Client ID.</span>
-          </p>
-        </div>
+        <p className="login-notice info" role="status">
+          <Info size={18} aria-hidden="true" />
+          <span>Đăng nhập Google chưa được cấu hình trên máy chủ này (thiếu Google Client ID). Dùng tài khoản có mật khẩu bên dưới nếu Quản trị viên đã cấp cho bạn.</span>
+        </p>
       )}
 
       {busy && (
-        <div className="mt-3 flex items-center justify-center gap-2 text-xs text-cyan-300">
-          <LoaderCircle size={15} className="animate-spin" />
-          <span>Đang xác minh danh tính Google...</span>
-        </div>
-      )}
-
-      {pending && (
-        <div
-          className="mt-3 flex items-start gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs leading-relaxed text-amber-200"
-          role="status"
-        >
-          <Clock size={16} className="mt-0.5 flex-shrink-0 text-amber-400" />
-          <div>
-            <strong className="block font-semibold text-amber-300">
-              Tài khoản đang chờ Admin phê duyệt
-            </strong>
-            Yêu cầu của bạn đã được ghi nhận vào hệ thống. Bạn vui lòng liên hệ Ban tổ chức
-            (Admin) để được duyệt và phân công sự kiện trước khi check-in.
-          </div>
-        </div>
+        <p className="login-notice info" role="status">
+          <LoaderCircle size={18} className="animate-spin" aria-hidden="true" />
+          <span>Đang xác minh danh tính Google…</span>
+        </p>
       )}
 
       {error && (
-        <div
-          className="mt-3 flex items-start gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs leading-relaxed text-rose-300"
-          role="alert"
-        >
-          <ShieldAlert size={16} className="mt-0.5 flex-shrink-0 text-rose-400" />
+        <div className="login-notice danger" role="alert">
+          <ShieldAlert size={18} aria-hidden="true" />
           <span>{error}</span>
         </div>
       )}

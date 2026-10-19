@@ -108,3 +108,40 @@ export function storeToken(token: string): void {
 export function clearStoredToken(): void {
   memoryAccessToken = null;
 }
+
+/** Error with the server's stable code, for flows that branch on it (password reset). */
+export class AuthRequestError extends Error {
+  readonly status: number;
+  readonly code?: string;
+
+  constructor(message: string, status: number, code?: string) {
+    super(message);
+    this.status = status;
+    this.code = code;
+  }
+}
+
+async function postAuth(path: string, body: unknown): Promise<string> {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    credentials: "include",
+  });
+  const payload = await readJson(response);
+  if (!response.ok) {
+    const code = typeof payload === "object" && payload !== null && "code" in payload && typeof payload.code === "string" ? payload.code : undefined;
+    throw new AuthRequestError(response.status === 429 ? "Bạn gửi yêu cầu quá nhiều lần, vui lòng thử lại sau ít phút." : getErrorMessage(payload), response.status, code);
+  }
+  return getErrorMessage(payload);
+}
+
+/** Neutral by contract: resolves with the same message whether or not the email is an Admin. */
+export function requestPasswordReset(email: string): Promise<string> {
+  return postAuth("/auth/password-reset/request", { email });
+}
+
+/** The token comes from the link fragment and is sent only in this JSON body. */
+export function confirmPasswordReset(token: string, newPassword: string): Promise<string> {
+  return postAuth("/auth/password-reset/confirm", { token, newPassword });
+}
