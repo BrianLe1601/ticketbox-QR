@@ -95,7 +95,11 @@ CREATE INDEX idx_auth_sessions_expires_at
 
 -- =========================================================
 -- 3. CATEGORIES
--- Admin-managed taxonomy. Public filters use slug; Events use category_id.
+-- Fixed music-genre catalogue shipped with TicketBox. Public filters use slug;
+-- Events use category_id. kind='music' marks a catalogue genre (only this file
+-- installs them); kind='other' is reserved for non-catalogue rows (none are
+-- installed; see below). Admins may only switch a genre
+-- on/off and reorder it; they never create, rename or delete Categories.
 -- =========================================================
 CREATE TABLE categories (
     id              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -122,25 +126,41 @@ CREATE TABLE categories (
 CREATE INDEX idx_categories_active_order
     ON categories(is_active, sort_order, name);
 
--- Music genres are the default catalogue for new concerts. The five general
--- categories below are legacy history and stay kind='other' until an Admin
--- classifies them; they can only be selected after the Admin switches the
--- platform category scope to 'all'.
+-- The 19 catalogue genres (Bửu, 20/10/2026). Slugs pop/rock/edm/acoustic are
+-- kept from the earlier catalogue because public links filter by slug.
+-- 'the-loai-khac' is a valid music genre for anything not listed yet; a new
+-- genre is added here in a later release, never typed by an Admin.
 INSERT INTO categories(name, slug, description, icon, kind, sort_order) VALUES
-    ('Pop', 'pop', 'Pop concerts.', 'music', 'music', 5),
-    ('Rock', 'rock', 'Rock concerts.', 'guitar', 'music', 6),
-    ('EDM', 'edm', 'EDM and electronic music concerts.', 'music', 'music', 7),
-    ('Acoustic', 'acoustic', 'Acoustic and unplugged concerts.', 'guitar', 'music', 8),
-    ('Music & Concerts', 'music', 'Concerts, festivals and live music.', 'music', 'other', 10),
-    ('Conferences', 'conference', 'Conferences, seminars and professional events.', 'monitor', 'other', 20),
-    ('Food & Drinks', 'food', 'Food, beverage and culinary events.', 'utensils', 'other', 30),
-    ('Sports & Fitness', 'sports', 'Sports, races and fitness activities.', 'dumbbell', 'other', 40),
-    ('Art & Culture', 'art', 'Art, exhibitions and cultural events.', 'palette', 'other', 50);
+    ('Pop', 'pop', 'Nhạc Pop, V-Pop và US-UK Pop.', 'music', 'music', 10),
+    ('Ballad', 'ballad', 'Nhạc trữ tình, ballad nhẹ nhàng.', 'music', 'music', 20),
+    ('Rock', 'rock', 'Rock, pop-rock, alternative.', 'guitar', 'music', 30),
+    ('Metal', 'metal', 'Heavy metal và các nhánh metal.', 'guitar', 'music', 40),
+    ('Indie', 'indie', 'Nhạc indie, nghệ sĩ độc lập.', 'guitar', 'music', 50),
+    ('Rap / Hip-hop', 'rap-hip-hop', 'Rap, hip-hop, trap.', 'mic', 'music', 60),
+    ('R&B / Soul', 'rnb-soul', 'R&B, soul, neo-soul.', 'mic', 'music', 70),
+    ('EDM / Điện tử', 'edm', 'EDM, house, techno, nhạc điện tử.', 'headphones', 'music', 80),
+    ('Acoustic', 'acoustic', 'Acoustic, unplugged, mộc.', 'guitar', 'music', 90),
+    ('Jazz', 'jazz', 'Jazz và các nhánh jazz.', 'music', 'music', 100),
+    ('Blues', 'blues', 'Blues truyền thống và hiện đại.', 'music', 'music', 110),
+    ('Folk / Đồng quê', 'folk-dong-que', 'Folk, country, nhạc đồng quê.', 'guitar', 'music', 120),
+    ('Bolero / Nhạc vàng', 'bolero-nhac-vang', 'Bolero, nhạc vàng, nhạc xưa.', 'music', 'music', 130),
+    ('Nhạc dân tộc / Truyền thống', 'nhac-dan-toc', 'Dân ca, nhạc cụ dân tộc, nhạc truyền thống.', 'music', 'music', 140),
+    ('Cổ điển', 'co-dien', 'Nhạc cổ điển, hòa nhạc giao hưởng, thính phòng.', 'music', 'music', 150),
+    ('K-Pop / J-Pop', 'kpop-jpop', 'K-Pop, J-Pop và pop châu Á.', 'music', 'music', 160),
+    ('Latin / Reggae', 'latin-reggae', 'Latin, reggae, nhạc nhảy Latin.', 'music', 'music', 170),
+    ('Nhạc kịch / Nhạc phim', 'nhac-kich-nhac-phim', 'Nhạc kịch, nhạc phim, soundtrack.', 'music', 'music', 180),
+    ('Thể loại nhạc khác', 'the-loai-khac', 'Thể loại âm nhạc chưa có trong danh sách.', 'music', 'music', 190);
+
+-- No kind='other' rows are installed (the five pre-concert general categories
+-- were dropped from the clean install on 20/10/2026). The value stays for a
+-- later extension and for fixtures such as the qa-workflow Category: such rows
+-- are never offered to new Events and, once off, never switched back on.
 
 -- =========================================================
 -- 3b. PLATFORM SETTINGS
 -- Exactly one row. Holds the single concert venue (copied into each new Event
--- as a purchase-time snapshot) and the Admin-selected Category scope. The row
+-- as a purchase-time snapshot). New Events may only use an active catalogue
+-- genre (categories.kind='music'); there is no wider Category scope. The row
 -- is also the lock that serializes venue-schedule changes across Admins; lock
 -- it before any Event row.
 -- Venue columns stay NULL until an Admin configures them; nothing is invented.
@@ -151,7 +171,6 @@ CREATE TABLE platform_settings (
     venue_address       VARCHAR(255) NULL,
     venue_city          VARCHAR(100) NULL,
     venue_capacity      INT UNSIGNED NULL,
-    category_scope      ENUM('music_only', 'all') NOT NULL DEFAULT 'music_only',
     updated_by          BIGINT UNSIGNED NULL,
     created_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     updated_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)

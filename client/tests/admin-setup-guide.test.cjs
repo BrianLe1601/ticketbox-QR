@@ -19,10 +19,10 @@ const api = load('admin-setup-guide.ts', { require: (name) => (name === './admin
 const now = new Date('2026-10-19T08:00:00Z');
 const later = new Date(now.getTime() + 3 * 24 * 3600e3).toISOString();
 const earlier = new Date(now.getTime() - 3600e3).toISOString();
-const music = { kind: 'music', isActive: true };
-const other = { kind: 'other', isActive: true };
+const music = { catalog: true, isActive: true };
+const other = { catalog: false, isActive: true };
 const ev = (id, status, extra = {}) => ({ id, status, validTicketTypeCount: 0, activeStaffCount: 0, checkinEndAt: later, readiness: { ready: false }, ...extra });
-const base = { venueConfigured: false, categoryScope: 'music_only', categories: [], events: [], pendingStaff: 0 };
+const base = { venueConfigured: false, categories: [], events: [], pendingStaff: 0 };
 const step = (progress, id) => progress.steps.find((item) => item.id === id);
 
 test('a fresh install starts at the venue and locks Event creation with the reason', () => {
@@ -34,13 +34,13 @@ test('a fresh install starts at the venue and locks Event creation with the reas
   assert.equal(step(progress, 'tickets').lockedReason, 'Cần tạo sự kiện (bước 3) trước');
 });
 
-test('selectable categories follow the platform scope (same rule as Settings)', () => {
-  assert.equal(api.selectableCategoryCount({ categoryScope: 'music_only', categories: [other, { kind: 'music', isActive: false }] }), 0);
-  assert.equal(api.selectableCategoryCount({ categoryScope: 'all', categories: [other, music] }), 2);
+test('only switched-on catalogue genres count; a legacy Category never does (same rule as the server)', () => {
+  assert.equal(api.selectableCategoryCount({ categories: [other, { catalog: true, isActive: false }] }), 0);
+  assert.equal(api.selectableCategoryCount({ categories: [other, music, music] }), 2);
   const progress = api.buildSetupProgress({ ...base, venueConfigured: true, categories: [other] }, now);
   assert.equal(progress.current, 'categories');
-  assert.equal(step(progress, 'event').lockedReason, 'Cần ít nhất một thể loại đang hoạt động (bước 2)');
-  assert.equal(step(progress, 'categories').status, 'Chưa có thể loại nào đang hoạt động');
+  assert.equal(step(progress, 'event').lockedReason, 'Cần bật ít nhất một thể loại (bước 2)');
+  assert.equal(step(progress, 'categories').status, 'Chưa bật thể loại nào');
 });
 
 test('with venue and a genre, the next action opens the create form', () => {

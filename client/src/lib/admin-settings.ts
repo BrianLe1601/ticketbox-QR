@@ -2,7 +2,7 @@
  * Pure helpers for the Admin "Cài đặt" page. They only give early feedback: the server re-checks
  * every rule (platform-settings venueSchema, auth changeAdminPasswordSchema).
  */
-import type { CategoryScope, PlatformSettings, VenueSettings } from "@/services/admin-platform-settings.service";
+import type { PlatformSettings, VenueSettings } from "@/services/admin-platform-settings.service";
 
 export type SettingsTab = "system" | "appearance" | "account";
 export const SETTINGS_TABS: Array<{ value: SettingsTab; label: string }> = [
@@ -52,21 +52,16 @@ export function venueImpact(settings: Pick<PlatformSettings, "venue" | "outOfSyn
   return `Chỉ áp dụng cho sự kiện tạo sau khi lưu; sự kiện đã có giữ địa điểm cũ.${capacityDown ? " Sức chứa giảm không làm giảm số vé của sự kiện đã tạo." : ""}`;
 }
 
-/* ---------- category scope ---------- */
+/* ---------- genre catalogue ---------- */
 
-interface CategoryLike { isActive: boolean; kind: "music" | "other" }
+interface CategoryLike { isActive: boolean; catalog: boolean }
 
-/** Active Categories a new Event may use under each scope, and legacy ("other") ones kept for history. */
-export function scopeCounts(categories: readonly CategoryLike[]) {
-  const active = categories.filter((item) => item.isActive);
-  const music = active.filter((item) => item.kind === "music").length;
-  return { music, otherActive: active.length - music, legacy: categories.filter((item) => item.kind !== "music").length };
+/** Catalogue genres switched on (usable for new Events) out of the whole fixed catalogue. */
+export function genreCounts(categories: readonly CategoryLike[]) {
+  const genres = categories.filter((item) => item.catalog);
+  const active = genres.filter((item) => item.isActive).length;
+  return { active, off: genres.length - active, total: genres.length };
 }
-
-export const SCOPE_OPTIONS: Array<{ value: CategoryScope; label: string }> = [
-  { value: "music_only", label: "Chỉ thể loại âm nhạc" },
-  { value: "all", label: "Mọi danh mục" },
-];
 
 /* ---------- password ---------- */
 

@@ -128,19 +128,15 @@ test('category reorder: move, 10-step sortOrder plan with only changed rows, and
   assert.deepEqual(plain(changes), [{ id: 1, from: 2, to: 10 }, { id: 3, from: 1, to: 20 }, { id: 2, from: 1, to: 30 }]);
   assert.deepEqual(plain(api.revertChanges(changes)), [{ id: 1, from: 10, to: 2 }, { id: 3, from: 20, to: 1 }, { id: 2, from: 30, to: 1 }]);
   assert.deepEqual(plain(api.orderChanges([{ id: 9, sortOrder: 10 }, { id: 8, sortOrder: 20 }])), [], 'already in plan order: nothing to save');
-  assert.equal(api.nextSortOrder(categories), 12);
-  assert.equal(api.nextSortOrder([]), 10);
 });
 
-test('category form: Vietnamese slugs, duplicates and server error codes in Vietnamese', () => {
+test('fixed genre catalogue: legacy Categories are kept apart, catalogue errors read in Vietnamese', () => {
   const api = load('lib/admin-category-view.ts');
-  assert.equal(api.slugify('Nhạc Trữ Tình & Bolero'), 'nhac-tru-tinh-bolero');
-  assert.equal(api.slugify('  Đờn ca tài tử  '), 'don-ca-tai-tu');
-  const base = { name: 'Jazz', slug: 'jazz', description: '', icon: '', kind: 'music', isActive: true };
-  assert.deepEqual(JSON.parse(JSON.stringify(api.validateCategoryForm(base, categories))), {});
-  assert.ok(api.validateCategoryForm({ ...base, name: 'pop' }, categories).name, 'same name ignoring case');
-  assert.ok(api.validateCategoryForm({ ...base, slug: 'rock' }, categories).slug);
-  assert.ok(api.validateCategoryForm({ ...base, slug: 'Jazz Mới' }, categories).slug);
-  assert.equal(api.categoryErrorText({ code: 'CATEGORY_IN_USE', message: 'English' }, 'x'), 'Danh mục đang có sự kiện, không xóa được; hãy vô hiệu hóa.');
+  const items = [{ id: 1, catalog: true }, { id: 30, catalog: false }, { id: 2, catalog: true }];
+  const { genres, legacy } = api.splitCatalog(items);
+  assert.deepEqual(genres.map((item) => item.id), [1, 2]);
+  assert.deepEqual(legacy.map((item) => item.id), [30]);
+  assert.equal(api.categoryErrorText({ code: 'CATEGORY_CATALOG_FIXED', message: 'English' }, 'x'), 'Danh sách thể loại là cố định; chỉ bật/tắt và sắp xếp được.');
+  assert.equal(api.categoryErrorText({ code: 'CATEGORY_LEGACY_READ_ONLY' }, 'x'), 'Danh mục cũ không bật lại được; hãy dùng một thể loại nhạc.');
   assert.equal(api.categoryErrorText(new Error('Mạng lỗi'), 'x'), 'Mạng lỗi');
 });

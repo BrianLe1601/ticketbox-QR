@@ -33,6 +33,8 @@ export interface Event {
   slug: string;          // events.slug
   shortTitle: string;    // FE-only, để hiển thị card gọn — KHÔNG có cột riêng trong DB
   category: CategorySlug;
+  /** Genre display name from the API (categories.name); the slug above stays the filter key. */
+  categoryName?: string;
   description: string;
   shortDesc?: string;    // FE-derived (cắt ngắn description), không có cột riêng
 

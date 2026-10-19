@@ -9,8 +9,8 @@ export type SetupStepId = "venue" | "categories" | "event" | "tickets" | "publis
 
 export interface SetupInput {
   venueConfigured: boolean;
-  categoryScope: "music_only" | "all";
-  categories: ReadonlyArray<{ kind: string; isActive: boolean }>;
+  /** `catalog`: genre of the fixed TicketBox catalogue (legacy Categories never count). */
+  categories: ReadonlyArray<{ catalog: boolean; isActive: boolean }>;
   events: ReadonlyArray<{
     id: number;
     status: string;
@@ -47,10 +47,9 @@ export interface SetupProgress {
 
 const PUBLISHED = new Set(["published", "ongoing", "completed"]);
 
-/** Categories a new Event may use under the platform scope (same rule as Settings and the server). */
-export function selectableCategoryCount(input: Pick<SetupInput, "categoryScope" | "categories">): number {
-  const active = input.categories.filter((item) => item.isActive);
-  return input.categoryScope === "all" ? active.length : active.filter((item) => item.kind === "music").length;
+/** Genres a new Event may use: switched-on catalogue genres (same rule as the server). */
+export function selectableCategoryCount(input: Pick<SetupInput, "categories">): number {
+  return input.categories.filter((item) => item.catalog && item.isActive).length;
 }
 
 export function buildSetupProgress(input: SetupInput, now: Date = new Date()): SetupProgress {
@@ -81,22 +80,17 @@ export function buildSetupProgress(input: SetupInput, now: Date = new Date()): S
       to: "/admin/settings", action: venue ? "Xem lại" : "Cấu hình địa điểm", lockedReason: null,
     },
     {
-      id: "categories", title: input.categoryScope === "all" ? "Chuẩn bị danh mục" : "Chuẩn bị thể loại âm nhạc", done: categories,
-      why: input.categoryScope === "all"
-        ? "Mỗi sự kiện thuộc một danh mục; tạo sẵn ít nhất một danh mục đang hoạt động."
-        : "Mỗi sự kiện thuộc một thể loại nhạc (Pop, Rock, EDM…); tạo sẵn ít nhất một thể loại đang hoạt động.",
-      status: (() => {
-        const noun = input.categoryScope === "all" ? "danh mục" : "thể loại";
-        return categories ? `${formatNumber(selectable)} ${noun} sẵn sàng cho sự kiện mới` : `Chưa có ${noun} nào đang hoạt động`;
-      })(),
-      to: "/admin/categories", action: categories ? "Xem lại" : "Thêm thể loại", lockedReason: null,
+      id: "categories", title: "Chọn thể loại nhạc", done: categories,
+      why: "Bật những thể loại địa điểm của bạn tổ chức (Pop, Rock, EDM…) và sắp xếp thứ tự hiện với khách.",
+      status: categories ? `${formatNumber(selectable)} thể loại đang bật` : "Chưa bật thể loại nào",
+      to: "/admin/categories", action: categories ? "Xem lại" : "Bật thể loại", lockedReason: null,
     },
     {
       id: "event", title: "Tạo sự kiện (bản nháp)", done: event,
       why: "Nhập tên buổi diễn, lịch diễn, thời gian bán vé và giờ mở cổng; bản nháp chưa hiện với khách.",
       status: event ? `${formatNumber(input.events.length)} sự kiện` : "Chưa có sự kiện nào",
       to: event ? "/admin/events" : "/admin/events?create=1", action: event ? "Xem sự kiện" : "Tạo sự kiện",
-      lockedReason: event ? null : !venue ? "Cần cấu hình địa điểm (bước 1) trước" : !categories ? "Cần ít nhất một thể loại đang hoạt động (bước 2)" : null,
+      lockedReason: event ? null : !venue ? "Cần cấu hình địa điểm (bước 1) trước" : !categories ? "Cần bật ít nhất một thể loại (bước 2)" : null,
     },
     {
       id: "tickets", title: "Thêm hạng vé", done: tickets,

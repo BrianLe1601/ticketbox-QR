@@ -44,12 +44,12 @@ test('venue impact explains that existing Events keep their snapshot', () => {
   assert.doesNotMatch(api.venueImpact({ venue, outOfSyncEventCount: 0 }, { ...api.venueFormOf(venue), capacity: '2500' }), /Sức chứa giảm/);
 });
 
-test('scope counts: selectable music genres, other active ones, and legacy kept for history', () => {
+test('genre counts cover only the fixed catalogue, never legacy Categories', () => {
   const cats = [
-    { isActive: true, kind: 'music' }, { isActive: true, kind: 'music' }, { isActive: false, kind: 'music' },
-    { isActive: true, kind: 'other' }, { isActive: false, kind: 'other' },
+    { isActive: true, catalog: true }, { isActive: true, catalog: true }, { isActive: false, catalog: true },
+    { isActive: true, catalog: false }, { isActive: false, catalog: false },
   ];
-  assert.deepEqual(plain(api.scopeCounts(cats)), { music: 2, otherActive: 1, legacy: 2 });
+  assert.deepEqual(plain(api.genreCounts(cats)), { active: 2, off: 1, total: 3 });
 });
 
 test('password checklist and form errors follow the server rules', () => {

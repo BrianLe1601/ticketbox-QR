@@ -20,6 +20,7 @@ interface ApiEventSummary {
     name: string;
     slug: string;
     category: CategorySlug;
+    categoryName?: string;
     venue: string;
     address: string;
     city: string;
@@ -56,6 +57,7 @@ interface ApiEventDetail {
     slug: string;
     description: string | null;
     category: CategorySlug;
+    categoryName?: string;
     venue: string;
     address: string;
     city: string;
@@ -87,6 +89,7 @@ function mapSummaryToEvent(row: ApiEventSummary): PublicEventSummary {
         slug: row.slug,
         shortTitle: row.name,
         category: row.category,
+        categoryName: row.categoryName,
         description: "",
         shortDesc: "",
         venue: row.venue,
@@ -136,6 +139,7 @@ function mapDetailToEvent(row: ApiEventDetail): Event {
         slug: row.slug,
         shortTitle: row.name,
         category: row.category,
+        categoryName: row.categoryName,
         description: row.description ?? "",
         shortDesc: (row.description ?? "").slice(0, 140),
         venue: row.venue,

@@ -37,6 +37,8 @@ export interface EventRow extends RowDataPacket {
     slug: string;
     description: string | null;
     category: string;
+    /** Display name of the genre (additive; `category` stays the slug used by filters). */
+    category_name: string;
     venue: string;
     address: string;
     city: string;
@@ -69,7 +71,7 @@ export interface TicketTypeRow extends RowDataPacket {
 }
 
 const EVENT_SELECT = `
-    e.id, e.name, e.slug, e.description, c.slug AS category,
+    e.id, e.name, e.slug, e.description, c.slug AS category, c.name AS category_name,
     e.venue, e.address, e.city,
     e.cover_image_url, e.start_time, e.end_time,
     e.sales_start_at, e.sales_end_at,
@@ -158,7 +160,7 @@ export async function findPublishedEvents(query: ListEventsQuery) {
         JOIN categories c ON c.id = e.category_id
         LEFT JOIN ticket_types tt ON tt.event_id = e.id AND tt.is_active = TRUE
         ${whereClause}
-        GROUP BY e.id,c.slug
+        GROUP BY e.id,c.slug,c.name
         ORDER BY ${orderBy}
         LIMIT ? OFFSET ?
     `;

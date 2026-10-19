@@ -23,16 +23,24 @@ Thứ tự khóa mới: `platform_settings → Event → Order (id tăng) → Ti
 
 Mã lỗi (HTTP): `VENUE_NOT_CONFIGURED`, `VENUE_SCHEDULE_CONFLICT`, `VENUE_CHANGE_CONFIRMATION_REQUIRED`, `VENUE_LOCKED_BY_SALES`, `VENUE_LOCKED_BY_STATUS`, `VENUE_CAPACITY_BELOW_ALLOCATION` (đều 409); `PLATFORM_SCHEMA_UPGRADE_REQUIRED` (503, database cũ chưa có bảng/cột mới; không crash).
 
-API: `GET /api/admin/platform-settings`; `PUT /api/admin/platform-settings/venue` `{ name, address, city, capacity }`; `PUT /api/admin/platform-settings/category-scope` `{ scope: "music_only" | "all" }`. Mọi route cần Admin. `GET` trả thêm `outOfSyncEventCount` (số Event nháp/đã công bố còn địa điểm cũ) và người/thời điểm sửa gần nhất.
+API: `GET /api/admin/platform-settings`; `PUT /api/admin/platform-settings/venue` `{ name, address, city, capacity }`. Mọi route cần Admin. (Route `category-scope` đã bỏ ngày 20/10/2026, xem mục 3.) `GET` trả thêm `outOfSyncEventCount` (số Event nháp/đã công bố còn địa điểm cũ) và người/thời điểm sửa gần nhất.
 
 **Seed.** Hai seed tạo Event trực tiếp nên phải theo cùng quy tắc. `seed:admin-demo` và `seed:workflows` đều dùng địa điểm hệ thống (chỉ ghi địa điểm mẫu "TicketBox Demo Center"/"TicketBox QA Hall" khi chưa có cấu hình; không bao giờ ghi đè địa điểm đã nhập). 10 concert demo nay xếp **mỗi ngày một concert từ ngày mai** (15:00–17:00, check-in 13:00–16:30, giờ Việt Nam) thay vì cùng giờ ngày 07/10. Vì cả hai bộ seed đều có Event "đang diễn ra" mà địa điểm chỉ chứa một, **không chạy cả hai trên cùng một database**; seed thứ hai dừng với thông báo rõ.
 
-## 3. Danh mục: loại và phạm vi Event mới
+## 3. Danh mục: danh sách thể loại nhạc cố định (cập nhật 20/10/2026)
 
-- `categories.kind ENUM('music','other')`, mặc định `other`. Bản cài mới có 4 thể loại nhạc (Pop, Rock, EDM, Acoustic) `kind='music'` và 5 danh mục tổng quát cũ `kind='other'`; không danh mục nào bị xóa hay đoán loại.
-- `platform_settings.category_scope`: `music_only` (mặc định) hoặc `all`, lưu ở backend nên mọi Admin thấy cùng chế độ. Backend kiểm tra khi **tạo Event hoặc đổi danh mục** (`409 CATEGORY_NOT_MUSIC`); sửa Event cũ giữ nguyên danh mục không bị chặn.
-- `GET /api/admin/categories` trả thêm `kind` và `selectableForNewEvent`; API Public `/api/categories` giữ nguyên hình dạng.
-- Sửa lỗi có sẵn: Zod 4 áp giá trị mặc định cả trong `.partial()`, nên `PATCH` danh mục chỉ gửi `name` từng âm thầm đặt lại `isActive=true` và `sortOrder=0`. Schema cập nhật nay dẫn xuất từ trường không có mặc định.
+**Vấn đề của bản 17/10:** "thể loại âm nhạc" chỉ là nhãn `kind` do Admin tự chọn khi tạo danh mục, nên một danh mục tên bất kỳ (ví dụ "Hội thảo") vẫn được đánh dấu là âm nhạc; công tắc phạm vi `all` còn mở cửa cho danh mục không phải nhạc.
+
+**Quyết định (Bửu):** danh mục là dữ liệu của sản phẩm, không phải của người vận hành.
+
+- Schema cài **19 thể loại** `kind='music'`, tất cả đang bật: Pop, Ballad, Rock, Metal, Indie, Rap / Hip-hop, R&B / Soul, EDM / Điện tử, Acoustic, Jazz, Blues, Folk / Đồng quê, Bolero / Nhạc vàng, Nhạc dân tộc / Truyền thống, Cổ điển, K-Pop / J-Pop, Latin / Reggae, Nhạc kịch / Nhạc phim, **Thể loại nhạc khác** (`the-loai-khac`). Đường dẫn `pop`, `rock`, `edm`, `acoustic` giữ như cũ để link và bộ lọc Public không đổi. "Thể loại nhạc khác" là một thể loại bình thường (Báo cáo tính như mọi thể loại); thể loại mới được thêm vào schema ở bản sau.
+- Admin chỉ **bật/tắt và sắp xếp**: `PATCH /api/admin/categories/:id` nhận đúng `{ isActive?, sortOrder? }` (strict; tên, đường dẫn, mô tả, biểu tượng, `kind` → 400). `POST`/`DELETE` → `409 CATEGORY_CATALOG_FIXED`.
+- Event mới hoặc Event đổi thể loại chỉ dùng được thể loại đang bật trong danh sách (`409 CATEGORY_NOT_MUSIC`); sửa Event giữ nguyên thể loại không bị chặn.
+- **Danh mục ngoài danh sách** (`kind='other'`): bản cài mới không còn 5 danh mục tổng quát cũ (bỏ ngày 20/10/2026); bảng, giá trị và nhóm "Danh mục cũ" được giữ để mở rộng sau, hiện chỉ danh mục kiểm thử `qa-workflow` dùng. Không xóa, không đổi loại, không chọn được cho Event mới; tắt được nhưng không bật lại (`409 CATEGORY_LEGACY_READ_ONLY`). Trang Admin chỉ hiện chúng khi còn Event hoặc còn bật.
+- Bỏ `platform_settings.category_scope` và `PUT /api/admin/platform-settings/category-scope`; thẻ "Phạm vi danh mục" ở Cài đặt thay bằng thẻ tóm tắt "Thể loại nhạc".
+- `GET /api/admin/categories` trả `catalog` và `selectableForNewEvent` (thay `kind`); API Public `/api/categories` giữ nguyên hình dạng.
+- `seed:admin-demo` dùng Pop/Rock/EDM/Acoustic của danh sách (không tạo danh mục `[DEMO]`), tắt Metal để minh họa thể loại đã tắt. `db:verify` kiểm tra đủ 19 thể loại và schema không cài danh mục nào ngoài danh sách.
+- Vẫn giữ: Zod 4 áp mặc định cả trong `.partial()`, nên schema `PATCH` không có giá trị mặc định nào.
 
 ## 4. Nhật ký check-in và Báo cáo "Tất cả sự kiện"
 

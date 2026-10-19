@@ -8,6 +8,7 @@ import { EventCardSkeleton } from "@/components/event/EventCardSkeleton";
 import { CategorySection } from "@/components/event/CategorySection";
 import { CITY_LABELS, getCategoryLabel, EVENT_LIFECYCLE_FALLBACK_REFRESH_MS } from "@/constants/eventconstants";
 import { subscribeToEventLifecycleUpdates } from "@/services/event-realtime.service";
+import { fetchCategories, type PublicCategory } from "@/services/category.service";
 
 import { TicketRetrievalForm } from "@/components/event/TicketRetrievalForm";
 
@@ -20,6 +21,18 @@ export function HomePage() {
     const [statsLoading, setStatsLoading] = useState(true);
     const [popularEvent, setPopularEvent] = useState<PublicEventSummary | null>(null);
     const [popularLoading, setPopularLoading] = useState(true);
+    const [genres, setGenres] = useState<PublicCategory[] | null>(null);
+    const [genresError, setGenresError] = useState(false);
+
+    // One row per active music genre, in the order the Admin set (the API already sorts and only
+    // returns active Categories; `genre === false` marks a non-catalogue row, kept off the Home page).
+    useEffect(() => {
+        let active = true;
+        fetchCategories()
+            .then(items => { if (active) { setGenres(items.filter(item => item.genre !== false)); setGenresError(false); } })
+            .catch(() => { if (active) { setGenres([]); setGenresError(true); } });
+        return () => { active = false; };
+    }, []);
 
     useEffect(() => {
         let active = true;
@@ -115,7 +128,7 @@ export function HomePage() {
                                 <Link to={`/events/${popularEvent.id}`} aria-label={`Xem sự kiện ${popularEvent.name}`} className="public-hero-ticket-link relative block h-100 rounded-3xl border focus-visible:outline-4 focus-visible:outline-offset-8 focus-visible:outline-primary">
                                     <div className="public-ticket-heading h-54.5 px-5 pt-7 pb-5 sm:px-7">
                                         <div className="flex items-center justify-between gap-3 text-xs font-semibold uppercase tracking-widest">
-                                            <span className="public-ticket-category truncate">{getCategoryLabel(popularEvent.category)}</span>
+                                            <span className="public-ticket-category truncate">{getCategoryLabel(popularEvent.category, popularEvent.categoryName)}</span>
                                             {popularEvent.soldCount > 0 && <span className="public-ticket-badge shrink-0 rounded-full px-3 py-1">Bán chạy</span>}
                                         </div>
                                         <p className="public-ticket-brand mt-5 text-[10px] font-semibold tracking-[0.22em]">TICKETBOX · VÉ SỰ KIỆN</p>
@@ -183,9 +196,9 @@ export function HomePage() {
             </section>
 
             <div className="space-y-16 pb-16">
-                <CategorySection category="music" />
-                <CategorySection category="conference" />
-                <CategorySection category="food" />
+                {genres === null && <p role="status" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-sm text-muted-foreground">Đang tải thể loại…</p>}
+                {genresError && <p role="alert" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-sm text-public-error">Không thể tải thể loại nhạc. Vui lòng thử lại sau.</p>}
+                {genres?.map(genre => <CategorySection key={genre.slug} category={genre.slug} label={genre.name} />)}
             </div>
         </div>
     );

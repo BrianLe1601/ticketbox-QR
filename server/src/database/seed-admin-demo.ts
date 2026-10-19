@@ -22,13 +22,10 @@ type DatabaseValue = string | number | boolean | Date | null;
 
 type ApprovalStatus = "pending" | "approved" | "rejected";
 
+/** A genre of the fixed catalogue (installed by the schema), switched on/off for the demo. */
 interface CategoryFixture {
   key: string;
-  name: string;
   slug: string;
-  description: string;
-  icon: string;
-  sortOrder: number;
   active: boolean;
 }
 
@@ -78,52 +75,14 @@ function fromNow(days: number, hours = 0): Date {
   return new Date(seedReferenceTime + days * 86_400_000 + hours * 3_600_000);
 }
 
+// The catalogue is fixed, so the demo uses its genres instead of creating Categories.
+// Keys stay as before (fixtures refer to them); "archived" shows a genre switched off.
 const categories: CategoryFixture[] = [
-  {
-    key: "music",
-    name: "[DEMO] Pop",
-    slug: "demo-admin-pop",
-    description: "Concert nhạc Pop; kiểm thử danh mục đang hoạt động và sự kiện liên kết.",
-    icon: "music",
-    sortOrder: 910,
-    active: true,
-  },
-  {
-    key: "technology",
-    name: "[DEMO] Rock",
-    slug: "demo-admin-rock",
-    description: "Concert nhạc Rock có nhiều hạng vé.",
-    icon: "guitar",
-    sortOrder: 920,
-    active: true,
-  },
-  {
-    key: "community",
-    name: "[DEMO] EDM",
-    slug: "demo-admin-edm",
-    description: "Concert EDM; kiểm thử vận hành cổng và check-in.",
-    icon: "music",
-    sortOrder: 930,
-    active: true,
-  },
-  {
-    key: "archived",
-    name: "[DEMO] Acoustic — Đã ngưng",
-    slug: "demo-admin-acoustic",
-    description: "Thể loại Acoustic tạm ngưng; không được chọn cho concert mới.",
-    icon: "archive",
-    sortOrder: 940,
-    active: false,
-  },
-  {
-    key: "acoustic",
-    name: "[DEMO] Acoustic",
-    slug: "demo-admin-acoustic-active",
-    description: "Concert Acoustic đang hoạt động; tách khỏi danh mục vô hiệu hóa dùng cho tình huống kiểm thử.",
-    icon: "guitar",
-    sortOrder: 935,
-    active: true,
-  },
+  { key: "music", slug: "pop", active: true },
+  { key: "technology", slug: "rock", active: true },
+  { key: "community", slug: "edm", active: true },
+  { key: "acoustic", slug: "acoustic", active: true },
+  { key: "archived", slug: "metal", active: false },
 ];
 
 const staffFixtures: StaffFixture[] = [
@@ -394,21 +353,16 @@ async function resetDemoStaffRelationships(connection: PoolConnection) {
   await connection.execute(`DELETE FROM event_staff WHERE staff_id IN (${idPlaceholders})`, ids);
 }
 
-async function upsertCategories(connection: PoolConnection) {
+async function useCatalogueGenres(connection: PoolConnection) {
   const ids = new Map<string, number>();
   for (const fixture of categories) {
-    await connection.execute(
-      `INSERT INTO categories(name,slug,description,icon,kind,is_active,sort_order)
-       VALUES (?,?,?,?,'music',TRUE,?)
-       ON DUPLICATE KEY UPDATE name=VALUES(name),description=VALUES(description),
-         icon=VALUES(icon),kind='music',is_active=TRUE,sort_order=VALUES(sort_order)`,
-      [fixture.name, fixture.slug, fixture.description, fixture.icon, fixture.sortOrder],
-    );
     const [rows] = await connection.execute<IdRow[]>(
-      "SELECT id FROM categories WHERE slug=? LIMIT 1", [fixture.slug],
+      "SELECT id FROM categories WHERE slug=? AND kind='music' LIMIT 1", [fixture.slug],
     );
     const row = rows[0];
-    if (!row) throw new Error(`Category was not created: ${fixture.slug}`);
+    if (!row) throw new Error(`Catalogue genre missing: ${fixture.slug}. Re-install database/migrations/001_initial_schema.sql on a disposable database.`);
+    // Events are inserted below, so every genre they use must be on first.
+    await connection.execute("UPDATE categories SET is_active=TRUE WHERE id=?", [row.id]);
     ids.set(fixture.key, row.id);
   }
   return ids;
@@ -713,7 +667,7 @@ async function seedAdminDemo() {
     await cleanupDemoEvents(connection, admin.id);
     venue = await resolveSeedVenue(connection, admin.id, DEMO_PLACEHOLDER_VENUE, DEMO_REQUIRED_CAPACITY);
     await resetDemoStaffRelationships(connection);
-    const categoryIds = await upsertCategories(connection);
+    const categoryIds = await useCatalogueGenres(connection);
     const staffIds = await upsertStaff(connection, admin.id, admin.passwordHash);
     const eventIds = await createEvents(connection, admin.id, categoryIds);
     await createTicketTypes(connection, eventIds);

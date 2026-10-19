@@ -5,7 +5,7 @@ import { pool } from '../src/database/pool.js';
 import { createAdminEvent, getAdminEventById, updateAdminEvent } from '../src/modules/events/admin-events.service.js';
 import { setEventCancelled } from '../src/modules/events/admin-events.repository.js';
 import type { CreateAdminEventInput } from '../src/modules/events/admin-events.schema.js';
-import { getPlatformSettings, saveCategoryScope, saveVenue } from '../src/modules/platform-settings/platform-settings.service.js';
+import { getPlatformSettings, saveVenue } from '../src/modules/platform-settings/platform-settings.service.js';
 
 // Real-MySQL suite: refuses any database that is not a disposable ticketboxqr_test_* copy.
 // It runs next to other integration suites in the same database, so every Event here sits
@@ -62,9 +62,9 @@ async function restoreSettings() {
     if (!originalSettings) return;
     await pool.query(
         `UPDATE platform_settings SET venue_name = ?, venue_address = ?, venue_city = ?, venue_capacity = ?,
-           category_scope = ?, updated_by = ? WHERE id = 1`,
+           updated_by = ? WHERE id = 1`,
         [originalSettings.venue_name, originalSettings.venue_address, originalSettings.venue_city,
-            originalSettings.venue_capacity, originalSettings.category_scope, originalSettings.updated_by],
+            originalSettings.venue_capacity, originalSettings.updated_by],
     );
 }
 
@@ -81,6 +81,7 @@ describe.sequential('single-venue scheduling and platform settings (disposable M
             [`${runId}@ticketbox.local`],
         );
         adminId = admin.insertId;
+        // Inserted directly (the API cannot create Categories): one stand-in catalogue genre and one legacy row.
         for (const [kind, suffix] of [['music', 'music'], ['other', 'other']] as const) {
             const slug = `${runId}-${suffix}`;
             const [category] = await pool.query<ResultSetHeader>(
@@ -91,7 +92,6 @@ describe.sequential('single-venue scheduling and platform settings (disposable M
             if (kind === 'music') musicSlug = slug; else otherSlug = slug;
         }
         await saveVenue(adminId, venueA);
-        await saveCategoryScope(adminId, { scope: 'music_only' });
     });
 
     afterAll(async () => {
@@ -192,17 +192,19 @@ describe.sequential('single-venue scheduling and platform settings (disposable M
         expect(replacement.id).not.toBe(event.id);
     });
 
-    it('limits new Events to music genres until the Admin widens the scope', async () => {
+    it('accepts only catalogue genres for a new Event, never a legacy Category', async () => {
         await expect(createAdminEvent(concert('other-blocked', day(7), { category: otherSlug }), adminId))
             .rejects.toMatchObject({ code: 'CATEGORY_NOT_MUSIC', statusCode: 409 });
-        await saveCategoryScope(adminId, { scope: 'all' });
-        try {
-            const event = await create('other-allowed', day(7), { category: otherSlug });
-            expect(event.category).toBe(otherSlug);
-        } finally {
-            await saveCategoryScope(adminId, { scope: 'music_only' });
-        }
-        expect((await getPlatformSettings()).categoryScope).toBe('music_only');
+        const event = await create('genre-allowed', day(7));
+        expect(event.category).toBe(musicSlug);
+    });
+
+    it('ships the 19-genre catalogue with the catch-all genre', async () => {
+        const [rows] = await pool.query<RowDataPacket[]>(
+            "SELECT slug FROM categories WHERE kind = 'music' AND slug NOT LIKE 'venue-%' ORDER BY sort_order",
+        );
+        expect(rows).toHaveLength(19);
+        expect(rows.map((row) => row.slug)).toEqual(expect.arrayContaining(['pop', 'rock', 'edm', 'acoustic', 'the-loai-khac']));
     });
 
     it('does not block editing an Event that keeps a legacy non-music Category', async () => {

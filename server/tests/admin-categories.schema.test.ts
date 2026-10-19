@@ -1,40 +1,38 @@
 import { describe, expect, it } from "vitest";
 
 import { isSelectableForNewEvent } from "../src/modules/categories/admin-categories.service.js";
-import { createCategorySchema, updateCategorySchema } from "../src/modules/categories/admin-categories.schema.js";
+import { updateCategorySchema } from "../src/modules/categories/admin-categories.schema.js";
 import { createAdminEventSchema, updateAdminEventSchema } from "../src/modules/events/admin-events.schema.js";
 
-describe("Category schemas", () => {
-  it("defaults a new Category to kind 'other', active, sort order 0", () => {
-    expect(createCategorySchema.parse({ name: "Jazz", slug: "jazz" }))
-      .toMatchObject({ kind: "other", isActive: true, sortOrder: 0 });
+describe("Category update schema (fixed genre catalogue)", () => {
+  it("accepts only the on/off switch and the display order", () => {
+    expect(updateCategorySchema.parse({ isActive: false })).toEqual({ isActive: false });
+    expect(updateCategorySchema.parse({ sortOrder: 30 })).toEqual({ sortOrder: 30 });
   });
 
-  it("does not reset untouched fields when only the name changes", () => {
-    // Zod 4 applies defaults inside .partial(); a PATCH {name} must not reactivate
-    // a Category or turn a music genre back into 'other'.
-    expect(updateCategorySchema.parse({ name: "Renamed" })).toEqual({ name: "Renamed" });
+  it("never fills defaults, so reordering cannot switch a genre back on", () => {
+    expect(updateCategorySchema.parse({ sortOrder: 10 })).not.toHaveProperty("isActive");
   });
 
-  it("rejects an unknown kind and unknown fields", () => {
-    expect(() => updateCategorySchema.parse({ kind: "sports" })).toThrow();
-    expect(() => updateCategorySchema.parse({ role: "admin" })).toThrow();
+  it.each([
+    ["rename", { name: "Renamed" }], ["new slug", { slug: "renamed" }], ["description", { description: "x" }],
+    ["icon", { icon: "music" }], ["reclassify", { kind: "other" }], ["unknown field", { role: "admin" }], ["empty body", {}],
+  ])("rejects %s", (_label, body) => {
+    expect(() => updateCategorySchema.parse(body)).toThrow();
   });
 });
 
-describe("Category scope for new Events", () => {
-  const music = { is_active: 1, kind: "music" as const };
-  const other = { is_active: 1, kind: "other" as const };
+describe("Categories a new Event may use", () => {
+  const genre = { is_active: 1, kind: "music" as const };
+  const legacy = { is_active: 1, kind: "other" as const };
 
-  it("offers only active music genres in music_only mode", () => {
-    expect(isSelectableForNewEvent(music, "music_only")).toBe(true);
-    expect(isSelectableForNewEvent(other, "music_only")).toBe(false);
-    expect(isSelectableForNewEvent({ ...music, is_active: 0 }, "music_only")).toBe(false);
+  it("offers only switched-on catalogue genres", () => {
+    expect(isSelectableForNewEvent(genre)).toBe(true);
+    expect(isSelectableForNewEvent({ ...genre, is_active: 0 })).toBe(false);
   });
 
-  it("offers every active Category in 'all' mode but never an inactive one", () => {
-    expect(isSelectableForNewEvent(other, "all")).toBe(true);
-    expect(isSelectableForNewEvent({ ...other, is_active: 0 }, "all")).toBe(false);
+  it("never offers a legacy Category, even while it is still on", () => {
+    expect(isSelectableForNewEvent(legacy)).toBe(false);
   });
 });
 

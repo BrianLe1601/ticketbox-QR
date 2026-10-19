@@ -1,4 +1,4 @@
-import { Activity, BarChart3, CalendarDays, ClipboardCheck, ScanLine, Settings, Tags, Ticket, Users, type LucideIcon } from "lucide-react";
+import { Activity, BarChart3, CalendarDays, ClipboardCheck, ListMusic, ScanLine, Settings, Ticket, Users, type LucideIcon } from "lucide-react";
 
 export type NavBadge = "live" | "pendingOrders" | "pendingStaff";
 
@@ -15,7 +15,7 @@ export const ADMIN_NAVIGATION: NavItem[] = [
   { label: "Tổng quan", to: "/admin", icon: Activity, end: true, badge: "live" },
   { label: "Sự kiện", to: "/admin/events", icon: CalendarDays },
   { label: "Hạng vé", to: "/admin/ticket-types", icon: Ticket },
-  { label: "Danh mục", to: "/admin/categories", icon: Tags },
+  { label: "Thể loại nhạc", to: "/admin/categories", icon: ListMusic },
   { label: "Đơn hàng", to: "/admin/orders", icon: ClipboardCheck, badge: "pendingOrders" },
   { label: "Nhân viên", to: "/admin/staff", icon: Users, badge: "pendingStaff" },
   { label: "Nhật ký check-in", to: "/admin/checkins", icon: ScanLine },
