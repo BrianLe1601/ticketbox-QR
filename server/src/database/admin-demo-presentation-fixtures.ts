@@ -13,39 +13,59 @@ export function alignDemoCheckinDay(start: Date, checkinStart: Date, ongoing = f
   return { start: alignedStart, checkinStart: new Date(alignedStart.getTime() - 2 * 3_600_000) };
 }
 
-// Fixed Vietnam-local dates: these fixtures are for the 7 October 2026 demo,
-// not relative to the machine clock or its operating-system timezone.
-export function createPresentationFixtures() {
-  const names = [
-    "Ngày hội TicketBoxQR", "Giao lưu âm nhạc sinh viên",
-    "Workshop công nghệ", "Hội nghị quản lý dự án",
-    "Triển lãm sáng tạo", "Ngày hội cộng đồng",
-    "Giao lưu câu lạc bộ", "Trải nghiệm khởi nghiệp",
-    "Sân khấu sinh viên", "Chia sẻ thiết kế hệ thống",
-  ];
-  const categoryKeys = ["community", "music", "technology"];
+const VIETNAM_OFFSET_MS = 7 * 3_600_000;
+const DAY_MS = 86_400_000;
+const HOUR_MS = 3_600_000;
 
-  return names.map((name, index) => {
+/** Midnight (UTC+7) of the Vietnam calendar day that contains `reference`. */
+export function vietnamMidnight(reference: Date) {
+  const local = new Date(reference.getTime() + VIETNAM_OFFSET_MS);
+  return Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate()) - VIETNAM_OFFSET_MS;
+}
+
+// TicketBox has one venue, so these concerts cannot be simultaneous: concert N
+// takes its own Vietnam-local day, starting tomorrow (15:00-17:00, check-in
+// 13:00-16:30). Dates are relative to `reference` so the sales window is open
+// when the seed runs; pass a fixed reference in tests.
+export function createPresentationFixtures(reference: Date = new Date()) {
+  const concerts = [
+    { name: "Concert Pop sinh viên", categoryKey: "music" },
+    { name: "Đêm nhạc Acoustic", categoryKey: "acoustic" },
+    { name: "Rock Live Concert", categoryKey: "technology" },
+    { name: "EDM Campus Concert", categoryKey: "community" },
+    { name: "Acoustic Sunset", categoryKey: "acoustic" },
+    { name: "Pop Hits Live", categoryKey: "music" },
+    { name: "Indie Rock Concert", categoryKey: "technology" },
+    { name: "EDM Summer Live", categoryKey: "community" },
+    { name: "Sân khấu Pop", categoryKey: "music" },
+    { name: "Acoustic Unplugged", categoryKey: "acoustic" },
+  ];
+  // Retain existing internal keys for Pop/Rock/EDM; assign genres explicitly,
+  // not by index modulo (which put Pop concerts into EDM and Acoustic into Rock).
+  const today = vietnamMidnight(reference);
+
+  return concerts.map(({ name, categoryKey }, index) => {
     const number = String(index + 1).padStart(2, "0");
-    const key = `presentation-20261007-${number}`;
+    const key = `presentation-${number}`;
+    const day = today + (index + 1) * DAY_MS;
     return {
       event: {
         key,
-        categoryKey: categoryKeys[index % categoryKeys.length]!,
-        name: `[DEMO 07/10] ${number} — ${name}`,
+        categoryKey,
+        name: `[DEMO] ${number} — ${name}`,
         slug: `demo-admin-${key}`,
         capacity: 100,
-        start: new Date("2026-10-07T15:00:00+07:00"),
-        end: new Date("2026-10-07T17:00:00+07:00"),
-        salesStart: new Date("2026-10-06T00:00:00+07:00"),
-        salesEnd: new Date("2026-10-07T16:30:00+07:00"),
-        checkinStart: new Date("2026-10-07T13:00:00+07:00"),
-        checkinEnd: new Date("2026-10-07T16:30:00+07:00"),
+        start: new Date(day + 15 * HOUR_MS),
+        end: new Date(day + 17 * HOUR_MS),
+        salesStart: new Date(today),
+        salesEnd: new Date(day + 16.5 * HOUR_MS),
+        checkinStart: new Date(day + 13 * HOUR_MS),
+        checkinEnd: new Date(day + 16.5 * HOUR_MS),
         cover: true,
       },
       staff: {
         key,
-        fullName: `[DEMO 07/10] Nhân viên cổng ${number}`,
+        fullName: `[DEMO] Nhân viên cổng ${number}`,
         email: `demo.staff.presentation.${number}@ticketbox.local`,
         googleSub: null,
         approvalStatus: "approved" as const,
@@ -53,8 +73,8 @@ export function createPresentationFixtures() {
         createdDaysAgo: 1,
       },
       ticketTypes: [
-        { eventKey: key, name: "Vé trải nghiệm miễn phí", description: "Demo mua vé và check-in ngày 07/10/2026.", price: 0, capacity: 60, maxPerOrder: 5 },
-        { eventKey: key, name: "Vé tiêu chuẩn", description: "Demo thanh toán mô phỏng và check-in ngày 07/10/2026.", price: 50_000 + index * 10_000, capacity: 40, maxPerOrder: 3 },
+        { eventKey: key, name: "Vé trải nghiệm miễn phí", description: "Demo mua vé và check-in theo ngày diễn ra.", price: 0, capacity: 60, maxPerOrder: 5 },
+        { eventKey: key, name: "Vé tiêu chuẩn", description: "Demo thanh toán mô phỏng và check-in theo ngày diễn ra.", price: 50_000 + index * 10_000, capacity: 40, maxPerOrder: 3 },
       ],
     };
   });

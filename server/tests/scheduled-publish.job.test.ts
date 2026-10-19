@@ -1,4 +1,4 @@
-import { beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const repoMock = vi.hoisted(() => ({
   findDueScheduledEvents: vi.fn(),
@@ -13,8 +13,15 @@ import { processDueScheduledEvents } from "../src/modules/events/admin-events.se
 import { startScheduledPublishJob } from "../src/jobs/scheduled-publish.job.js";
 
 beforeEach(() => {
+  // Keep boundary timestamps consistent and check-in on the Event's Vietnam calendar day.
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-10-15T05:00:00.000Z"));
   vi.resetAllMocks();
   repoMock.findDueScheduledEvents.mockResolvedValue([]);
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 it("publishes due scheduled draft events that satisfy readiness requirements", async () => {

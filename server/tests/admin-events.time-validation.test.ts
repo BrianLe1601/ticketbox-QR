@@ -45,3 +45,23 @@ describe("admin event check-in time validation", () => {
     })).not.toThrow();
   });
 });
+
+describe("sales must close by check-in end", () => {
+  it("accepts sales ending exactly when check-in ends", () => {
+    expect(() => validateEventTimes({ ...baseTimes, salesEndAt: baseTimes.checkinEndAt })).not.toThrow();
+  });
+
+  it("rejects sales that end after check-in, even when still before the Event end", () => {
+    expect(() => validateEventTimes({
+      ...baseTimes,
+      salesEndAt: "2026-10-12T14:45:00.000Z", // 21:45, check-in closes 21:30, show ends 22:00
+    })).toThrowError(expect.objectContaining({ code: "SALES_AFTER_CHECKIN_END" }));
+  });
+
+  it("keeps the Event-end error when sales also pass the Event end", () => {
+    expect(() => validateEventTimes({
+      ...baseTimes,
+      salesEndAt: "2026-10-12T15:30:00.000Z",
+    })).toThrowError(expect.objectContaining({ code: "SALES_AFTER_EVENT_END" }));
+  });
+});

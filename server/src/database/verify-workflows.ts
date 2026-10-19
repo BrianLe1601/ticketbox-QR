@@ -58,10 +58,10 @@ async function verify() {
     } else {
       check("Schema installs all 18 integrity triggers", triggerRows.length === 18, `found ${triggerRows.length}`);
     }
-    check("Schema contains exactly 13 base tables", await count(
+    check("Schema contains exactly 14 base tables", await count(
       connection,
       "SELECT COUNT(*) total FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_TYPE='BASE TABLE'",
-    ) === 13);
+    ) === 14);
     check("Category -> Event uses RESTRICT", await count(
       connection,
       `SELECT COUNT(*) total
@@ -176,11 +176,6 @@ async function verify() {
       "SELECT id FROM users WHERE email='qa.staff@ticketbox.local' LIMIT 1",
     );
     const qaStaffId = qaStaffRows[0]?.id ?? 0;
-    const [adminRows] = await connection.execute<(RowDataPacket & { id: number })[]>(
-      "SELECT id FROM users WHERE email=? LIMIT 1",
-      [env.SEED_ADMIN_EMAIL.toLowerCase()],
-    );
-    const adminId = adminRows[0]?.id ?? 0;
     const [orderItemRows] = await connection.execute<(RowDataPacket & { id: number })[]>(
       `SELECT oi.id FROM order_items oi JOIN orders o ON o.id=oi.order_id
         WHERE o.event_id=? ORDER BY oi.id LIMIT 1`,
@@ -190,20 +185,65 @@ async function verify() {
 
     await expectRejected(connection, "Referenced Category cannot be deleted", () =>
       connection.execute("DELETE FROM categories WHERE slug='qa-workflow'"), "ER_ROW_IS_REFERENCED");
-    await expectRejected(connection, "Overlapping Staff assignment is rejected", () =>
+    // One venue: two non-cancelled Events can never share [checkin_start_at, end_time],
+    // so the Staff overlap trigger is no longer reachable from fixture data. The venue
+    // rule replaces that negative check.
+    await expectRejected(connection, "Second Event in the same venue time slot is rejected", () =>
       connection.execute(
-        "INSERT INTO event_staff(event_id,staff_id,assigned_by) VALUES (?,?,?)",
-        [draftReadyId, qaStaffId, adminId],
-      ), "Staff is already assigned to an overlapping Event");
+        `INSERT INTO events(name,slug,category_id,venue,address,city,venue_capacity,start_time,end_time,
+            sales_start_at,sales_end_at,checkin_start_at,checkin_end_at,created_by)
+          SELECT 'QA venue overlap probe','qa-venue-overlap-probe',category_id,venue,address,city,venue_capacity,
+                 start_time,end_time,sales_start_at,sales_end_at,checkin_start_at,checkin_end_at,created_by
+            FROM events WHERE id=?`,
+        [onSaleId],
+      ), "Venue schedule conflicts with another Event");
+    await expectRejected(connection, "Moving an Event onto another Event's slot is rejected", () =>
+      connection.execute(
+        `UPDATE events target JOIN events other ON other.id=?
+            SET target.start_time=other.start_time, target.end_time=other.end_time,
+                target.checkin_start_at=other.checkin_start_at, target.checkin_end_at=other.checkin_end_at
+          WHERE target.id=?`,
+        [onSaleId, draftReadyId],
+      ), "Venue schedule conflicts with another Event");
     await expectRejected(connection, "Hidden Event with all tiers paused cannot be shown", () =>
       connection.execute(
         "UPDATE events SET visibility='visible',hidden_at=NULL,hidden_by=NULL,hidden_reason=NULL WHERE id=?",
         [hiddenId],
       ), "requires an active valid Ticket Type");
+    // Sales must close by check-in end: a ticket sold after the gates close could never be used.
+    const draftNeedsTicketId = eventBySlug.get("qa-draft-needs-ticket")?.id ?? 0;
+    await expectRejected(connection, "Event sales cannot end after check-in ends", () =>
+      connection.execute(
+        "UPDATE events SET checkin_end_at=sales_end_at - INTERVAL 1 MINUTE WHERE id=?",
+        [draftNeedsTicketId],
+      ), "chk_events_sales_before_checkin_end");
+    await expectRejected(connection, "Closing check-in before an inherited tier sales end is rejected", () =>
+      connection.execute(
+        "UPDATE events SET checkin_end_at=sales_end_at - INTERVAL 1 MINUTE WHERE id=?",
+        [draftReadyId],
+      ), "Event schedule would invalidate a Ticket sales window");
+    await expectRejected(connection, "Ticket Type sales cannot end after check-in ends", async () => {
+      // Check-in closes 30 minutes after the Event sales end, and before the Event end;
+      // the tier then tries to sell 15 minutes past check-in end (still before the Event end).
+      await connection.execute("UPDATE events SET checkin_end_at=sales_end_at + INTERVAL 30 MINUTE WHERE id=?", [draftReadyId]);
+      const [windowRows] = await connection.execute<(RowDataPacket & { checkin_end_at: Date; end_time: Date })[]>(
+        "SELECT checkin_end_at, end_time FROM events WHERE id=?", [draftReadyId],
+      );
+      const late = new Date(new Date(windowRows[0]!.checkin_end_at).getTime() + 15 * 60_000);
+      if (late >= new Date(windowRows[0]!.end_time)) throw new Error("fixture: check-in must close before the Event end");
+      return connection.execute("UPDATE ticket_types SET sales_end_at=? WHERE event_id=? LIMIT 1", [late, draftReadyId]);
+    }, "outside the Event sales/check-in window");
+    // Read the snapshot first: MySQL forbids INSERT ... SELECT FROM events while a
+    // ticket_types trigger touches events. Overflow is derived, not hard-coded, so it
+    // holds for whatever venue capacity the Admin configured.
+    const [capacityRows] = await connection.execute<(RowDataPacket & { venue_capacity: number })[]>(
+      "SELECT venue_capacity FROM events WHERE id=?", [hiddenId],
+    );
+    const overflow = Number(capacityRows[0]?.venue_capacity ?? 0) + 1;
     await expectRejected(connection, "Ticket allocation beyond venue capacity is rejected", () =>
       connection.execute(
-        "INSERT INTO ticket_types(event_id,name,price,capacity,max_per_order,is_active) VALUES (?,'Unsafe Overflow',1,999,1,FALSE)",
-        [hiddenId],
+        "INSERT INTO ticket_types(event_id,name,price,capacity,max_per_order,is_active) VALUES (?,'Unsafe Overflow',1,?,1,FALSE)",
+        [hiddenId, overflow],
       ), "Ticket allocation exceeds Event venue capacity");
     await expectRejected(connection, "Completed Event cannot return to Published", () =>
       connection.execute("UPDATE events SET status='published',completed_at=NULL WHERE id=?", [completedId]),

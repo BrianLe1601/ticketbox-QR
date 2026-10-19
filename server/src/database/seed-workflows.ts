@@ -4,10 +4,15 @@ import type { PoolConnection, ResultSetHeader, RowDataPacket } from "mysql2/prom
 import { env } from "../config/env.js";
 import { syncEventLifecycleStatuses } from "../modules/events/event-lifecycle.service.js";
 import { pool } from "./pool.js";
+import { explainVenueConflict, resolveSeedVenue, type SeedVenue } from "./seed-venue.js";
 
 const QA_CATEGORY_SLUG = "qa-workflow";
 const QA_STAFF_EMAIL = "qa.staff@ticketbox.local";
 const COVER_URL = "https://res.cloudinary.com/demo/image/upload/sample.jpg";
+// Placeholder used only when no Admin has configured the single platform venue.
+const QA_PLACEHOLDER_VENUE: SeedVenue = { name: "TicketBox QA Hall", address: "01 Workflow Street", city: "Ho Chi Minh City", capacity: 1000 };
+const QA_REQUIRED_CAPACITY = 200;
+let venue: SeedVenue = QA_PLACEHOLDER_VENUE;
 
 interface IdRow extends RowDataPacket { id: number }
 
@@ -30,6 +35,33 @@ const seedReferenceTime = Date.now();
 
 function fromNow(days: number, hours = 0): Date {
   return new Date(seedReferenceTime + days * 86_400_000 + hours * 3_600_000);
+}
+
+const VN_OFFSET_MS = 7 * 3_600_000;
+
+/**
+ * hh:mm Vietnam time on the Vietnam calendar day `days` after the reference day.
+ * Concert fixtures are anchored to fixed local times (doors 17:00, show 19:00) because the
+ * schema requires check-in to open on the same Vietnam day as the show, at least 2h before.
+ * Offsets from "now" broke that rule whenever the seed ran between 00:00 and 03:00.
+ */
+function vnDayAt(days: number, hour: number, minute = 0): Date {
+  const vn = new Date(seedReferenceTime + VN_OFFSET_MS);
+  const vnMidnight = Date.UTC(vn.getUTCFullYear(), vn.getUTCMonth(), vn.getUTCDate() + days) - VN_OFFSET_MS;
+  return new Date(vnMidnight + hour * 3_600_000 + minute * 60_000);
+}
+
+/**
+ * Start of the "ongoing now" fixture: about an hour ago, but never before 02:00 Vietnam time
+ * on its own day (otherwise the 2h same-day check-in lead is impossible). In that case the
+ * show is placed at 23:59 the previous day, which still keeps it ongoing with an open gate.
+ */
+function ongoingStart(): Date {
+  const candidate = fromNow(0, -1);
+  const vnHour = new Date(candidate.getTime() + VN_OFFSET_MS).getUTCHours();
+  if (vnHour >= 2) return candidate;
+  const vn = new Date(candidate.getTime() + VN_OFFSET_MS);
+  return new Date(Date.UTC(vn.getUTCFullYear(), vn.getUTCMonth(), vn.getUTCDate()) - VN_OFFSET_MS - 60_000);
 }
 
 function sha256(value: string): string {
@@ -149,23 +181,27 @@ async function createEvent(
   categoryId: number,
   fixture: EventFixture,
 ) {
-  const [result] = await connection.execute<ResultSetHeader>(
-    `INSERT INTO events
-      (name,slug,description,category_id,venue,address,city,venue_capacity,
-       cover_image_url,cover_image_alt,start_time,end_time,sales_start_at,
-       sales_end_at,checkin_start_at,checkin_end_at,created_by)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    [
-      fixture.name, fixture.slug,
-      `Automated local fixture for ${fixture.slug}. Do not use as production data.`,
-      categoryId, "TicketBox QA Hall", "01 Workflow Street", "Ho Chi Minh City",
-      fixture.capacity, fixture.cover === false ? null : COVER_URL,
-      fixture.cover === false ? null : `${fixture.name} test cover`, fixture.start,
-      fixture.end, fixture.salesStart, fixture.salesEnd, fixture.checkinStart,
-      fixture.checkinEnd, adminId,
-    ],
-  );
-  return result.insertId;
+  try {
+    const [result] = await connection.execute<ResultSetHeader>(
+      `INSERT INTO events
+        (name,slug,description,category_id,venue,address,city,venue_capacity,
+         cover_image_url,cover_image_alt,start_time,end_time,sales_start_at,
+         sales_end_at,checkin_start_at,checkin_end_at,created_by)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [
+        fixture.name, fixture.slug,
+        `Automated local fixture for ${fixture.slug}. Do not use as production data.`,
+        categoryId, venue.name, venue.address, venue.city,
+        venue.capacity, fixture.cover === false ? null : COVER_URL,
+        fixture.cover === false ? null : `${fixture.name} test cover`, fixture.start,
+        fixture.end, fixture.salesStart, fixture.salesEnd, fixture.checkinStart,
+        fixture.checkinEnd, adminId,
+      ],
+    );
+    return result.insertId;
+  } catch (error) {
+    throw explainVenueConflict(error, "seed:workflows");
+  }
 }
 
 async function createTier(
@@ -303,43 +339,48 @@ async function seedWorkflows() {
     if (!passwordHash) throw new Error("Seed Admin password hash is unavailable");
 
     await cleanupPreviousFixtures(connection, adminId);
+    venue = await resolveSeedVenue(connection, adminId, QA_PLACEHOLDER_VENUE, QA_REQUIRED_CAPACITY);
     const qaStaffId = await createQaStaff(connection, passwordHash);
     const categoryId = await createCategory(connection);
 
     const draftNeedsTicket = await createEvent(connection, adminId, categoryId, {
       name: "[QA] Draft — Missing Cover & Ticket", slug: "qa-draft-needs-ticket",
-      capacity: 100, start: fromNow(30), end: fromNow(30, 4),
-      salesStart: fromNow(1), salesEnd: fromNow(30, 3),
-      checkinStart: fromNow(29, 22), checkinEnd: fromNow(30, 4), cover: false,
+      capacity: 100, start: vnDayAt(30, 19), end: vnDayAt(30, 23),
+      salesStart: fromNow(1), salesEnd: vnDayAt(30, 22),
+      checkinStart: vnDayAt(30, 17), checkinEnd: vnDayAt(30, 23), cover: false,
     });
 
-    const onSaleStart = fromNow(20);
-    const onSaleEnd = fromNow(20, 4);
+    const draftReadyStart = vnDayAt(20, 19);
+    const draftReadyEnd = vnDayAt(20, 23);
     const draftReady = await createEvent(connection, adminId, categoryId, {
       name: "[QA] Draft — Ready To Publish", slug: "qa-draft-ready",
-      capacity: 120, start: onSaleStart, end: onSaleEnd,
-      salesStart: fromNow(-1), salesEnd: fromNow(20, 3),
-      checkinStart: fromNow(19, 22), checkinEnd: onSaleEnd,
+      capacity: 120, start: draftReadyStart, end: draftReadyEnd,
+      salesStart: fromNow(-1), salesEnd: vnDayAt(20, 22),
+      checkinStart: vnDayAt(20, 17), checkinEnd: draftReadyEnd,
     });
     await createTier(connection, draftReady, "General Admission", 150_000, 120);
 
     const comingSoon = await createEvent(connection, adminId, categoryId, {
       name: "[QA] Published — Coming Soon", slug: "qa-published-coming-soon",
-      capacity: 80, start: fromNow(45), end: fromNow(45, 3),
-      salesStart: fromNow(5), salesEnd: fromNow(45, 2),
-      checkinStart: fromNow(44, 22), checkinEnd: fromNow(45, 3),
+      capacity: 80, start: vnDayAt(45, 19), end: vnDayAt(45, 22),
+      salesStart: fromNow(5), salesEnd: vnDayAt(45, 21),
+      checkinStart: vnDayAt(45, 17), checkinEnd: vnDayAt(45, 22),
     });
     await createTier(connection, comingSoon, "Scheduled Pass", 100_000, 80);
     await publish(connection, comingSoon);
 
+    // The single venue hosts one concert at a time, so this Event takes its own
+    // slot three days after the Draft above instead of sharing its time.
+    const onSaleEventStart = vnDayAt(23, 19);
+    const onSaleEventEnd = vnDayAt(23, 23);
     const onSale = await createEvent(connection, adminId, categoryId, {
       name: "[QA] Published — On Sale With Orders", slug: "qa-published-on-sale",
-      capacity: 200, start: onSaleStart, end: onSaleEnd,
-      salesStart: fromNow(-2), salesEnd: fromNow(20, 3),
-      checkinStart: fromNow(19, 22), checkinEnd: onSaleEnd,
+      capacity: 200, start: onSaleEventStart, end: onSaleEventEnd,
+      salesStart: fromNow(-2), salesEnd: vnDayAt(23, 22),
+      checkinStart: vnDayAt(23, 17), checkinEnd: onSaleEventEnd,
     });
     const onSaleGeneral = await createTier(connection, onSale, "General Sale", 200_000, 150);
-    await createTier(connection, onSale, "Last Minute", 120_000, 50, true, fromNow(18), fromNow(20, 3));
+    await createTier(connection, onSale, "Last Minute", 120_000, 50, true, fromNow(21), vnDayAt(23, 22));
     await publish(connection, onSale);
     await createOrder(connection, onSale, onSaleGeneral, "ONSALE-PENDING", 2, 200_000, false);
     await createOrder(connection, onSale, onSaleGeneral, "ONSALE-PAID", 3, 200_000, true);
@@ -350,9 +391,9 @@ async function seedWorkflows() {
 
     const hiddenPaused = await createEvent(connection, adminId, categoryId, {
       name: "[QA] Hidden — All Tiers Paused", slug: "qa-hidden-all-paused",
-      capacity: 60, start: fromNow(35), end: fromNow(35, 3),
-      salesStart: fromNow(-1), salesEnd: fromNow(35, 2),
-      checkinStart: fromNow(34, 22), checkinEnd: fromNow(35, 3),
+      capacity: 60, start: vnDayAt(35, 19), end: vnDayAt(35, 22),
+      salesStart: fromNow(-1), salesEnd: vnDayAt(35, 21),
+      checkinStart: vnDayAt(35, 17), checkinEnd: vnDayAt(35, 22),
     });
     await createTier(connection, hiddenPaused, "Paused Tier", 90_000, 60);
     await publish(connection, hiddenPaused);
@@ -362,11 +403,12 @@ async function seedWorkflows() {
     );
     await connection.execute("UPDATE ticket_types SET is_active=FALSE WHERE event_id=?", [hiddenPaused]);
 
+    const ongoingShowStart = ongoingStart();
     const ongoing = await createEvent(connection, adminId, categoryId, {
       name: "[QA] Ongoing — Check-in Active", slug: "qa-ongoing-checkin",
-      capacity: 50, start: fromNow(0, -1), end: fromNow(0, 3),
+      capacity: 50, start: ongoingShowStart, end: fromNow(0, 3),
       salesStart: fromNow(-10), salesEnd: fromNow(0, 2),
-      checkinStart: fromNow(0, -3), checkinEnd: fromNow(0, 3),
+      checkinStart: new Date(ongoingShowStart.getTime() - 2 * 3_600_000), checkinEnd: fromNow(0, 3),
     });
     const ongoingTier = await createTier(connection, ongoing, "Gate Pass", 50_000, 50);
     await publish(connection, ongoing, fromNow(-10));
@@ -379,20 +421,20 @@ async function seedWorkflows() {
 
     const completed = await createEvent(connection, adminId, categoryId, {
       name: "[QA] Completed — Read-only History", slug: "qa-completed-history",
-      capacity: 40, start: fromNow(-2), end: fromNow(-1),
-      salesStart: fromNow(-20), salesEnd: fromNow(-1, -1),
-      checkinStart: fromNow(-2, -2), checkinEnd: fromNow(-1),
+      capacity: 40, start: vnDayAt(-2, 19), end: vnDayAt(-1, 19),
+      salesStart: fromNow(-20), salesEnd: vnDayAt(-1, 18),
+      checkinStart: vnDayAt(-2, 17), checkinEnd: vnDayAt(-1, 19),
     });
     await createTier(connection, completed, "Archived Pass", 75_000, 40);
     await publish(connection, completed, fromNow(-20));
     await connection.execute("UPDATE events SET status='ongoing' WHERE id=?", [completed]);
-    await connection.execute("UPDATE events SET status='completed',completed_at=? WHERE id=?", [fromNow(-1), completed]);
+    await connection.execute("UPDATE events SET status='completed',completed_at=? WHERE id=?", [vnDayAt(-1, 19), completed]);
 
     const cancelledEmpty = await createEvent(connection, adminId, categoryId, {
       name: "[QA] Cancelled — No Orders", slug: "qa-cancelled-no-orders",
-      capacity: 30, start: fromNow(50), end: fromNow(50, 2),
-      salesStart: fromNow(-1), salesEnd: fromNow(50, 1),
-      checkinStart: fromNow(49, 22), checkinEnd: fromNow(50, 2),
+      capacity: 30, start: vnDayAt(50, 19), end: vnDayAt(50, 21),
+      salesStart: fromNow(-1), salesEnd: vnDayAt(50, 20),
+      checkinStart: vnDayAt(50, 17), checkinEnd: vnDayAt(50, 21),
     });
     await createTier(connection, cancelledEmpty, "Cancelled Pass", 60_000, 30);
     await publish(connection, cancelledEmpty);
@@ -408,9 +450,9 @@ async function seedWorkflows() {
 
     const cancelledOrders = await createEvent(connection, adminId, categoryId, {
       name: "[QA] Cancelled — Orders & Refund", slug: "qa-cancelled-with-orders",
-      capacity: 100, start: fromNow(55), end: fromNow(55, 3),
-      salesStart: fromNow(-2), salesEnd: fromNow(55, 2),
-      checkinStart: fromNow(54, 22), checkinEnd: fromNow(55, 3),
+      capacity: 100, start: vnDayAt(55, 19), end: vnDayAt(55, 22),
+      salesStart: fromNow(-2), salesEnd: vnDayAt(55, 21),
+      checkinStart: vnDayAt(55, 17), checkinEnd: vnDayAt(55, 22),
     });
     const cancelledTier = await createTier(connection, cancelledOrders, "Refundable Pass", 300_000, 100);
     await publish(connection, cancelledOrders);
