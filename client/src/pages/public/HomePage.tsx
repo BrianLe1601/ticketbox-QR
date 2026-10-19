@@ -94,7 +94,7 @@ export function HomePage() {
                             Bán vé dễ dàng. <span className="text-primary">Check-in</span> thông minh.
                         </h1>
                         <p className="text-base sm:text-lg text-white/60 leading-relaxed mb-7 max-w-lg">
-                            Khám phá các sự kiện âm nhạc, hội nghị, lễ hội ẩm thực và nhiều hơn nữa. Mua vé không cần đăng nhập.
+                            Khám phá concert và những đêm nhạc yêu thích. Chọn hạng vé, mua bằng email và nhận mã QR, không cần đăng nhập.
                         </p>
                         <div className="flex flex-col sm:flex-row gap-3">
                             <button onClick={() => navigate("/events")} className="flex items-center justify-center gap-2 px-7 py-3.5 rounded-xl bg-primary text-white font-bold text-sm hover:bg-primary/90 transition-transform motion-reduce:transition-none shadow-xl shadow-primary/30 hover:shadow-primary/50 active:scale-[0.98] motion-reduce:transform-none focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary">
