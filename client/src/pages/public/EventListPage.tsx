@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Search, X, ChevronDown, SlidersHorizontal, ArrowUpDown } from "lucide-react";
 import type { SortKey, Event, CategorySlug } from "@/types/event.types";
@@ -10,7 +10,7 @@ import {
 } from "@/constants/eventconstants";
 import { subscribeToEventLifecycleUpdates } from "@/services/event-realtime.service";
 import type { CategoryFilter } from "@/constants/eventconstants";
-import { daysDiff, cn } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { EventCard } from "@/components/event/EventCard";
 import { EventCardSkeleton } from "@/components/event/EventCardSkeleton";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -18,13 +18,21 @@ import { CategoryIcon } from "@/components/shared/CategoryIcon";
 import { NativeSelect } from "@/components/shared/NativeSelect";
 
 export function EventListPage() {
-    const [searchParams] = useSearchParams();
-    const [query, setQuery] = useState(searchParams.get("q") ?? "");
-    const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>(
-        (searchParams.get("category") as CategoryFilter) ?? "all"
-    );
+    const [searchParams, setSearchParams] = useSearchParams();
+    const query = searchParams.get("q") ?? "";
+    const selectedCategory: CategoryFilter = searchParams.get("category") ?? "all";
+    function updateSearchFilter(key: "q" | "category", value: string) {
+        setSearchParams((current) => {
+            const next = new URLSearchParams(current);
+            if (!value || (key === "category" && value === "all")) next.delete(key);
+            else next.set(key, value);
+            return next;
+        }, { replace: key === "q" });
+    }
+    const setQuery = (value: string) => updateSearchFilter("q", value);
+    const setSelectedCategory = (value: string) => updateSearchFilter("category", value);
     const [selectedCity, setSelectedCity] = useState("all");
-    const [selectedTime, setSelectedTime] = useState("all");
+    const [selectedTime, setSelectedTime] = useState<"all" | "week" | "month">("all");
     const [sortBy, setSortBy] = useState<SortKey>("upcoming");
     const [filterOpen, setFilterOpen] = useState(false);
     const [categoryOptions,setCategoryOptions]=useState<{ value: string; label: string }[]>([{value:"all",label:"Tất cả"}]);
@@ -36,64 +44,73 @@ export function EventListPage() {
     const [page, setPage] = useState(1);
     const [loading, setLoading] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
+    const requestVersion = useRef(0);
 
     useEffect(()=>{let active=true;void fetchCategories().then(items=>{if(active)setCategoryOptions([{value:"all",label:"Tất cả"},...items.map(item=>({value:item.slug,label:item.name}))]);}).catch(()=>{if(active)setCategoryError('Không thể tải danh mục.');});return()=>{active=false;};},[]);
 
     const loadPage = useCallback(
         async (targetPage: number, append: boolean) => {
+            const version = ++requestVersion.current;
             if (append) setLoadingMore(true);
-            else setLoading(true);
+            else { setLoading(true); setLoadingMore(false); }
             setError('');
             try {
                 const { events: pageEvents, total: pageTotal } = await fetchEventList({
                     q: query || undefined,
                     category: selectedCategory === "all" ? undefined : (selectedCategory as CategorySlug),
                     city: selectedCity === "all" ? undefined : selectedCity,
+                    time: selectedTime === "all" ? undefined : selectedTime,
                     sort: sortBy,
                     page: targetPage,
                     limit: PAGE_SIZE,
                 });
+                if (version !== requestVersion.current) return;
                 setEvents((prev) => (append ? [...prev, ...pageEvents] : pageEvents));
                 setTotal(pageTotal);
                 setPage(targetPage);
             } catch {
+                if (version !== requestVersion.current) return;
                 setError('Không thể tải sự kiện. Vui lòng thử lại.');
                 if (!append) { setEvents([]); setTotal(0); }
             } finally {
-                if (append) setLoadingMore(false);
-                else setLoading(false);
+                if (version === requestVersion.current) {
+                    if (append) setLoadingMore(false);
+                    else setLoading(false);
+                }
             }
         },
-        [query, selectedCategory, selectedCity, sortBy]
+        [query, selectedCategory, selectedCity, selectedTime, sortBy]
     );
 
     // reset & fetch lại từ trang 1 mỗi khi filter/sort đổi (debounce cho ô tìm kiếm)
     useEffect(() => {
         const t = setTimeout(() => loadPage(1, false), query ? 400 : 0);
-        return () => clearTimeout(t);
+        return () => { clearTimeout(t); requestVersion.current += 1; };
     }, [loadPage, query]);
 
     // Refresh every loaded page without showing the initial-loading skeleton again.
     useEffect(() => {
         let active = true;
         const refreshVisibleEvents = async () => {
+            const version = requestVersion.current;
             try {
                 const pages = await Promise.all(Array.from({ length: page }, (_, index) => (
                     fetchEventList({
                         q: query || undefined,
                         category: selectedCategory === "all" ? undefined : (selectedCategory as CategorySlug),
                         city: selectedCity === "all" ? undefined : selectedCity,
+                        time: selectedTime === "all" ? undefined : selectedTime,
                         sort: sortBy,
                         page: index + 1,
                         limit: PAGE_SIZE,
                     })
                 )));
-                if (!active) return;
+                if (!active || version !== requestVersion.current) return;
                 setEvents(pages.flatMap((result) => result.events));
                 setTotal(pages[0]?.total ?? 0);
                 setError('');
             } catch {
-                if (active) setError('Không thể cập nhật sự kiện. Dữ liệu đang hiển thị có thể đã thay đổi.');
+                if (active && version === requestVersion.current) setError('Không thể cập nhật sự kiện. Dữ liệu đang hiển thị có thể đã thay đổi.');
             }
         };
         const unsubscribeRealtime = subscribeToEventLifecycleUpdates(
@@ -108,20 +125,17 @@ export function EventListPage() {
             unsubscribeRealtime();
             window.clearInterval(refreshTimer);
         };
-    }, [page, query, selectedCategory, selectedCity, sortBy]);
-
-    const timeFiltered = events.filter((event) => {
-        if (selectedTime === "all") return true;
-        const diff = daysDiff(event.startTime);
-        if (selectedTime === "week") return diff >= 0 && diff <= 7;
-        if (selectedTime === "month") return diff >= 0 && diff <= 30;
-        return true;
-    });
+    }, [page, query, selectedCategory, selectedCity, selectedTime, sortBy]);
 
     const hasMore = page * PAGE_SIZE < total;
 
     function resetFilters() {
-        setQuery(""); setSelectedCategory("all"); setSelectedCity("all"); setSelectedTime("all"); setSortBy("upcoming");
+        setSearchParams((current) => {
+            const next = new URLSearchParams(current);
+            next.delete("q"); next.delete("category");
+            return next;
+        });
+        setSelectedCity("all"); setSelectedTime("all"); setSortBy("upcoming");
     }
 
     const hasActiveFilters = query || selectedCategory !== "all" || selectedCity !== "all" || selectedTime !== "all";
@@ -133,14 +147,14 @@ export function EventListPage() {
                 <p className="text-xs text-primary font-semibold uppercase tracking-widest mb-2">Khám phá</p>
                 <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground" style={{ fontFamily: "Manrope, sans-serif" }}>Tất cả sự kiện</h1>
                 <p className="text-sm text-muted-foreground mt-1.5">
-                    {loading ? "Đang tải..." : `Hiển thị ${timeFiltered.length}/${total} sự kiện`}
+                    {loading ? "Đang tải..." : `Hiển thị ${events.length}/${total} sự kiện`}
                 </p>
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3 mb-4">
                 <div className="relative flex-1">
                     <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-                    <input aria-label="Tìm kiếm sự kiện" type="text" placeholder="Tìm kiếm sự kiện, địa điểm, thành phố..." value={query} onChange={(e) => setQuery(e.target.value)} className="w-full pl-11 pr-10 py-3 rounded-xl bg-card border border-white/[0.08] text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-primary" />
+                    <input aria-label="Tìm kiếm sự kiện" type="text" placeholder="Tìm kiếm sự kiện, địa điểm, thành phố..." value={query} onChange={(e) => setQuery(e.target.value)} className="w-full pl-11 pr-10 py-3 rounded-xl bg-card border border-border text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-primary" />
                     {query && <button aria-label="Xóa tìm kiếm" onClick={() => setQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1 rounded"><X size={14} /></button>}
                 </div>
 
@@ -149,7 +163,7 @@ export function EventListPage() {
                     <NativeSelect ariaLabel="Sắp xếp sự kiện" value={sortBy} onChange={(v) => setSortBy(v as SortKey)} options={SORT_OPTIONS} className="min-w-[160px]" />
                 </div>
 
-                <button onClick={() => setFilterOpen(!filterOpen)} className={cn("flex items-center gap-2 px-4 py-3 rounded-xl border text-sm font-semibold transition-colors sm:hidden", filterOpen || hasActiveFilters ? "bg-primary/15 border-primary/30 text-primary" : "bg-card border-white/[0.08] text-muted-foreground")}>
+                <button onClick={() => setFilterOpen(!filterOpen)} className={cn("flex items-center gap-2 px-4 py-3 rounded-xl border text-sm font-semibold transition-colors sm:hidden", filterOpen || hasActiveFilters ? "bg-primary/15 border-primary/30 text-primary" : "bg-card border-border text-muted-foreground")}>
                     <SlidersHorizontal size={15} /> Bộ lọc {hasActiveFilters && <span className="w-1.5 h-1.5 rounded-full bg-primary" />}
                 </button>
             </div>
@@ -158,14 +172,14 @@ export function EventListPage() {
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
                     <div className="flex flex-wrap gap-2 flex-1">
                         {categoryOptions.map(({ value, label }) => (
-                            <button key={value} onClick={() => setSelectedCategory(value)} className={cn("flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold border motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-primary", selectedCategory === value ? "bg-primary text-white border-primary shadow-lg shadow-primary/25" : "bg-card text-muted-foreground border-white/[0.08] hover:border-primary/30 hover:text-foreground")}>
+                            <button key={value} onClick={() => setSelectedCategory(value)} className={cn("flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold border motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-primary", selectedCategory === value ? "bg-primary text-white border-primary shadow-lg shadow-primary/25" : "bg-card text-muted-foreground border-border hover:border-primary/30 hover:text-foreground")}>
                                 {value !== "all" && <CategoryIcon category={value} size={11} />} {label}
                             </button>
                         ))}
                     </div>
                     <div className="flex gap-2 shrink-0">
                         <NativeSelect ariaLabel="Lọc thành phố" value={selectedCity} onChange={setSelectedCity} options={CITY_OPTIONS} className="min-w-[160px]" />
-                        <NativeSelect ariaLabel="Lọc thời gian" value={selectedTime} onChange={setSelectedTime} options={TIME_OPTIONS} className="min-w-[160px]" />
+                        <NativeSelect ariaLabel="Lọc thời gian" value={selectedTime} onChange={(value) => setSelectedTime(value as "all" | "week" | "month")} options={TIME_OPTIONS} className="min-w-[160px]" />
                     </div>
                 </div>
 
@@ -181,25 +195,25 @@ export function EventListPage() {
                 )}
             </div>
 
-            {categoryError && <p role="alert" className="mb-4 text-sm text-red-400">{categoryError}</p>}
-            {error && <div role="alert" className="mb-4 text-sm text-red-400">{error} <button disabled={loading || loadingMore} onClick={() => void loadPage(1, false)} className="underline focus-visible:outline-2 disabled:opacity-50">Thử lại</button></div>}
+            {categoryError && <p role="alert" className="mb-4 text-sm text-public-error">{categoryError}</p>}
+            {error && <div role="alert" className="mb-4 text-sm text-public-error">{error} <button disabled={loading || loadingMore} onClick={() => void loadPage(1, false)} className="underline focus-visible:outline-2 disabled:opacity-50">Thử lại</button></div>}
             <div aria-busy={loading || loadingMore} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                 {loading
                     ? Array.from({ length: 6 }).map((_, i) => <EventCardSkeleton key={i} />)
-                    : timeFiltered.length > 0
-                        ? timeFiltered.map((event) => <EventCard key={event.id} event={event} />)
+                    : events.length > 0
+                        ? events.map((event) => <EventCard key={event.id} event={event} />)
                         : !error && <EmptyState query={query} onReset={resetFilters} />}
             </div>
 
             {!loading && (events.length > 0 || hasMore) && (
                 <div className="mt-10 flex flex-col items-center gap-4">
                     {hasMore && (
-                        <button disabled={loadingMore} onClick={() => loadPage(page + 1, true)} className="flex items-center gap-2 px-8 py-3 rounded-xl border border-white/[0.08] bg-card text-sm font-semibold text-muted-foreground hover:text-foreground hover:border-primary/30 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-50">
+                        <button disabled={loadingMore} onClick={() => loadPage(page + 1, true)} className="flex items-center gap-2 px-8 py-3 rounded-xl border border-border bg-card text-sm font-semibold text-muted-foreground hover:text-foreground hover:border-primary/30 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-50">
                             {loadingMore ? "Đang tải..." : `Xem thêm (${total - events.length} sự kiện)`} <ChevronDown size={15} />
                         </button>
                     )}
                     <p className="text-xs text-muted-foreground">
-                        Đang xem <span className="text-foreground font-semibold">{timeFiltered.length}</span> trong <span className="text-foreground font-semibold">{total}</span> sự kiện
+                        Đang xem <span className="text-foreground font-semibold">{events.length}</span> trong <span className="text-foreground font-semibold">{total}</span> sự kiện
                     </p>
                 </div>
             )}

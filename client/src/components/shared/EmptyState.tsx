@@ -3,7 +3,7 @@ import { Search } from "lucide-react";
 export function EmptyState({ query, onReset }: { query: string; onReset: () => void }) {
     return (
         <div className="col-span-full flex flex-col items-center justify-center py-24 gap-4 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-card border border-white/[0.08] flex items-center justify-center">
+            <div className="w-16 h-16 rounded-2xl bg-card border border-border flex items-center justify-center">
                 <Search size={24} className="text-muted-foreground" />
             </div>
             <div>

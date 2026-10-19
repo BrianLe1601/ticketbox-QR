@@ -193,7 +193,7 @@ client/
 | File | Vai trò |
 |---|---|
 | `index.html` | HTML host có root cho React; Vite dùng làm entry |
-| `src/main.tsx` | createRoot, StrictMode, BrowserRouter, import CSS và bắt đầu nạp reCAPTCHA |
+| `src/main.tsx` | createRoot, StrictMode, import CSS; reCAPTCHA chỉ được nạp khi cần (`useRecaptcha` ở Checkout OTP và Tìm lại vé) |
 | `src/App.tsx` | Bọc route bằng AuthProvider |
 | `src/routes/router.tsx` | Data router (`createBrowserRouter`): khai báo các đường dẫn, guard theo vai trò và `lazy` cấp route cho layout/trang; `RouteFallbacks.tsx` (màn tải đầu, 404, lỗi tải chunk), `page-loaders.ts` (chunk Admin/Staff được tải sẵn) |
 | `src/routes/ProtectedRoute.tsx` | Chờ khôi phục auth, kiểm tra role trước khi render route Admin/Staff |
@@ -347,7 +347,7 @@ Tất cả đường dẫn dưới đây có tiền tố `/api` trừ WebSocket.
 | Auth | `POST /auth/login`, `/auth/google`, `/auth/refresh`, `/auth/logout`, `/auth/password-reset/request`, `/auth/password-reset/confirm`; `GET /auth/me` |
 | Danh mục Public | `GET /categories` |
 | Danh mục Admin | `GET/POST /admin/categories`; `PATCH/DELETE /admin/categories/:id` |
-| Event Public | `GET /events`, `GET /events/:id` |
+| Event Public | `GET /events` (query `time=all\|week\|month` tùy chọn; lọc 7/30 ngày từ thời điểm hiện tại trước phân trang, `meta.total` cùng bộ lọc), `GET /events/:id` |
 | Event Admin | `GET/POST /admin/events`; `GET/PATCH/DELETE /admin/events/:id`; `GET /:id/publish-readiness`; `POST /:id/publish`; `PATCH /:id/publish-schedule`; `POST /:id/cancel`; `PATCH /:id/visibility` dưới `/admin/events` |
 | Hạng vé Admin | `GET/POST /admin/ticket-types`; `PATCH/DELETE /admin/ticket-types/:id`; `PATCH /:id/sales-status` |
 | Staff Admin | `GET /admin/staff`; `PATCH /:staffId`, `PATCH /:staffId/status`; `POST /:staffId/assignments`; `DELETE /:staffId/assignments/:assignmentId` dưới `/admin/staff` |
@@ -391,6 +391,7 @@ Chỉ liệt kê tên biến, không đưa giá trị bí mật vào tài liệu
 | client | `npm run build` | TypeScript project build + Vite production bundle |
 | client | `npm run preview` | Xem bundle build tại máy phát triển |
 | client | `node --test tests/recaptcha.test.cjs` | Test reCAPTCHA/form có sẵn, chưa nằm trong npm test script |
+| client | `node --test tests/public-workflows.test.cjs` | Hồi quy trạng thái Order, khôi phục lỗi thanh toán, tìm kiếm theo URL và lọc thời gian/phân trang |
 | server | `npm run dev` | tsx watch chạy TypeScript server |
 | server | `npm run typecheck` | Kiểm tra kiểu, không emit |
 | server | `npm run build` / `npm start` | Biên dịch tsc / chạy dist/server.js |

@@ -1,5 +1,5 @@
 import { useId, useState, type FormEvent } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { Ticket } from 'lucide-react';
 import { apiPost, ApiRequestError } from '@/services/api';
 import { useRecaptcha } from '@/hooks/useRecaptcha';
 import { useEmailCooldown } from '@/hooks/useEmailCooldown';
@@ -26,30 +26,31 @@ export function TicketRetrievalForm() {
             setLoading(false);
         }
     }
-    return <details className="group mt-6 max-w-lg rounded-xl border border-white/10 bg-background/70 text-white/80"
+    return <details className="group text-foreground"
         onKeyDown={event => {
             if (event.key === 'Escape' && event.currentTarget.open) {
                 event.currentTarget.open = false;
                 event.currentTarget.querySelector('summary')?.focus();
             }
         }}>
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-4 py-3 text-sm font-medium hover:text-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary [&::-webkit-details-marker]:hidden">
-            <span>Bạn lạc mất vé? Nhập email để nhận lại mã QR</span>
-            <ChevronDown size={16} aria-hidden="true" className="shrink-0 text-primary transition-transform group-open:rotate-180 motion-reduce:transition-none" />
+        <summary className="inline-flex min-h-13 cursor-pointer list-none items-center justify-center gap-2.5 rounded-[14px] border border-border bg-card/80 px-5 py-3.5 text-[13px] font-semibold hover:bg-card group-open:border-primary/40 group-open:bg-primary/10 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary transition-colors motion-reduce:transition-none [&::-webkit-details-marker]:hidden">
+            <Ticket size={17} aria-hidden="true" className="shrink-0" />
+            <span>Tìm lại vé</span>
         </summary>
-        <form onSubmit={submit} className="space-y-3 border-t border-white/10 p-4 text-sm" aria-busy={loading}>
+        <form onSubmit={submit} className="absolute left-0 top-[calc(100%+12px)] z-30 w-full max-w-lg space-y-3 rounded-2xl border border-border bg-card p-5 text-sm shadow-xl shadow-black/10" aria-busy={loading}>
+            <p className="text-xs leading-relaxed text-muted-foreground">Bạn lạc mất vé? Nhập email đã mua vé để nhận lại mã QR.</p>
             <label htmlFor={emailId} className="block text-sm">Email đã dùng để mua vé</label>
             <div className="flex flex-col gap-3 sm:flex-row">
                 <input id={emailId} required type="email" autoComplete="email" maxLength={254} value={email} disabled={loading}
-                    onChange={event => setEmail(event.target.value)} className="min-w-0 w-full flex-1 border border-white/20 rounded-lg px-3 py-2.5 bg-card text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-50" />
+                    onChange={event => setEmail(event.target.value)} className="min-w-0 w-full flex-1 border border-border rounded-lg px-3 py-2.5 bg-card text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-50" />
                 <button disabled={!captcha.ready || loading || remaining > 0} className="shrink-0 rounded-lg bg-primary text-white px-4 py-2.5 hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50">
                     {loading ? 'Đang gửi...' : remaining > 0 ? `Gửi lại sau ${remaining}s` : 'Gửi lại vé'}
                 </button>
             </div>
             {!captcha.ready && !captcha.error && <p role="status">Đang tải xác minh reCAPTCHA...</p>}
-            {captcha.error && <div><p role="alert" className="text-red-400">{captcha.error}</p><button type="button" onClick={captcha.retry} className="underline hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">Thử tải lại xác minh</button></div>}
+            {captcha.error && <div><p role="alert" className="text-public-error">{captcha.error}</p><button type="button" onClick={captcha.retry} className="underline hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">Thử tải lại xác minh</button></div>}
             {message && <p role="status" className="text-sm">{message}</p>}
-            {error && <p role="alert" className="text-sm text-red-400">{error}</p>}
+            {error && <p role="alert" className="text-sm text-public-error">{error}</p>}
         </form>
     </details>;
 }
