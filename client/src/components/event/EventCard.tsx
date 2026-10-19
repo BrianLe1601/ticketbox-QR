@@ -17,7 +17,7 @@ export function EventCard({ event }: { event: Event }) {
                 <div className="absolute top-3 right-3">
                     <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-black/40 backdrop-blur-sm text-white border border-white/10">
                         <CategoryIcon category={event.category} size={11} />
-                        {getCategoryLabel(event.category)}
+                        {getCategoryLabel(event.category, event.categoryName)}
                     </span>
                 </div>
             </div>

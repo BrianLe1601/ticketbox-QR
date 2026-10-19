@@ -4,18 +4,10 @@ import type { CategorySlug, Event, TicketType, TicketSaleStatus, SortKey, Select
 // resilience fallback for proxies or networks that block/drop WebSocket traffic.
 export const EVENT_LIFECYCLE_FALLBACK_REFRESH_MS = 60_000;
 
-export const CATEGORY_LABELS: Record<string, string> = {
-    music: "Âm nhạc",
-    conference: "Hội nghị",
-    food: "Ẩm thực",
-    sports: "Thể thao",
-    art: "Nghệ thuật",
-};
-
-export const CATEGORY_SLUGS: CategorySlug[] = ["music", "conference", "food", "sports", "art"];
-
-export function getCategoryLabel(slug: CategorySlug): string {
-    return CATEGORY_LABELS[slug] ?? slug.split("-").map((part)=>part.charAt(0).toUpperCase()+part.slice(1)).join(" ");
+// Genres come from the API (/api/categories, fixed catalogue); never a hard-coded slug list.
+/** The genre name sent with the Event; the slug is only a fallback for old cached data. */
+export function getCategoryLabel(slug: CategorySlug, name?: string | null): string {
+    return name?.trim() || slug.split("-").map((part)=>part.charAt(0).toUpperCase()+part.slice(1)).join(" ");
 }
 
 export const CITY_LABELS: Record<string, string> = {
@@ -83,11 +75,6 @@ export function computeTotalCapacity(tickets: TicketType[]): number {
 }
 
 export type CategoryFilter = "all" | CategorySlug;
-
-export const CATEGORY_FILTER_OPTIONS: { value: CategoryFilter; label: string }[] = [
-    { value: "all", label: "Tất cả" },
-    ...CATEGORY_SLUGS.map((slug) => ({ value: slug as CategoryFilter, label: CATEGORY_LABELS[slug] })),
-];
 
 export const CITY_OPTIONS: SelectOption[] = [
     { value: "all", label: "Tất cả thành phố" },

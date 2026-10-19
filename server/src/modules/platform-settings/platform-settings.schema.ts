@@ -7,9 +7,4 @@ export const venueSchema = z.object({
   capacity: z.number().int().positive().max(1_000_000),
 }).strict();
 
-export const categoryScopeSchema = z.object({
-  scope: z.enum(["music_only", "all"]),
-}).strict();
-
 export type VenueInput = z.infer<typeof venueSchema>;
-export type CategoryScopeInput = z.infer<typeof categoryScopeSchema>;

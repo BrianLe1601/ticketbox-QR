@@ -46,7 +46,7 @@ export function AdminSettingsPage() {
     <PageLayout className="stp">
       <PageHeader
         title="Cài đặt"
-        description="Địa điểm và danh mục dùng chung cho cả hệ thống; giao diện và tài khoản là của riêng bạn."
+        description="Địa điểm và thể loại nhạc dùng chung cho cả hệ thống; giao diện và tài khoản là của riêng bạn."
         meta={settings?.updatedAt ? <span className="tb-num"><Clock3 size={13} aria-hidden="true" /> Cấu hình hệ thống cập nhật {formatDateTime(settings.updatedAt)}{settings.updatedBy?.fullName ? ` bởi ${settings.updatedBy.fullName}` : ""}</span> : null}
         actions={tab === "system" ? <Button icon={RefreshCw} loading={loading && Boolean(settings)} disabled={unsaved} disabledReason="Lưu hoặc hoàn tác địa điểm trước" onClick={() => { setLoading(true); setReload((n) => n + 1); }}>Tải lại</Button> : undefined}
       />
@@ -56,7 +56,7 @@ export function AdminSettingsPage() {
           {error && <Notice tone="danger" title="Không tải được cấu hình hệ thống" action={<Button size="sm" icon={RefreshCw} onClick={() => { setLoading(true); setReload((n) => n + 1); }}>Thử lại</Button>}>{error}</Notice>}
           {!settings ? (!error && <BentoGrid><div className="st-skel"><SkeletonBlock lines={6} /></div><div className="st-skel"><SkeletonBlock lines={6} /></div></BentoGrid>) : (
             <BentoGrid>
-              <SystemSettings settings={settings} categories={categories} form={venueForm} onForm={setVenueForm} onSettings={setSettings} onCategories={setCategories} />
+              <SystemSettings settings={settings} categories={categories} form={venueForm} onForm={setVenueForm} onSettings={setSettings} />
             </BentoGrid>
           )}
         </TabPanel>

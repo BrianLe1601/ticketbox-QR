@@ -49,7 +49,7 @@ export function SetupGuide({ accountId, signals }: { accountId: number; signals:
     return Promise.all([getPlatformSettings(), listAdminCategories(true), listAdminEvents()]).then(
       ([settings, categories, events]) => {
         const next = buildSetupProgress({
-          venueConfigured: Boolean(settings.venue), categoryScope: settings.categoryScope, categories, events: events.data, pendingStaff,
+          venueConfigured: Boolean(settings.venue), categories, events: events.data, pendingStaff,
         });
         setProgress(next); setError("");
         return next;

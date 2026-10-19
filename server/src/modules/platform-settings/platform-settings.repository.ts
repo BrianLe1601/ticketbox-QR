@@ -2,7 +2,6 @@ import type { PoolConnection, RowDataPacket } from "mysql2/promise";
 import { pool } from "../../database/pool.js";
 import { AppError } from "../../utils/app-error.js";
 
-export type CategoryScope = "music_only" | "all";
 export type Queryable = Pick<PoolConnection, "query">;
 
 export interface PlatformSettingsRow extends RowDataPacket {
@@ -10,7 +9,6 @@ export interface PlatformSettingsRow extends RowDataPacket {
   venue_address: string | null;
   venue_city: string | null;
   venue_capacity: number | null;
-  category_scope: CategoryScope;
   updated_by: number | null;
   updated_at: Date;
   updated_by_name: string | null;
@@ -66,7 +64,7 @@ export async function transaction<T>(work: (conn: PoolConnection) => Promise<T>)
 }
 
 const settingsSelect = `SELECT ps.venue_name, ps.venue_address, ps.venue_city, ps.venue_capacity,
-  ps.category_scope, ps.updated_by, ps.updated_at, u.full_name AS updated_by_name
+  ps.updated_by, ps.updated_at, u.full_name AS updated_by_name
   FROM platform_settings ps LEFT JOIN users u ON u.id = ps.updated_by WHERE ps.id = 1`;
 
 export async function readSettings(db: Queryable = pool): Promise<PlatformSettingsRow> {
@@ -96,13 +94,6 @@ export async function writeVenue(
     `UPDATE platform_settings SET venue_name = ?, venue_address = ?, venue_city = ?,
        venue_capacity = ?, updated_by = ? WHERE id = 1`,
     [venue.name, venue.address, venue.city, venue.capacity, adminId],
-  );
-}
-
-export async function writeCategoryScope(conn: PoolConnection, adminId: number, scope: CategoryScope) {
-  await conn.query(
-    "UPDATE platform_settings SET category_scope = ?, updated_by = ? WHERE id = 1",
-    [scope, adminId],
   );
 }
 
