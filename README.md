@@ -1,12 +1,16 @@
 # TicketBox QR
 
-Hệ thống quản lý vé và check-in bằng mã QR cho sự kiện, được xây dựng bằng React, Node.js và MySQL.
+Hệ thống quản lý vé và check-in bằng mã QR cho concert âm nhạc, được xây dựng bằng React, Node.js và MySQL.
 
 Repository: https://github.com/BrianLe1601/ticketbox-QR
 
 ## 1. Mục tiêu dự án
 
-TicketBox QR hỗ trợ toàn bộ quy trình quản lý vé sự kiện:
+TicketBox QR tập trung vào quy trình quản lý vé concert tại **một địa điểm cố định** (do Admin cấu hình, không quản lý nhiều địa điểm; các concert không được trùng lịch tại địa điểm đó). Danh mục phân loại thể loại âm nhạc như Pop, Rock, EDM và Acoustic; không mở rộng sang quản lý nghệ sĩ, sơ đồ ghế hoặc nhiều đơn vị tổ chức. Phạm vi vẫn gồm bán vé và check-in, không phải hệ thống chỉ quét vé.
+
+Sự kiện/danh mục/giao dịch cũ ngoài âm nhạc được giữ nguyên để bảo toàn lịch sử. Nguồn `seed:admin-demo` đã đổi nội dung mới sang concert; chưa chạy seed hay chuyển đổi dữ liệu đang sử dụng. Schema không bị thay đổi để ép xóa hoặc phân loại lại dữ liệu cũ.
+
+Các chức năng:
 
 - Admin tạo và quản lý sự kiện.
 - Tạo nhiều loại vé, giá bán và số lượng khác nhau.
@@ -82,17 +86,19 @@ Khôi xây dựng Scanner, Check-in Logs và Reporting
 
 ## 4. Trạng thái hiện tại
 
-Đối chiếu ngày 25/09/2026: `buu-events`, `develop`, `main`, `origin/develop` và `origin/main` cùng có base `1146eca`. Các sửa lỗi P0/P1 dưới đây đang ở working tree để review, chưa được xem là đã merge. Quy ước:
+Phần trạng thái/checklist tuần bên dưới ghi lại lần đối chiếu 25/09/2026 (base `1146eca`), không chứng minh các nhánh hiện vẫn đồng bộ. Các thay đổi giao diện và nền tảng từ 06/10 đến 19/10/2026 đã commit trên `buu-events` (đã gộp `develop`), đang chờ PR vào `develop`; xem mục “Địa điểm duy nhất…” ngay dưới đây. Không tự đánh dấu các mục UAT là hoàn tất chỉ vì code đã có.
+
+Quy ước:
 
 - `[x]`: code đã có trong commit chung; nghiệm thu môi trường thật vẫn được ghi riêng nếu còn thiếu.
 - `[~]`: đã triển khai và kiểm chứng trên nhánh sở hữu, còn chờ review/merge.
 - `[ ]`: chưa hoàn tất, chưa nghiệm thu hoặc còn chờ review/merge.
 - Một chức năng chỉ được tick trên README và Trello khi đáp ứng Definition of Done ở mục 16.
 
-Đã có trên `main`:
+Các chức năng ghi nhận trong lần đối chiếu trước:
 
 - [x] Repository React 19 + Vite + TypeScript và Node.js + Express + TypeScript.
-- [x] Schema MySQL hợp nhất gồm 13 bảng, constraints, indexes và triggers, bao gồm Google identity/approval cho Staff và ciphertext QR phục vụ gửi lại vé.
+- [x] Schema MySQL hợp nhất gồm 14 bảng (thêm `platform_settings` cho địa điểm duy nhất và phạm vi danh mục), constraints, indexes và triggers, bao gồm Google identity/approval cho Staff và ciphertext QR phục vụ gửi lại vé.
 - [x] Kết nối MySQL, seed tài khoản và `/api/health`.
 - [x] Authentication, refresh-session rotation/revoke và RBAC Admin/Staff.
 - [x] Admin CRUD Categories, Events và Ticket Types.
@@ -108,17 +114,30 @@ Còn thiếu hoặc cần hoàn thiện:
 
 - [ ] Nghiệm thu Google Staff với Google Client ID thật và clean-install schema trên database thử nghiệm — Bửu.
 - [~] Worker email hủy Event đã claim bằng `FOR UPDATE SKIP LOCKED`, có lease, stale recovery và attempt fencing; chờ review/merge và UAT SMTP — Bửu.
-- [ ] Xây notification center realtime cho Admin theo thiết kế được duyệt — Bửu. WebSocket lifecycle Event hiện chỉ báo client refetch dữ liệu công khai, không phải notification center.
+- [~] Thông báo realtime cho Admin qua WebSocket `/ws/admin` (đã commit trên `buu-events`, chờ review/merge — Bửu): xác thực bằng tin nhắn đầu tiên + kiểm tra Admin còn hoạt động trong DB, đẩy tên chủ đề thay đổi để client gọi lại REST, chuông "Việc cần xử lý" hiện toast việc mới. Chưa có lịch sử/trạng thái đã đọc phía server và chỉ chạy một instance.
 - [~] Lần nhập OTP sai thứ 5 trả `EMAIL_CODE_ATTEMPTS_EXCEEDED`; nội dung dùng thuật ngữ email chung; chờ review/merge và UAT reCAPTCHA/SMTP thật — Tài.
 - [~] Admin cancel Order chỉ nhận `pending_payment`; Refund mô phỏng có API/UI `pending -> processing -> completed|failed`, retry từ `failed` và test state transition — Tài triển khai, Bửu review contract.
 - [~] Order lookup đã chuyển từ query string sang POST body; access log chỉ ghi path, không ghi query; chờ review/merge — Tài.
 - [~] `GET /api/staff/events` đã loại Event completed/cancelled/đã hết giờ; chờ review/merge và UAT camera trên thiết bị thật — Khôi.
 - [ ] Test tích hợp end-to-end, concurrency, responsive và accessibility — cả nhóm.
-- [ ] Deploy staging, sửa blocker, deploy production và chuẩn bị demo — Bửu điều phối.
+- [ ] Chuẩn bị môi trường local ổn định, dữ liệu demo và minh chứng báo cáo — Bửu điều phối. Deploy không thuộc phạm vi nghiệm thu đồ án hiện tại; các ghi chú staging/production phía dưới là kế hoạch cũ/tham khảo, không phải yêu cầu bắt buộc.
 
 Khách mua vé bằng email và không tạo tài khoản. Nhóm đã thống nhất **đưa Ticket Retrieval và controlled ticket-email redelivery vào phạm vi đồ án**, do Tài sở hữu. Khách có thể yêu cầu gửi lại vé bằng email, nhưng API luôn trả phản hồi trung tính, có reCAPTCHA/rate limit và chỉ gửi dữ liệu của Order đã xác nhận. Gửi lại phải dùng đúng QR gốc, không xoay credential; email thông báo hủy Event vẫn là workflow `order_cancelled` riêng.
 
+### Địa điểm duy nhất, Nhật ký/Báo cáo toàn hệ thống và giao diện — cập nhật 17/10/2026
+
+Chi tiết, bảng quy tắc, mã lỗi, ma trận quyền và kết quả kiểm thử nằm ở **[07 — Địa điểm, Báo cáo, giao diện](docs/project-guide/07-venue-reports-theme.md)**; mục này chỉ tóm tắt. Các số liệu ở [05](docs/project-guide/05-concert-ui-review.md) và [06](docs/project-guide/06-redesign-review.md) là lịch sử. Tiến độ từng trang Admin/Staff/Login: [kế hoạch redesign](docs/admin-redesign-plan.md). Mọi thay đổi đã commit trên `buu-events`, chờ review/merge (phần Public/Orders cần Tài, Check-in/Staff/Nhật ký/Báo cáo cần Khôi).
+
+- **Một địa điểm cố định.** Admin nhập tên, địa chỉ, thành phố và sức chứa tại **Cài đặt → Địa điểm tổ chức** (bảng một dòng `platform_settings`); Event mới sao chép thông tin này, không nhập lại. Backend chặn hai Event trùng khung `[checkin_start_at, end_time]` (chạm biên cũng trùng, Event hủy giải phóng địa điểm), an toàn khi nhiều Admin thao tác cùng lúc (khóa dòng cài đặt + trigger). Event đã bán vé không đổi được địa điểm.
+- **Thể loại âm nhạc.** `categories.kind` (`music`/`other`) và chế độ toàn hệ thống **Chỉ thể loại âm nhạc** (mặc định) / **Mở rộng tất cả danh mục** do backend kiểm tra khi tạo hoặc đổi danh mục Event. Danh mục và Event cũ được giữ nguyên.
+- **Nhật ký và Báo cáo mặc định "Tất cả sự kiện"**: `eventId` tùy chọn; chọn Event có phân trang phía server; tỷ lệ tính từ tổng tử/mẫu số; bản chụp (snapshot) 15 phút gắn Admin làm màn hình và file Excel khớp nhau. Không đổi quyền của Staff.
+- **Theme sáng/tối** (sáng mặc định) cho Admin, Staff và Login dùng chung token `client/src/styles/ticketbox-tokens.css`; nút Sáng/Tối lưu theo tài khoản trên trình duyệt (Admin có thêm **Tự động** theo giờ Việt Nam). Public có nút Sáng/Tối riêng (Tài: `layouts/PublicLayout.tsx`, `styles/public-theme.css`, mặc định Tối) và không dùng các token này. Font/cỡ chữ Admin vẫn ở **Cài đặt → Giao diện** (14/15/17px, `localStorage` theo tài khoản, không đồng bộ thiết bị).
+- Mọi trang Admin dựng lại theo mẫu Bento của Tổng quan (Sự kiện có 4 chế độ xem, Hạng vé, Danh mục, Nhân viên, Đơn hàng, Nhật ký check-in, Báo cáo, Cài đặt), shell có tìm nhanh Ctrl/⌘+K, chuông "Việc cần xử lý" và hướng dẫn "Bắt đầu với TicketBox". Cổng Nhân viên `/staff/*` làm lại (phán quyết quét bằng chữ, số vé toàn cổng, giữ màn hình sáng, tạm dừng soát vé khi mất mạng). Login dạng cuống vé với hai vai trò, nhớ vai trò lần trước, quên/đặt lại mật khẩu Admin. Routing là data router có thanh tiến trình khi đổi trang; đo bố cục bằng `npm run audit:layout`.
+- **Chưa làm / cần lưu ý:** database đang dùng cần clean-install để có bảng mới (đến khi đó API mới trả `503 PLATFORM_SCHEMA_UPGRADE_REQUIRED`); chưa nghiệm thu Google, SMTP, camera/QR trên thiết bị thật, MySQL 8.0.x và macOS; snapshot nằm trong bộ nhớ một tiến trình. Hai seed (`seed:admin-demo`, `seed:workflows`) không chạy chung một database vì mỗi bộ có một Event "đang diễn ra" mà địa điểm chỉ chứa một. 10 concert demo nay xếp mỗi ngày một concert từ ngày mai (giờ Việt Nam: Event 15:00–17:00, check-in 13:00–16:30).
+
 ## 5. Cấu trúc repository hiện có
+
+Phần cây thư mục dưới đây mô tả nền tảng; thư mục skill mới nêu trên bổ sung vào `.agents/skills`.
 
 ```text
 ticketbox-QR/
@@ -127,7 +146,7 @@ ticketbox-QR/
 ├── client/                         # React + Vite + TypeScript
 ├── server/                         # Express + TypeScript
 ├── database/migrations/
-│   └── 001_initial_schema.sql      # Clean-install schema 13 bảng; DROP/CREATE
+│   └── 001_initial_schema.sql      # Clean-install schema 14 bảng; DROP/CREATE
 └── scripts/verify.ps1              # Kiểm tra client và server trên Windows/PowerShell
 ```
 
@@ -136,11 +155,14 @@ Seed thực tế nằm ở `server/src/database`; repository không có `databas
 ## 6. Cấu trúc frontend hiện có
 
 - `client/src/pages/public`: Home, Event List/Detail, Checkout và Order Payment/Result.
-- `client/src/pages/auth`: Login Admin/Staff bằng mật khẩu hiện có và Google Staff sign-in.
+- `client/src/pages/auth`: Login Admin/Staff bằng mật khẩu hiện có và Google Staff sign-in; `ResetPasswordPage` cho đặt lại mật khẩu Admin (token chỉ nằm sau `#`).
 - `client/src/pages/admin`: Dashboard, Categories, Events, Ticket Types, Staff, Orders, Check-in Logs và Reports.
-- `client/src/pages/staff` và `client/src/components/checkin`: Assigned Events, camera/manual Scanner, Result và Recent Logs.
+- `client/src/pages/staff` và `client/src/components/checkin`: Assigned Events, camera/manual Scanner, Result (phán quyết bằng chữ, `scan-verdict.ts`) và Recent Logs.
+- `client/src/components/admin`: thành phần Admin dùng lại (`EventScopeSelect`, `EventCoverUploader`), `ui/` (hệ thống thiết kế Admin: PageHeader, KpiCard, DataTable, FilterBar, SlideOver…), `shell/` (khung Admin: điều hướng, Ctrl/⌘+K, chuông việc cần xử lý, hướng dẫn thiết lập `SetupGuide`), và một thư mục cho từng trang: `events/`, `ticket-types/`, `categories/`, `staff/`, `orders/`, `checkins/` (Nhật ký), `settings/` (Cài đặt); `components/shared/ThemeToggle.tsx` và `lib/ticketbox-theme.ts` cho theme sáng/tối.
+- `client/src/styles`: `ticketbox-tokens.css` (token dùng chung), `admin/` (`theme.css` ghi đè sáng/tối, `legacy.css` bố cục cũ, từng trang), `staff/` (`theme.css`, `portal.css`), `auth/login.css`; Public giữ `theme.css`, `fonts.css`, `tailwind.css` và `public-theme.css` (sáng/tối của Public).
 - `client/src/components/layout/Header.tsx`: Public Header; không có nút Login/Register sau thay đổi hiện tại.
-- `client/src/layouts`, `routes`, `services`, `context`, `types`, `styles`: layout, route protection, giao tiếp API, auth state, kiểu dữ liệu và giao diện. `event-realtime.service.ts` giữ một WebSocket dùng chung, tự reconnect và yêu cầu trang gọi lại REST khi trạng thái Event đổi.
+- `client/src/routes`: data router `router.tsx` (`createBrowserRouter`, `lazy` theo route, guard theo vai trò), `page-loaders.ts` (chunk trang Admin/Staff được tải sẵn) và `RouteFallbacks.tsx` (màn tải đầu, trang 404, lỗi tải trang).
+- `client/src/layouts`, `services`, `context`, `types`, `styles`: layout, route protection, giao tiếp API, auth state, kiểu dữ liệu và giao diện. `event-realtime.service.ts` giữ một WebSocket dùng chung, tự reconnect và yêu cầu trang gọi lại REST khi trạng thái Event đổi.
 
 Client hiện dùng `fetch` trong `client/src/services/api.ts`; không mô tả là Axios. Trang khách không có tài khoản, nên không có route đăng ký/đăng nhập khách. Route `/login` được giữ cho Admin/Staff.
 
@@ -152,11 +174,13 @@ Client hiện dùng `fetch` trong `client/src/services/api.ts`; không mô tả 
 - `server/src/modules/admin-staff`: duyệt/quản lý Staff và Event assignment.
 - `server/src/modules/checkout`: xác minh email, giữ chỗ, Order, simulated Payment, phát hành Ticket/QR và email đầu tiên.
 - `server/src/modules/checkins`: Staff Assigned Events, check-in và Recent Logs.
-- `server/src/modules/reports`: Admin Check-in Logs, Reports và export Excel.
+- `server/src/modules/reports`: Admin Check-in Logs, Reports (mặc định tất cả sự kiện), snapshot gắn Admin và export Excel; `report.metrics.ts` giữ phép tính tỷ lệ từ tổng.
+- `server/src/modules/platform-settings`: địa điểm duy nhất và phạm vi danh mục (`/api/admin/platform-settings`).
 - `server/src/services`: OTP email, gửi mail và sinh QR.
 - `server/src/jobs`: Order expiry, auth-session cleanup, email thông báo hủy Event, scheduled publish và Event lifecycle mỗi giây.
 - `server/src/realtime/event-status.gateway.ts`: WebSocket `/ws/events`, heartbeat `ping/pong` và broadcast trạng thái Event sau commit; không truyền dữ liệu vé/đơn hàng hoặc secret.
-- `server/src/database`: seed tài khoản, dữ liệu QA và workflow verifier; `server/tests`: test hiện có.
+- `server/src/realtime/admin-signals.gateway.ts`: WebSocket `/ws/admin` chỉ cho Admin đang hoạt động (token gửi ở tin nhắn đầu, không trong URL; Origin phải là `CLIENT_URL`); 5 giây so “dấu vân tay” tác vụ một lần khi có Admin kết nối và chỉ gửi tên chủ đề thay đổi. `realtime/upgrade-router.ts` cho hai kênh dùng chung một HTTP server.
+- `server/src/database`: seed tài khoản, dữ liệu QA/demo (dùng địa điểm hệ thống qua `seed-venue.ts`) và workflow verifier; `server/tests`: test hiện có, gồm 4 suite MySQL tích hợp (`checkout`, `ticket-credential`, `venue-schedule`, `report`) chỉ chạy trên `ticketboxqr_test_*`.
 
 Backend theo Route → validation/auth middleware → Controller → Service → Repository → MySQL. Transaction và SQL nằm ở repository; service điều phối nghiệp vụ. Các chức năng chưa triển khai được ghi ở mục 4 và các task tuần 4–8.
 ## 8. Database
@@ -167,7 +191,8 @@ Database `ticketboxqr` có các bảng nghiệp vụ cốt lõi sau:
 |---|---|
 | `users` | Tài khoản Admin và Staff |
 | `auth_sessions` | Refresh session đã hash, rotation và thu hồi phiên đăng nhập |
-| `categories` | Danh mục Event do Admin quản lý; Event tham chiếu bằng khóa ngoại |
+| `categories` | Danh mục Event do Admin quản lý (`kind` = thể loại âm nhạc hoặc khác); Event tham chiếu bằng khóa ngoại |
+| `platform_settings` | Một dòng: địa điểm duy nhất (tên, địa chỉ, thành phố, sức chứa), phạm vi danh mục cho Event mới, người sửa; cũng là điểm khóa chống trùng lịch |
 | `events` | Thông tin và trạng thái sự kiện |
 | `event_staff` | Phân công Staff vào Event |
 | `ticket_types` | Loại vé, giá, sức chứa và thời gian bán |
@@ -204,11 +229,14 @@ Ticket
 ### Luồng quản trị
 
 1. Admin đăng nhập.
-2. Admin tạo Event.
-3. Admin tạo Ticket Type cho Event.
-4. Admin công khai Event.
-5. Admin phân công Staff.
-6. Admin theo dõi đơn hàng và báo cáo.
+2. Admin nhập địa điểm tổ chức một lần tại Cài đặt (và chọn phạm vi danh mục nếu cần).
+3. Admin tạo Event: chọn thể loại âm nhạc và lịch; địa điểm lấy từ Cài đặt; lịch không được trùng Event khác.
+4. Admin tạo Ticket Type cho Event (tổng vé không vượt sức chứa địa điểm).
+5. Admin công khai Event.
+6. Admin phân công Staff.
+7. Admin theo dõi đơn hàng, Nhật ký check-in và Báo cáo (mặc định tất cả sự kiện).
+
+Các bước 2–6 có hướng dẫn **Bắt đầu với TicketBox** (nút danh sách kiểm tra trên thanh trên cùng của Admin): mỗi bước tự đánh dấu xong theo dữ liệu đang có, bước chưa làm được bị khóa kèm lý do, nút đưa tới đúng chỗ (ví dụ `/admin/events?create=1` mở form tạo sự kiện). Dialog tự mở tối đa một lần mỗi phiên khi còn bước chưa xong và có thể tắt tự mở theo tài khoản.
 
 ### Luồng hoàn tiền mô phỏng
 
@@ -218,7 +246,7 @@ Project môn học không chuyển tiền thật. Khi Admin hủy một Event c�
 2. Admin mô phỏng xử lý theo state machine `pending -> processing -> completed|failed`; trường hợp `failed` có thể đưa lại `pending|processing` để thử lại.
 3. `completed` ghi `completed_at`; `failed` bắt buộc có lý do an toàn. Không gọi ngân hàng/cổng thanh toán, không sửa Payment `success` và không thông báo rằng tiền thật đã về tài khoản khách.
 4. Email hủy Event chỉ nói yêu cầu hoàn tiền đã được ghi nhận trong hệ thống mô phỏng. Reports chỉ trừ Refund `completed` khỏi doanh thu mô phỏng.
-5. Code hiện mới tạo Refund `pending`, Dashboard/Reports đọc dữ liệu; API/UI cho Admin chuyển trạng thái mô phỏng và test state transition vẫn là phần còn thiếu của Tài, Bửu review workflow/schema.
+5. Đã có API chuyển trạng thái một đơn (`PATCH /api/admin/orders/:id/refund`) và hàng loạt theo sự kiện (`PATCH /api/admin/orders/events/:eventId/refunds`), UI Admin Orders và test state transition. Nghiệm thu bằng dữ liệu thực/demo vẫn tách riêng; không coi Refund mô phỏng là chuyển tiền thật.
 
 ### Đồng bộ trạng thái Event real-time
 
@@ -239,14 +267,16 @@ Project môn học không chuyển tiền thật. Khi Admin hủy một Event c�
 
 **Flow gán nhân viên cho Event:**
 
-1. Admin chọn Staff đang active và một hoặc nhiều Event còn ở trạng thái `draft`, `published` hoặc `ongoing`, đồng thời chưa qua `end_time`. Màn gán không hiển thị Event đã kết thúc/completed/cancelled; backend vẫn kiểm tra lại điều kiện này trong transaction.
-2. Backend từ chối phân công trùng Staff–Event đang active hoặc Event có thời gian tổ chức chồng lấn với Event khác mà Staff đó đang nhận; khi hợp lệ, lưu từng phân công trong `event_staff` cùng Admin thực hiện và thời điểm gán.
-3. Staff đăng nhập và chỉ thấy Event được phân công còn hiệu lực ở trạng thái `published|ongoing` và chưa qua `end_time`, chọn đúng Event trước khi quét QR/nhập mã. Quyền check-in vẫn được backend kiểm tra theo trạng thái Staff, assignment và cửa sổ check-in; đăng nhập thành công không tự cấp quyền vào mọi Event.
+1. Admin chọn Staff đang active và Event chưa terminal, chưa đóng cổng (`checkin_end_at` còn hiệu lực). Màn gán loại Event đã kết thúc/completed/cancelled; backend kiểm tra lại trong transaction.
+2. Backend từ chối phân công trùng Staff–Event đang active hoặc chồng lấn **khung giờ làm việc check-in** `[checkin_start_at, checkin_end_at]` với phân công khác, kể cả hai ca chạm nhau ở biên. Không dùng giờ Event bắt đầu để tính ca. Giờ mở cổng cùng ngày Việt Nam và sớm ít nhất hai giờ so với Event; lưu từng phân công với Admin/thời điểm, không ghi đè lịch sử.
+3. Staff đăng nhập; bộ chọn soát vé chỉ trả Event có phân công active, trạng thái `published|ongoing`, chưa kết thúc và **đang trong khung check-in** (`GET /api/staff/events`). Trang phân công riêng có các nhóm đang mở, sắp tới/chuẩn bị và lịch sử; không gộp lịch sử vào bộ chọn quét. Staff chọn đúng Event trước khi quét QR/nhập mã. Backend kiểm tra lại trạng thái Staff, assignment và cửa sổ check-in; đăng nhập thành công không tự cấp quyền vào mọi Event.
 4. Admin gỡ phân công bằng `is_active = FALSE` và `revoked_at`, không xóa hàng lịch sử. Khi đổi lịch Event, cần xử lý các phân công active trước rồi mới gán lại theo lịch mới. Staff không thể tự gán Event; chỉ Admin xem lịch sử tổng thể.
 
 Commit chung hiện có API Google login và Admin Staff UI/API cho duyệt/từ chối, kích hoạt/vô hiệu hóa, sửa tên, gán/gỡ Event và xem lịch sử phân công. Schema có `google_sub`, `staff_approval_status` và metadata duyệt; `password_hash` nullable để hỗ trợ tài khoản Google không có mật khẩu TicketBox. Các trigger chặn Staff inactive, Event đã đóng và lịch chồng lấn; thu hồi phân công xảy ra trước khi vô hiệu hóa. Phần còn thiếu là clean-install schema và UAT với Google Client ID/tài khoản thật.
 
 API Bửu dùng cho flow này: `POST /api/auth/google`; `GET /api/admin/staff`; `PATCH /api/admin/staff/:staffId`; `PATCH /api/admin/staff/:staffId/status`; `POST /api/admin/staff/:staffId/assignments`; `DELETE /api/admin/staff/:staffId/assignments/:assignmentId`. Các API `/api/admin/staff` chỉ dành cho Admin; request Google `pending` trả HTTP 202, không kèm phiên ứng dụng.
+
+Quên mật khẩu (chỉ Admin có mật khẩu): `POST /api/auth/password-reset/request` `{ email }` luôn trả 202 với cùng một câu, dù email có thuộc tài khoản hay không; nếu là Admin đang hoạt động, server gửi email (sau khi trả lời, ngoài transaction) chứa liên kết `/reset-password#token=…` dùng một lần trong 30 phút. `POST /api/auth/password-reset/confirm` `{ token, newPassword }` đặt mật khẩu mới theo đúng luật đổi mật khẩu và thu hồi mọi phiên (`400 RESET_TOKEN_INVALID`, `400 PASSWORD_REUSED`). Token ký HMAC theo hash mật khẩu hiện tại nên không cần bảng mới; giới hạn 5 yêu cầu/15 phút mỗi IP và 1 email/phút mỗi địa chỉ. Cần `MAIL_USER`/`MAIL_APP_PASSWORD` để thật sự gửi được email.
 
 ### Luồng đặt vé
 
@@ -363,7 +393,7 @@ FLUSH PRIVILEGES;
 
 Không đưa mật khẩu trên vào Git và không dùng tài khoản MySQL `root` để chạy backend.
 
-Schema gồm Users/Auth Sessions, Categories, Events, Event Staff, Ticket Types, Orders, Order Items, Tickets, Payments, Refunds, Check-in Logs, Email Logs, indexes, constraints và triggers. Báo cáo hiện truy vấn trực tiếp từ bảng nghiệp vụ, không có reporting view trong SQL.
+Schema gồm Users/Auth Sessions, Categories, Platform Settings, Events, Event Staff, Ticket Types, Orders, Order Items, Tickets, Payments, Refunds, Check-in Logs, Email Logs, indexes, constraints và triggers. Báo cáo hiện truy vấn trực tiếp từ bảng nghiệp vụ, không có reporting view trong SQL.
 
 ### Chạy backend
 
@@ -453,6 +483,30 @@ http://localhost:5173
 cd client
 npm run lint
 npm run build
+node --test tests/*.test.cjs
+```
+
+Đo độ ổn định bố cục khi chuyển trang (Admin, Staff, Login) trên trình duyệt thật, chạy với dev server của **DB dùng một lần** (cần Chrome hoặc Edge, Node 22 trở lên, không cài thêm gói). Tài khoản chỉ đọc từ biến môi trường, không ghi vào file:
+
+```powershell
+cd client
+$env:AUDIT_BASE_URL="http://localhost:5173"; $env:AUDIT_ADMIN_EMAIL="..."; $env:AUDIT_ADMIN_PASSWORD="..."
+$env:AUDIT_STAFF_EMAIL="..."; $env:AUDIT_STAFF_PASSWORD="..."   # tùy chọn
+npm run audit:layout -- --width=1440          # thêm --slow để giả lập mạng chậm, --json để lấy số liệu
+```
+
+Script chỉ bấm link điều hướng; báo lỗi khi trang cũ còn trên màn hình quá 600 ms sau khi bấm, khung trang lệch quá 2px khi đang tải, khung trang khác nhau giữa các trang, hoặc CLS > 0.1.
+
+Trước khi phát hành, đo trên **bản build chính thức** (Vite dev tải từng module riêng nên số liệu kém sát thực tế). API dùng cho bản build phải cho phép origin của preview (`CLIENT_URL`):
+
+```powershell
+cd client
+$env:VITE_API_BASE_URL="http://localhost:3000/api"   # API của stack dùng một lần
+npm run build
+npm run preview -- --port 4173 --strictPort         # để chạy ở một cửa sổ khác
+$env:AUDIT_BASE_URL="http://localhost:4173"
+npm run audit:layout -- --width=1440; npm run audit:layout -- --width=768; npm run audit:layout -- --width=390
+npm run audit:layout -- --width=390 --slow
 ```
 
 ### Backend
@@ -519,7 +573,7 @@ Event -> Orders theo id tăng dần -> Ticket Types theo id tăng dần -> Ticke
 - Thanh toán: không cạnh tranh tồn kho mới; chỉ khóa Event và Order để chống thanh toán lặp, chuyển phần vé Order đã giữ từ reserved sang sold, xác nhận Order, ghi Payment và phát hành Ticket trong một transaction.
 - Check-in: khóa Event và kiểm tra assignment, sau đó khóa Order/Ticket, đổi Ticket sang `checked_in` và ghi log trong một transaction.
 - Cancel Event: khóa Event cùng toàn bộ Order, đóng bán, nhả giữ chỗ, hủy pending Order/Payment, vô hiệu QR, tạo Refund mô phỏng và queue Email Log trong một transaction. SMTP chạy ngoài transaction; project không gọi provider hoàn tiền thật.
-- Lifecycle theo thời gian: server đồng bộ `published -> ongoing` khi đến `start_time` và `ongoing -> completed` khi qua `end_time` lúc khởi động, mỗi 10 giây và ngay sau seed demo/workflow. Admin/Public làm mới nền mỗi 10 giây; API vẫn suy ra trạng thái hiệu lực theo thời gian tại lúc trả dữ liệu để hai giao diện không lệch nhau.
+- Lifecycle theo thời gian: server đồng bộ `published -> ongoing` khi đến `start_time` và `ongoing -> completed` khi qua `end_time`, với job mỗi giây và sau seed demo/workflow. WebSocket thông báo thay đổi đã commit để Admin/Public gọi lại REST; fallback refresh 60 giây. Job hẹn giờ công bố chạy mỗi 30 giây. API vẫn suy ra trạng thái hiệu lực khi trả dữ liệu; Event cancelled không tự chuyển sang completed.
 
 ### Quy tắc dữ liệu không được phá vỡ
 
@@ -547,6 +601,18 @@ Admin Categories là nhiệm vụ của Bửu và là nguồn dữ liệu độn
 
 Slug danh mục đã được Event sử dụng không được đổi. Danh mục inactive không xuất hiện trong form tạo Event mới nhưng Event cũ vẫn giữ quan hệ và lịch sử.
 
+Từ 17/10/2026 mỗi danh mục có `kind` (`music` hoặc `other`, mặc định `other`); `GET` trả thêm `kind` và `selectableForNewEvent`. `PATCH` chỉ đổi các trường được gửi (trước đây Zod 4 đặt lại `isActive`/`sortOrder` ngầm).
+
+### Cài đặt nền tảng (Admin)
+
+| Method | Endpoint | Ý nghĩa |
+|---|---|---|
+| `GET` | `/api/admin/platform-settings` | Địa điểm, phạm vi danh mục, số Event nháp/đã công bố còn địa điểm cũ, người/thời điểm sửa |
+| `PUT` | `/api/admin/platform-settings/venue` | `{ name, address, city, capacity }` |
+| `PUT` | `/api/admin/platform-settings/category-scope` | `{ scope: "music_only" hoặc "all" }`; backend kiểm tra khi tạo/đổi danh mục Event |
+
+Tạo Event không còn nhận `venue/address/city/venueCapacity`. Mã lỗi, quy tắc chống trùng lịch và sửa địa điểm của Event cũ: xem [07](docs/project-guide/07-venue-reports-theme.md). Cập nhật database có sẵn **không** có migration tăng dần; cần chạy lại schema trên database có thể xóa.
+
 Lưu ý: một số lệnh test chỉ hoạt động sau khi nhóm bổ sung file kiểm thử.
 
 ## 13. Kế hoạch triển khai 8 tuần và checklist theo thành viên
@@ -560,7 +626,7 @@ Kế hoạch này là nguồn đối chiếu với Trello. Mỗi tuần có đú
 **Bửu — Leader, Platform và CSDL**
 
 - [x] Khởi tạo repo, cấu trúc `client/server/database` và các package nền.
-- [x] Phân tích nghiệp vụ tổng thể và vẽ ERD cho schema 13 bảng.
+- [x] Phân tích nghiệp vụ tổng thể và vẽ ERD cho schema 13 bảng (nay 14 với `platform_settings`).
 - [x] Tạo consolidated schema, MySQL pool, seed và `/api/health`.
 - [x] Viết `AGENTS.md`, README, quy ước branch/PR và hướng dẫn nhóm chạy dự án.
 - Bàn giao: repo chạy được, ERD/schema và tài liệu nền có minh chứng.
@@ -861,7 +927,8 @@ Camera dừng khi đóng, đổi Event hoặc rời trang, và có thể đóng 
 | Method | Endpoint | Kết quả |
 |---|---|---|
 | GET | `/api/staff/events` | Event có assignment active của Staff hiện tại |
-| POST | `/api/staff/events/:eventId/checkins` | Kiểm tra và check-in với body `{ "code": "TKT-…" }` |
+| POST | `/api/staff/events/:eventId/checkins` | Kiểm tra và check-in với body `{ "code": "TKT-…" }`; kết quả có `ticket.ticketTypeName` (tên hạng vé lưu lúc mua, không gửi khi `WRONG_EVENT`) |
+| GET | `/api/staff/events/:eventId/attendance` | Số vé toàn cổng `{ admitted, validTickets, remaining }` (admitted cùng điều kiện "đã vào" của Báo cáo); chỉ đọc, chỉ cho Staff đang được phân công và trong khung check-in (`403 STAFF_NOT_ASSIGNED`, `409 EVENT_NOT_AVAILABLE`) |
 | GET | `/api/staff/events/:eventId/checkins` | 20 lần quét mới nhất của chính Staff tại Event được phân công |
 
 Tất cả endpoint yêu cầu Bearer token và role `staff`; Admin không được dùng API
@@ -920,22 +987,23 @@ trên thiết bị thật vẫn cần nghiệm thu.
 
 ## Admin Check-in Logs và Reports (Khôi)
 
-- `/admin/checkins`: chọn Event, lọc ngày, Staff ID, kết quả; phân trang 20 dòng;
-  giữ cả mã sai không có Ticket. Xuất toàn bộ dữ liệu khớp bộ lọc (tối đa 10.000 dòng),
-  không chỉ trang đang xem. Nếu vượt giới hạn, API yêu cầu thu hẹp bộ lọc.
-- `/admin/reports`: chọn Event, khoảng ngày, xem số đơn xác nhận, vé bán/phát hành,
-  vé đã vào, tổng lần quét/từ chối, tiền thu/hoàn/thu ròng. Không có dữ liệu trong kỳ
-  thì trả số 0; Event không tồn tại trả 404.
-- `GET /api/admin/reports/events?q=...`: tìm tối đa 100 Event theo tên.
-- `GET /api/admin/reports?eventId=...&from=YYYY-MM-DD&to=YYYY-MM-DD`: số liệu Event.
-- `GET /api/admin/checkins?eventId=...&from=...&to=...&staffId=...&result=...&page=1&limit=20`: lịch sử.
-- Thêm `/export` vào hai endpoint reports/checkins để tải `.xlsx`; chỉ bỏ các tham
-  số phân trang khi muốn xuất toàn bộ. Cả hai endpoint đều áp dụng cùng bộ lọc.
+- `/admin/checkins`: mặc định **mọi lượt quét của tất cả sự kiện**; lọc Event (chọn có tìm kiếm và "Tải thêm"),
+  ngày, Staff ID, kết quả; phân trang 20 dòng phía server; giữ cả mã sai không có Ticket.
+  Cột Sự kiện hiện khi xem tất cả.
+- `/admin/reports`: mặc định **tất cả sự kiện không phải Bản nháp** (gồm đã kết thúc/hủy và chưa có
+  hoạt động); tổng hợp + chi tiết từng sự kiện, kèm `N / M` dưới mỗi tỷ lệ; lọc một Event hoặc khoảng ngày.
+- `GET /api/admin/reports/events?q&page&limit`: Event có phân trang và `meta.total` (không còn cắt 100).
+- `GET /api/admin/reports?eventId?&from&to&groupBy&page&limit&snapshotId?` và
+  `GET /api/admin/checkins?eventId?&from&to&staffId&result&page&limit&snapshotId?`: `eventId` tùy chọn,
+  client cũ gửi `eventId` vẫn chạy.
+- Thêm `/export` (cùng `snapshotId`) để tải `.xlsx` đúng bản đang xem; nhật ký tối đa 10.000 dòng.
 
-Tất cả API trên yêu cầu Admin, `Cache-Control: no-store`. Xuất giới hạn 5 file/phút/
-Admin/tiến trình. Excel có sheet bộ lọc, thời gian xuất và sheet dữ liệu; cột tiền
-là số, chuỗi bắt đầu `=` vẫn là văn bản, không tạo công thức từ dữ liệu người dùng.
-Không xuất QR token hoặc hash bí mật.
+Tất cả API trên yêu cầu Admin, `Cache-Control: no-store`; xem 120 lượt/phút, xuất 5 file/phút/Admin/tiến trình.
+**Snapshot** (id ngẫu nhiên, TTL 15 phút, tối đa 20/Admin, lưu trong bộ nhớ một tiến trình) gắn Admin tạo ra
+nó: Admin khác, id lạ hoặc hết hạn đều trả `410 SNAPSHOT_EXPIRED`; bộ lọc khác snapshot trả
+`409 SNAPSHOT_FILTER_MISMATCH`. Excel có sheet bộ lọc (kèm **thời điểm chụp**) và sheet từng sự kiện với hàng
+tổng dùng công thức `SUM` và tỷ số của các tổng; chuỗi bắt đầu `=` vẫn là văn bản. Không xuất QR token
+hoặc hash bí mật. Chi tiết: [07](docs/project-guide/07-venue-reports-theme.md).
 
 ### Định nghĩa số liệu
 
@@ -953,11 +1021,12 @@ nghĩa là không giới hạn khoảng thời gian. Mỗi chỉ số dùng th�
 | Thu ròng | Đã thu trừ đã hoàn trong kỳ; có thể âm |
 
 Tổng hợp Payments, Refunds, Orders và Check-in Logs độc lập để không nhân số tiền
-khi một đơn có nhiều vé/lần quét. Mỗi lần đọc báo cáo hoặc count+danh sách log dùng
-một transaction read-only với snapshot nhất quán. Báo cáo không sửa lịch sử giao dịch.
-Xuất Excel là một snapshot mới tại lúc bấm tải, có thể khác trang vừa xem nếu đang
-có giao dịch mới. Thay đổi bộ lọc trên form chưa ảnh hưởng dữ liệu/export cho đến
-khi bấm **Áp dụng bộ lọc**.
+khi một đơn có nhiều vé/lần quét. Khi gộp nhiều Event, **tỷ lệ luôn tính từ tổng tử số / tổng mẫu số**
+(lấp đầy = Σ vé bán / Σ sức chứa hạng vé, mẫu số không lọc ngày; tham dự = Σ vé vào / Σ vé bán), không
+lấy trung bình phần trăm từng Event. Mỗi lần xem là một transaction read-only với snapshot nhất quán;
+nhật ký là bảng chỉ thêm nên snapshot lưu bộ lọc và mốc `id` cao nhất. Báo cáo không sửa lịch sử giao dịch.
+Excel luôn render từ snapshot đang xem (không đọc lại DB lúc tải). Thay đổi bộ lọc trên form chưa ảnh
+hưởng dữ liệu/export cho đến khi bấm **Áp dụng bộ lọc**.
 
 ### Môi trường Windows và macOS
 
@@ -965,10 +1034,24 @@ khi bấm **Áp dụng bộ lọc**.
 - Windows PowerShell: `Copy-Item server/.env.example server/.env`, `Copy-Item client/.env.example client/.env.local`; macOS/Linux Terminal: `cp server/.env.example server/.env`, `cp client/.env.example client/.env.local`. Chạy các lệnh này từ root nếu file chưa tồn tại; không ghi đè cấu hình hiện có.
 - Cài dependencies bằng `npm ci` ở từng thư mục. Chạy `npm run dev` trong hai terminal riêng từ `server` và `client`. Vite mặc định `http://localhost:5173`, API `http://localhost:3000`; giữ `CLIENT_URL` và Google OAuth origin khớp URL dùng thực tế.
 - Windows có thể chạy `./scripts/verify.ps1 -Scope all`. macOS/Linux chạy lệnh npm của mục 12. Chỉ chạy SQL clean-install và seed trên database thử nghiệm có thể xóa, tuyệt đối không trên dữ liệu cần giữ.
+- **Bật kiểm thử MySQL tích hợp**: `node scripts/verify-ticket-email.mjs` cần tài khoản có quyền tạo database `ticketboxqr_test_*`. Cấp một lần bằng tài khoản quản trị MySQL (đổi tên user nếu khác): ``GRANT ALL ON `ticketboxqr\_test\_%`.* TO 'ticketbox_app'@'localhost';``. Script tạo và xóa đúng database nó tạo. Nó chạy Vitest lượt 1 (các suite tự tạo Event), rồi `seed:workflows`, Vitest lượt 2 (suite đọc fixture QA: credential, báo cáo) và `db:verify`; tách hai lượt vì địa điểm chỉ chứa một Event "đang diễn ra".
+- **MySQL riêng cho kiểm thử** (khi không có quyền trên MySQL đang dùng): khởi tạo một instance tạm, ví dụ `mysqld --initialize-insecure --datadir=<thư-mục-tạm>` rồi `mysqld --datadir=<thư-mục-tạm> --port=3399 --bind-address=127.0.0.1`, đặt mật khẩu root tạm, rồi chạy script trên với `DB_HOST=127.0.0.1 DB_PORT=3399 DB_USER=root DB_PASSWORD=...` (biến môi trường ghi đè `.env`). Windows PowerShell dùng `$env:DB_PORT = "3399"`; macOS/Linux đặt biến ngay trước lệnh `node`. Quote đường dẫn có khoảng trắng; tắt và xóa thư mục tạm khi xong.
 
 ### Bằng chứng và giới hạn nghiệm thu
 
-Lần kiểm tra gần nhất ngày 25/09/2026 trên working tree P0/P1, base commit `1146eca`:
+**Mới nhất — 17/10/2026** (Windows 11, Node 24, MySQL 9.5 tạm ở cổng 3399 chỉ để kiểm thử; không phải database của dự án), working tree `buu-events` chưa commit:
+
+| Kiểm tra | Kết quả |
+|---|---|
+| server `typecheck`, `build` | đạt |
+| server Vitest bỏ `*.integration.test.ts` | 37 file, 286/286 |
+| `node scripts/verify-ticket-email.mjs` (database dùng một lần) | lượt 1: 39 file, 308/308; lượt 2 (credential + báo cáo qua HTTP): 16/16; `db:verify` 30/30 |
+| client `lint`, `build`, `node --test tests/*.test.cjs` | đạt; 40/40 |
+| UI tự động (Edge headless): tương phản, chữ <12px, tràn ngang, hộp thoại | Admin 9 trang + Staff 4 trang + Login × sáng/tối × 1440/768/390 (Staff 1440/390), không lỗi |
+
+Đây là bằng chứng tự động và kiểm tra giao diện bằng trình duyệt tự động; **không** thay thế UAT. Chưa kiểm chứng: Google sign-in thật, SMTP/inbox, camera và quét QR trên thiết bị, MySQL 8.0.x, macOS, database đang dùng của bạn (chưa có bảng mới), môi trường triển khai. Chi tiết và danh sách việc còn lại: [07](docs/project-guide/07-venue-reports-theme.md).
+
+Bằng chứng lịch sử ngày 25/09/2026 trên working tree P0/P1, base commit `1146eca` (không thay thế lần kiểm tra giao diện 06/10/2026 nêu ở mục 4):
 
 - Client lint/build và server typecheck pass.
 - Vitest thực thi 137 test thành công và bỏ qua 14 test cần fixture; lệnh tổng thể trả exit code 1 vì hai suite tích hợp chủ động từ chối chạy khi `DB_NAME` không bắt đầu bằng `ticketboxqr_test_`. Vì vậy không được ghi “toàn bộ test pass” cho lần chạy này.
@@ -983,7 +1066,7 @@ Lần kiểm tra gần nhất ngày 25/09/2026 trên working tree P0/P1, base co
 - Configure `RECAPTCHA_SECRET_KEY` on the server and `VITE_RECAPTCHA_SITE_KEY` in the client using a matching reCAPTCHA **v3** key pair. Register the actual frontend hostname in Google. Restart the server and rebuild/restart Vite after configuration changes. `RECAPTCHA_MIN_SCORE` defaults to `0.5`; optional `RECAPTCHA_HOSTNAME` restricts the verified hostname. Missing keys fail closed with a generic message.
 - Google integration follows https://developers.google.com/recaptcha/docs/v3 and https://developers.google.com/recaptcha/docs/verify: execute at submit time, verify server-side, and check the expected action and score.
 - Existing `MAIL_USER`, `MAIL_APP_PASSWORD`, and `MAIL_FROM_NAME` configure delivery. No credentials are included in client code.
-- `POST /api/tickets/retrieval` accepts `{ email, recaptchaToken }`, action `ticket_retrieval`. It acknowledges every accepted request with the same neutral message. Background work selects confirmed orders only and sends each order's active tickets to its buyer email. Empty results send no mail. This endpoint never requires an OTP.
+- `POST /api/tickets/retrieval` accepts `{ email, recaptchaToken }`, action `ticket_retrieval`. It acknowledges every accepted request with the same neutral message. Selection requires confirmed orders, issued tickets and visible, non-ended published/ongoing Events. If an Event becomes unavailable before the locked enqueue check, that order is skipped with the same acknowledgement; other eligible orders continue. Empty results send no mail. This endpoint never requires an OTP, and acknowledgement does not prove SMTP delivery.
 - `POST /api/orders/verify-email/request` accepts `{ email, recaptchaToken }`, action `checkout_email`. `POST /api/orders/verify-email/confirm` accepts `{ email, otp }`. Both require a random UUID `X-Checkout-Session` header generated for the current checkout. OTP expires after 5 minutes and is invalidated after 5 incorrect attempts. Confirmation returns a token valid for 15 minutes and bound to the normalized email and checkout session.
 - Order creation at `/api/checkout/orders` (also `/api/orders`) sends the same `X-Checkout-Session` plus `emailVerificationToken` and the existing `Idempotency-Key`. Successful creation consumes verification; retries of the same order retain the existing idempotency behavior. `/api/checkout/email-verifications` aliases now require the same reCAPTCHA/session contract; confirm uses `otp` instead of `code`. Email verification accepts valid non-Gmail addresses too.
 - Each flow limits both IP and normalized email to one accepted request per 60 seconds. HTTP 429 returns `code: RATE_LIMITED`, `retryAfterSeconds`, and `Retry-After`. Limits and verification records use `node-cache`; restart clears them. Deploy this implementation as a single server process; multiple replicas require a shared cache/sticky-session design before rollout.

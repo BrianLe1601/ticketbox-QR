@@ -1,0 +1,119 @@
+/* Admin Đơn hàng (Tài's module, UI-only rebuild) — Bento reference. Tokens only; imported by
+   AdminOrdersPage. The detail panel is portaled, so its rules also match body[data-admin-appearance]. */
+
+.admin-room .ordp {
+  .ord-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .ord-chip {
+    display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 6px 0 12px; border: 1px solid var(--tb-border); border-radius: 999px;
+    background: var(--tb-surface); color: var(--tb-text); font: inherit; font-size: max(12px, .88em); font-weight: 600; cursor: pointer;
+  }
+  .ord-chip:hover:not(:disabled) { border-color: var(--tb-accent); }
+  .ord-chip:focus-visible { outline: 3px solid var(--tb-focus); outline-offset: 2px; }
+  .ord-chip:disabled { cursor: progress; opacity: .7; }
+  .ord-chip.is-active { border-color: var(--tb-accent); background: var(--tb-accent); color: var(--tb-on-accent); }
+  .ord-chip-count { min-width: 22px; padding: 1px 7px; border-radius: 999px; background: var(--tb-surface-2); color: var(--tb-text); font-size: 12px; text-align: center; }
+  .ord-chip.is-active .ord-chip-count { background: var(--tb-surface); color: var(--tb-heading); }
+  .bento-card > .adm-filterbar { margin: 0; }
+
+  .ord-code, .ord-buyer, .ord-tiers { display: grid; gap: 2px; min-width: 0; }
+  .ord-code strong { color: var(--tb-heading); }
+  .ord-code span, .ord-buyer span, .ord-tiers span:last-child { color: var(--tb-secondary); font-size: max(12px, .85em); }
+  .ord-buyer strong { color: var(--tb-text); overflow-wrap: anywhere; }
+  .ord-buyer span { overflow-wrap: anywhere; }
+  .ord-event { display: grid; justify-items: start; gap: 4px; min-width: 140px; }
+  .ord-tiers span:first-child { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; max-width: 220px; }
+  .ord-amount { display: grid; justify-items: end; gap: 2px; }
+  .ord-amount span { color: var(--tb-secondary); font-size: max(12px, .85em); }
+  .ord-status { display: grid; justify-items: start; gap: 4px; }
+  .ord-actions { display: inline-flex; align-items: center; gap: 4px; justify-content: flex-end; }
+  .ord-empty { display: grid; justify-items: center; gap: 4px; padding: 28px 12px; color: var(--tb-secondary); text-align: center; }
+  .ord-empty svg { color: var(--tb-muted); }
+  .ord-empty strong { color: var(--tb-text); }
+  .ord-note { margin: 0; color: var(--tb-secondary); font-size: max(12px, .85em); }
+
+
+  /* refund centre */
+  .rc, .rc-done { scroll-margin-top: calc(var(--adm-topbar-h, 64px) + 120px); }
+  .rc-summary { display: grid; gap: 8px; }
+  .rc-summary:focus { outline: none; }
+  .rc-summary p { margin: 0; color: var(--tb-text); }
+  .rc-summary strong { color: var(--tb-heading); }
+  .rc-failed { color: var(--tb-danger); font-weight: 700; }
+  .rc-bar { display: block; height: 10px; border-radius: 999px; background: var(--tb-ring-track); overflow: hidden; box-shadow: inset 0 0 0 1px var(--tb-border); }
+  .rc-bar > span { display: block; height: 100%; background: var(--tb-success-solid); }
+  .rc-errors { margin: 4px 0 0; padding-left: 18px; }
+  .rc-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .rc-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 14px; background: var(--tb-surface-2); }
+  .rc-name { display: grid; gap: 4px; min-width: 0; }
+  .rc-name strong { color: var(--tb-text); overflow-wrap: anywhere; }
+  .rc-counts { display: flex; flex-wrap: wrap; gap: 4px 6px; }
+  .rc-amount { display: grid; justify-items: end; gap: 1px; }
+  .rc-amount strong { color: var(--tb-heading); }
+  .rc-amount span { color: var(--tb-secondary); font-size: max(12px, .85em); }
+  .rc-actions { display: inline-flex; align-items: center; gap: 4px; }
+  .rc-done {
+    grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 12px 16px; border-radius: var(--tb-radius-card);
+    background: var(--tb-success-soft); color: var(--tb-success); font-weight: 600;
+  }
+  .rc-done:focus { outline: none; }
+}
+
+/* detail panel */
+:is(.admin-room, body[data-admin-appearance]) {
+  .od-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 10px 0; }
+  .od-flags { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+  .od-total { color: var(--tb-heading); font-size: 1.15em; }
+  .od-total small { color: var(--tb-secondary); font-size: max(12px, .75em); font-weight: 600; }
+  .od { display: grid; gap: 14px; min-width: 0; }
+  .od > * { min-width: 0; }
+  .od .adm-tab-panel { display: grid; gap: 12px; padding-top: 12px; }
+  .od-muted { color: var(--tb-secondary); }
+  .od-dl { display: grid; margin: 0; }
+  .od-row { display: grid; grid-template-columns: minmax(110px, 32%) minmax(0, 1fr); gap: 12px; padding: 8px 0; border-bottom: 1px dashed var(--tb-grid); }
+  .od-row:last-child { border-bottom: 0; }
+  .od-row dt { color: var(--tb-secondary); }
+  .od-row dd { margin: 0; color: var(--tb-text); font-weight: 600; overflow-wrap: anywhere; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .od-h { margin: 4px 0 0; color: var(--tb-heading); font-size: 1em; font-weight: 700; }
+  .od-items { width: 100%; border-collapse: collapse; font-size: .95em; }
+  .od-items th, .od-items td { padding: 8px 6px; border-bottom: 1px dashed var(--tb-grid); text-align: left; color: var(--tb-text); }
+  .od-items thead th { color: var(--tb-muted); font-size: 12px; font-weight: 700; background: var(--tb-surface-2); }
+  .od-items tfoot th { color: var(--tb-secondary); font-weight: 600; background: transparent; }
+  .od-items .is-num { text-align: right; white-space: nowrap; }
+  .od-rule { margin: 0; padding: 10px 12px; border-radius: 12px; background: var(--tb-surface-2); color: var(--tb-secondary); font-size: max(12px, .88em); }
+  .od-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .od-list li { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--tb-surface-2); }
+  .od-list-main { display: grid; gap: 2px; min-width: 0; }
+  .od-list-main > span { color: var(--tb-secondary); font-size: max(12px, .85em); overflow-wrap: anywhere; }
+  .od-list-side { display: grid; justify-items: end; gap: 4px; flex: none; color: var(--tb-secondary); font-size: max(12px, .85em); }
+  .od-code { font-family: var(--tb-font-mono); color: var(--tb-text); }
+  .od-error { color: var(--tb-danger) !important; font-weight: 600; }
+  .od-tab-actions { display: flex; justify-content: flex-end; }
+  .od-refund-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px; border-radius: 12px; background: var(--tb-surface-2); }
+  .od-refund-head > span { display: grid; }
+  .od-refund-head strong { color: var(--tb-heading); font-size: 1.4em; }
+  .od-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .od-steps li { display: flex; align-items: flex-start; gap: 8px; padding: 10px; border-radius: 12px; background: var(--tb-surface-2); border: 1px solid transparent; }
+  .od-steps li > span:last-child { display: grid; gap: 1px; min-width: 0; }
+  .od-steps strong { color: var(--tb-text); font-size: .95em; }
+  .od-steps small { color: var(--tb-secondary); font-size: 12px; }
+  .od-step-dot { display: grid; place-items: center; flex: none; width: 24px; height: 24px; border-radius: 50%; background: var(--tb-surface); color: var(--tb-secondary); font-size: 12px; font-weight: 800; border: 1px solid var(--tb-border-strong); }
+  .od-steps li.is-done .od-step-dot { background: var(--tb-success-solid); border-color: transparent; color: var(--tb-on-solid); }
+  .od-steps li.is-current { border-color: var(--tb-accent); background: var(--tb-accent-soft); }
+  .od-steps li.is-current .od-step-dot { background: var(--tb-accent); border-color: transparent; color: var(--tb-on-accent); }
+  .od-steps li.is-failed { border-color: var(--tb-danger-border); background: var(--tb-danger-soft); }
+  .od-steps li.is-failed .od-step-dot { background: var(--tb-danger-solid); border-color: transparent; color: var(--tb-on-solid); }
+  .od-step-action { display: grid; gap: 10px; justify-items: start; padding: 12px; border-radius: 12px; border: 1px solid var(--tb-border); }
+  .od-step-action p { margin: 0; color: var(--tb-secondary); }
+  .od-step-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+  .od-step-action .adm-field { width: 100%; }
+}
+
+@media (max-width: 760px) {
+  .admin-room .ordp .rc-list li { grid-template-columns: minmax(0, 1fr) auto; }
+  .admin-room .ordp .rc-amount { justify-items: start; grid-column: 1; }
+  .admin-room .ordp .rc-actions { grid-column: 2; grid-row: 1 / span 2; align-self: start; flex-direction: column; align-items: flex-end; }
+  :is(.admin-room, body[data-admin-appearance]) .od-row { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  :is(.admin-room, body[data-admin-appearance]) .od-steps { grid-template-columns: minmax(0, 1fr); }
+  :is(.admin-room, body[data-admin-appearance]) .od-list li { flex-direction: column; }
+  :is(.admin-room, body[data-admin-appearance]) .od-list-side { justify-items: start; }
+}

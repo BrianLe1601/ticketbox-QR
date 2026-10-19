@@ -6,15 +6,26 @@ export const categoryIdSchema = z.object({ id: z.coerce.number().int().positive(
 export const categoryListSchema = z.object({
   includeInactive: z.enum(["true", "false"]).transform((value) => value === "true").default(false),
 });
-export const createCategorySchema = z.object({
+
+// Fields without defaults. Zod 4 applies defaults even inside .partial(), so the
+// update schema must be derived from this base: otherwise renaming a Category
+// would silently reset is_active, kind and sort_order.
+const categoryFields = z.object({
   name: z.string().trim().min(2).max(100),
   slug,
   description: z.string().trim().max(500).nullable().optional(),
   icon: z.string().trim().max(50).nullable().optional(),
-  sortOrder: z.number().int().min(0).max(10000).default(0),
-  isActive: z.boolean().default(true),
+  kind: z.enum(["music", "other"]),
+  sortOrder: z.number().int().min(0).max(10000),
+  isActive: z.boolean(),
+});
+
+export const createCategorySchema = categoryFields.extend({
+  kind: categoryFields.shape.kind.default("other"),
+  sortOrder: categoryFields.shape.sortOrder.default(0),
+  isActive: categoryFields.shape.isActive.default(true),
 }).strict();
-export const updateCategorySchema = createCategorySchema.partial().strict();
+export const updateCategorySchema = categoryFields.partial().strict();
 
 export type CreateCategoryInput = z.infer<typeof createCategorySchema>;
 export type UpdateCategoryInput = z.infer<typeof updateCategorySchema>;

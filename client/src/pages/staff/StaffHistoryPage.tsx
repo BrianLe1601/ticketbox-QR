@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react';
-import { History, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Filter, History, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { CHECKIN_LABELS, scanVerdict } from '@/components/checkin/scan-verdict';
+import { StaffEmptyState } from '@/components/staff/StaffEmptyState';
+import { ASSIGNMENT_STATE, historySummary } from '@/lib/staff-portal';
 import { getAssignmentCheckins, getStaffAssignments } from '@/services/checkin.service';
 import type { CheckinLog, StaffAssignment } from '@/services/checkin.service';
 
-const labels: Record<string, string> = { SUCCESS: 'Thành công', ALREADY_CHECKED_IN: 'Đã check-in', WRONG_EVENT: 'Sai sự kiện', CANCELLED: 'Vé đã hủy', UNPAID: 'Chưa thanh toán', INVALID: 'Không hợp lệ', EVENT_NOT_AVAILABLE: 'Ngoài giờ check-in', STAFF_NOT_ASSIGNED: 'Chưa phân công' };
-const assignmentStateLabels: Record<StaffAssignment['operationalState'], string> = {
-  checkin_open: 'Đang mở cổng', upcoming: 'Sắp tới', preparing: 'Đang chuẩn bị',
-  checkin_closed: 'Đã đóng cổng', completed: 'Đã kết thúc', cancelled: 'Đã hủy', revoked: 'Đã thu hồi',
-};
 const format = (value: string) => new Date(value).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+const timeOnly = (value: string) => new Date(value).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+const dateOnly = (value: string) => new Date(value).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', day: '2-digit', month: '2-digit', year: 'numeric' });
 
 export function StaffHistoryPage() {
   const { token } = useAuth();
@@ -22,6 +22,7 @@ export function StaffHistoryPage() {
   const [logTotal, setLogTotal] = useState(0);
   const [logReload, setLogReload] = useState(0);
   const [result, setResult] = useState<CheckinLog['code'] | ''>('');
+  const [summary, setSummary] = useState<{ total: number; allowed: number; refused: number } | null>(null);
   const [loadingAssignments, setLoadingAssignments] = useState(true);
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [assignmentError, setAssignmentError] = useState('');
@@ -39,7 +40,7 @@ export function StaffHistoryPage() {
           setAssignments(data); setAssignmentTotal(meta?.total ?? 0);
           setLogPage(1);
           if (data.length === 0) {
-            setSelectedId(''); setLogs([]); setLogTotal(0); setLoadingLogs(false); setLogsError('');
+            setSelectedId(''); setLogs([]); setLogTotal(0); setLoadingLogs(false); setLogsError(''); setSummary(null);
           } else {
             setLoadingLogs(true);
             setSelectedId((current) => data.some((item) => String(item.assignmentId) === current) ? current : String(data[0]!.assignmentId));
@@ -62,16 +63,164 @@ export function StaffHistoryPage() {
     return () => controller.abort();
   }, [selectedId, token, logPage, result, logReload]);
 
+  // Summary strip: two server totals for the whole assignment (all results / SUCCESS), never page-derived.
+  useEffect(() => {
+    if (!selectedId) return;
+    const controller = new AbortController();
+    const id = Number(selectedId);
+    Promise.all([
+      getAssignmentCheckins(id, token, { page: 1, limit: 1 }, controller.signal),
+      getAssignmentCheckins(id, token, { page: 1, limit: 1, result: 'SUCCESS' }, controller.signal),
+    ])
+      .then(([all, success]) => { if (!controller.signal.aborted) setSummary(historySummary(all.meta?.total ?? 0, success.meta?.total ?? 0)); })
+      .catch(() => { if (!controller.signal.aborted) setSummary(null); });
+    return () => controller.abort();
+  }, [selectedId, token, logReload]);
+
   const assignmentPages = Math.max(1, Math.ceil(assignmentTotal / assignmentLimit));
   const logPages = Math.max(1, Math.ceil(logTotal / logLimit));
   const selectedAssignment = assignments.find((assignment) => String(assignment.assignmentId) === selectedId) ?? null;
-  return <div className="space-y-5">
-    <div><h2 className="text-xl font-bold text-slate-100">Lịch sử quét vé cá nhân</h2><p className="mt-1 text-sm text-slate-400">Hiển thị các lượt quét do chính bạn thực hiện ở cả ca đang mở, đã kết thúc hoặc đã được thu hồi.</p></div>
-    {assignmentError && <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-300" role="alert">{assignmentError}</div>}
-    <div className="flex flex-wrap items-end justify-between gap-3 rounded-xl border border-white/10 bg-slate-900/60 p-4"><label className="grid w-full gap-1.5 text-sm font-semibold text-slate-200 sm:w-auto"><span className="flex items-center gap-2"><History size={17} className="text-cyan-400" />Sự kiện được phân công</span><select value={selectedId} disabled={loadingAssignments || assignments.length === 0} onChange={(event) => { setLoadingLogs(true); setLogPage(1); setSelectedId(event.target.value); }} className="min-h-[40px] w-full rounded-lg border border-cyan-500/30 bg-slate-950 px-3 text-sm text-slate-100 focus-visible:outline-2 focus-visible:outline-cyan-300 sm:min-w-80">{assignments.length === 0 ? <option value="">Chưa có sự kiện được phân công</option> : assignments.map((assignment) => <option key={assignment.assignmentId} value={assignment.assignmentId}>{assignment.name} · {assignmentStateLabels[assignment.operationalState]}</option>)}</select>{selectedAssignment && <small className="font-normal text-amber-200">Ca check-in: {format(selectedAssignment.checkinStartAt)} — {format(selectedAssignment.checkinEndAt)}</small>}</label><label className="grid gap-1.5 text-xs font-semibold text-slate-300">Kết quả<select value={result} onChange={(event) => { setLoadingLogs(true); setLogPage(1); setResult(event.target.value as CheckinLog['code'] | ''); }} className="min-h-[40px] rounded-lg border border-white/10 bg-slate-950 px-3 text-sm text-slate-100"><option value="">Tất cả kết quả</option>{Object.entries(labels).map(([code, label]) => <option key={code} value={code}>{label}</option>)}</select></label><button type="button" disabled={loadingLogs || !selectedId} onClick={() => { setLoadingLogs(true); setLogPage(1); setLogReload((value) => value + 1); }} className="staff-page-button"><RefreshCw size={14} className={loadingLogs ? 'animate-spin' : ''} />Làm mới</button></div>
-    {assignmentPages > 1 && <nav className="flex justify-end gap-2 text-xs text-slate-400" aria-label="Phân trang sự kiện được phân công"><button className="staff-page-button" type="button" disabled={assignmentPage === 1} onClick={() => { setLoadingAssignments(true); setAssignmentPage((page) => page - 1); }}><ChevronLeft size={14} />Trước</button><span className="self-center">{assignmentPage}/{assignmentPages}</span><button className="staff-page-button" type="button" disabled={assignmentPage === assignmentPages} onClick={() => { setLoadingAssignments(true); setAssignmentPage((page) => page + 1); }}>Sau<ChevronRight size={14} /></button></nav>}
-    {logsError && <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-300" role="alert">{logsError}</div>}
-    <div className="overflow-x-auto rounded-xl border border-white/10 bg-slate-900/60"><table className="w-full text-left text-sm text-slate-200"><caption className="border-b border-white/10 p-4 text-left font-bold text-slate-100">Lượt quét do bạn thực hiện · {logTotal} kết quả</caption><thead className="bg-slate-950/60 text-xs uppercase tracking-wider text-slate-400"><tr><th scope="col" className="p-3.5">Thời điểm</th><th scope="col" className="p-3.5">Mã quét đã che</th><th scope="col" className="p-3.5">Kết quả</th><th scope="col" className="p-3.5">Thông báo</th></tr></thead><tbody className="divide-y divide-white/5">{loadingLogs ? <tr><td colSpan={4} className="p-6 text-center text-xs text-slate-400">Đang tải lịch sử soát vé...</td></tr> : logs.length === 0 ? <tr><td colSpan={4} className="p-6 text-center text-xs text-slate-400">{selectedId ? 'Bạn chưa có lượt quét phù hợp tại sự kiện này.' : 'Chưa có sự kiện để xem lịch sử quét.'}</td></tr> : logs.map((log) => <tr key={log.id} className="hover:bg-white/[0.02]"><td className="whitespace-nowrap p-3.5 text-xs text-slate-300">{format(log.checkedAt)}</td><td className="whitespace-nowrap p-3.5 font-mono text-xs text-cyan-300">{log.scannedCode}</td><td className="p-3.5 text-xs font-semibold text-slate-200">{labels[log.code] ?? log.code}</td><td className="p-3.5 text-xs text-slate-300">{log.message}</td></tr>)}</tbody></table></div>
-    {logPages > 1 && <nav className="flex items-center justify-center gap-3" aria-label="Phân trang lịch sử lượt quét"><button className="staff-page-button" type="button" disabled={logPage === 1} onClick={() => { setLoadingLogs(true); setLogPage((page) => page - 1); }}><ChevronLeft size={16} />Trước</button><span className="text-xs text-slate-400">Trang {logPage}/{logPages}</span><button className="staff-page-button" type="button" disabled={logPage === logPages} onClick={() => { setLoadingLogs(true); setLogPage((page) => page + 1); }}>Sau<ChevronRight size={16} /></button></nav>}
-  </div>;
+  const chooseResult = (next: CheckinLog['code'] | '') => {
+    if (next === result) return;
+    setLoadingLogs(true);
+    setLogPage(1);
+    setResult(next);
+  };
+
+  return (
+    <div className="sp-page">
+      <header className="sp-page-head">
+        <div>
+          <h1>Lịch sử quét vé cá nhân</h1>
+          <p>Các lượt quét do chính bạn thực hiện ở ca đang mở, đã kết thúc hoặc đã được thu hồi. Dữ liệu chỉ đọc.</p>
+        </div>
+      </header>
+
+      {assignmentError && <div className="sp-alert is-danger" role="alert">{assignmentError}</div>}
+
+      <div className="sp-card sp-history-filters">
+        <label className="sp-field">
+          <span><History size={16} aria-hidden="true" />Sự kiện được phân công</span>
+          <select
+            value={selectedId}
+            disabled={loadingAssignments || assignments.length === 0}
+            onChange={(event) => {
+              setLoadingLogs(true);
+              setLogPage(1);
+              setSummary(null);
+              setSelectedId(event.target.value);
+            }}
+          >
+            {assignments.length === 0 ? (
+              <option value="">Chưa có sự kiện được phân công</option>
+            ) : (
+              assignments.map((assignment) => (
+                <option key={assignment.assignmentId} value={assignment.assignmentId}>
+                  {assignment.name} · {ASSIGNMENT_STATE[assignment.operationalState].label}
+                </option>
+              ))
+            )}
+          </select>
+          {/* Always one line, so the filter card keeps its height before the shifts are loaded. */}
+          <small aria-hidden={!selectedAssignment}>{selectedAssignment ? <>Ca check-in: {format(selectedAssignment.checkinStartAt)} — {format(selectedAssignment.checkinEndAt)}</> : '\u00a0'}</small>
+        </label>
+
+        <label className="sp-field">
+          <span><Filter size={16} aria-hidden="true" />Kết quả quét</span>
+          <select value={result} disabled={!selectedId} onChange={(event) => chooseResult(event.target.value as CheckinLog['code'] | '')}>
+            <option value="">Tất cả kết quả</option>
+            {Object.entries(CHECKIN_LABELS).map(([code, label]) => (
+              <option key={code} value={code}>{label}</option>
+            ))}
+          </select>
+        </label>
+
+        <button
+          type="button"
+          disabled={loadingLogs || !selectedId}
+          onClick={() => { setLoadingLogs(true); setLogPage(1); setLogReload((value) => value + 1); }}
+          className="sp-btn sp-btn--outline sp-history-refresh"
+        >
+          <RefreshCw size={16} className={loadingLogs ? 'animate-spin' : ''} aria-hidden="true" />Làm mới
+        </button>
+      </div>
+
+      {assignmentPages > 1 && (
+        <nav className="sp-pager is-end" aria-label="Phân trang sự kiện được phân công">
+          <button className="sp-btn sp-btn--ghost sp-btn--sm" type="button" disabled={assignmentPage === 1}
+            onClick={() => { setLoadingAssignments(true); setAssignmentPage((page) => page - 1); }}><ChevronLeft size={16} aria-hidden="true" />Sự kiện trước</button>
+          <span className="tb-num">{assignmentPage}/{assignmentPages}</span>
+          <button className="sp-btn sp-btn--ghost sp-btn--sm" type="button" disabled={assignmentPage === assignmentPages}
+            onClick={() => { setLoadingAssignments(true); setAssignmentPage((page) => page + 1); }}>Sự kiện sau<ChevronRight size={16} aria-hidden="true" /></button>
+        </nav>
+      )}
+
+      {logsError && <div className="sp-alert is-danger" role="alert">{logsError}</div>}
+
+      <section className="sp-card sp-history" aria-labelledby="sp-history-title">
+        <header className="sp-history-head">
+          <h2 id="sp-history-title">Lượt quét do bạn thực hiện · <span className="tb-num">{logTotal}</span> kết quả</h2>
+          {(selectedId || loadingAssignments) && (
+            <div className="sp-summary" aria-label="Tổng hợp cả ca trực đã chọn">
+              <button type="button" className="sp-summary-item" aria-pressed={result === ''} onClick={() => chooseResult('')}
+                aria-label={`Hiện tất cả lượt quét: ${summary?.total ?? '—'}`}>
+                Tổng lượt quét <strong className="tb-num">{summary?.total ?? '—'}</strong>
+              </button>
+              <button type="button" className="sp-summary-item is-ok" aria-pressed={result === 'SUCCESS'} onClick={() => chooseResult('SUCCESS')}
+                aria-label={`Chỉ hiện lượt cho vào: ${summary?.allowed ?? '—'}`}>
+                Cho vào <strong className="tb-num">{summary?.allowed ?? '—'}</strong>
+              </button>
+              <span className="sp-summary-item is-static is-bad">
+                Từ chối / trùng <strong className="tb-num">{summary?.refused ?? '—'}</strong>
+              </span>
+            </div>
+          )}
+        </header>
+
+        {loadingLogs ? (
+          <p className="sp-loading" role="status">Đang tải lịch sử soát vé…</p>
+        ) : logs.length === 0 ? (
+          <StaffEmptyState icon={History} title={selectedId ? 'Chưa có lượt quét cho bộ lọc hiện tại' : 'Chưa có sự kiện để xem lịch sử quét'}>
+            <p>{selectedId ? (result ? 'Thử chọn "Tất cả kết quả" hoặc một ca trực khác.' : 'Lượt quét bạn thực hiện tại cổng sẽ xuất hiện ở đây.') : 'Khi được phân công và quét vé, lịch sử của bạn sẽ được lưu ở đây.'}</p>
+          </StaffEmptyState>
+        ) : (
+          <div className="sp-table-wrap">
+            <table className="sp-table">
+              <thead>
+                <tr>
+                  <th scope="col">Thời điểm</th>
+                  <th scope="col">Mã quét đã che</th>
+                  <th scope="col">Kết quả</th>
+                  <th scope="col">Thông báo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {logs.map((log) => {
+                  const tone = scanVerdict(log.code).tone;
+                  return (
+                    <tr key={log.id}>
+                      <td><strong className="tb-num">{timeOnly(log.checkedAt)}</strong><span className="sp-table-sub tb-num">{dateOnly(log.checkedAt)}</span></td>
+                      <td><span className="sp-code tb-mono">{log.scannedCode}</span></td>
+                      <td><span className={`sp-status is-${tone}`}>{CHECKIN_LABELS[log.code] ?? log.code}</span></td>
+                      <td className="sp-table-msg">{log.message}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {logPages > 1 && (
+        <nav className="sp-pager" aria-label="Phân trang lịch sử lượt quét">
+          <button className="sp-btn sp-btn--ghost sp-btn--sm" type="button" disabled={logPage === 1}
+            onClick={() => { setLoadingLogs(true); setLogPage((page) => page - 1); }}><ChevronLeft size={16} aria-hidden="true" />Trước</button>
+          <span className="tb-num">Trang {logPage}/{logPages}</span>
+          <button className="sp-btn sp-btn--ghost sp-btn--sm" type="button" disabled={logPage === logPages}
+            onClick={() => { setLoadingLogs(true); setLogPage((page) => page + 1); }}>Sau<ChevronRight size={16} aria-hidden="true" /></button>
+        </nav>
+      )}
+    </div>
+  );
 }

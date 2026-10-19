@@ -104,7 +104,7 @@ function renderForm(f, checkout) {
         useState(initial) {
             const index = cursor++;
             if (!(index in states)) states[index] = checkout && index === 0
-                ? { id: '1', shortTitle: 'Test', tickets: [{ id: '1', price: 100, name: 'VIP' }] } : initial;
+                ? { id: '1', shortTitle: 'Test', tickets: [{ id: '1', price: 100, name: 'VIP', saleStatus: 'on-sale', maxPerOrder: 5, available: 10 }] } : initial;
             return [states[index], value => { states[index] = value; }];
         },
         useEffect() {}, useMemo: fn => fn(), useRef: value => ({ current: value }), useId: () => 'test-id',

@@ -1,0 +1,339 @@
+/* Admin app shell — Mint/Teal Bento: floating rounded teal sidebar with profile, quick summary
+   and logout; a slim topbar on the canvas (search, task bell, theme). Class names adm-shell-*. */
+
+.adm-shell {
+  --adm-gap: 20px;                 /* sidebar floats this far from the viewport edges */
+  --adm-sidebar-w: 250px;
+  --adm-topbar-h: 64px;
+  --adm-gutter: 24px;
+  min-height: 100vh;
+  background: var(--tb-bg);
+  color: var(--tb-text);
+  font-family: var(--admin-font, system-ui, sans-serif);
+  font-size: var(--admin-font-size, 15px);
+  line-height: 1.5;
+}
+.adm-shell.is-collapsed { --adm-sidebar-w: 76px; }
+/* No global scroll-behavior: smooth. Focus-driven scrolling would then emit scroll events for
+   ~300ms, and Radix closes tooltips on scroll, so keyboard users lost every disabled-reason tooltip. */
+/* Reserve the scrollbar lane on every page: short and long pages (or a page while it loads) would
+   otherwise toggle the scrollbar and shift the centred workspace by half its width (~8px). */
+html:has(.adm-shell) { background: var(--tb-bg); scrollbar-gutter: stable; }
+
+.adm-skip-link { position: absolute; left: 12px; top: -48px; z-index: 100; padding: 8px 14px; border-radius: 8px; background: var(--tb-accent); color: var(--tb-on-accent); font-weight: 600; text-decoration: none; }
+.adm-skip-link:focus { top: 12px; outline: 3px solid var(--tb-focus); outline-offset: 2px; }
+
+/* ---------- floating sidebar ---------- */
+.adm-shell-sidebar {
+  position: fixed; z-index: 40; top: var(--adm-gap); bottom: var(--adm-gap); left: var(--adm-gap);
+  display: flex; flex-direction: column; gap: 16px;
+  width: var(--adm-sidebar-w); padding: 22px 16px 16px;
+  background: var(--tb-nav-bg); color: var(--tb-nav-text);
+  border-radius: var(--tb-radius-sidebar); box-shadow: var(--tb-nav-shadow);
+  overflow: hidden auto; scrollbar-width: thin; scrollbar-color: var(--tb-nav-surface) transparent;
+  transition: width .2s ease;
+}
+.adm-shell-sidebar :focus-visible { outline: 2px solid var(--tb-nav-focus); outline-offset: 2px; }
+
+.adm-shell-profile { position: relative; display: grid; justify-items: center; gap: 10px; text-align: center; flex: none; }
+.adm-shell-close { position: absolute; top: -8px; right: -4px; }
+.adm-shell-logo { display: block; border-radius: 50%; text-decoration: none; }
+.adm-shell-avatar {
+  display: grid; place-items: center; width: 76px; height: 76px; border-radius: 50%;
+  background: var(--tb-nav-strong); color: var(--tb-nav-active-ink); border: 4px solid var(--tb-nav-surface);
+  font-size: 1.5em; font-weight: 800; letter-spacing: .02em;
+}
+.adm-shell-profile-text { display: grid; justify-items: center; gap: 6px; min-width: 0; }
+.adm-shell-name { color: var(--tb-nav-strong); font-weight: 700; font-size: 1.02em; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adm-shell-role {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 12px; border-radius: 999px;
+  background: var(--tb-nav-strong); color: var(--tb-nav-active-ink); font-size: 12px; font-weight: 700; text-decoration: none;
+}
+.adm-shell-role:hover { background: var(--tb-accent-soft); }
+
+.adm-shell-nav { flex: 1 0 auto; }
+.adm-shell-nav ul { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.adm-nav-link {
+  position: relative; display: flex; align-items: center; gap: 12px; width: 100%; height: 42px; padding: 0 12px;
+  border: 0; border-radius: 12px; background: transparent; color: var(--tb-nav-text);
+  font: inherit; font-size: .95em; font-weight: 600; text-align: left; text-decoration: none; white-space: nowrap; cursor: pointer;
+  transition: background-color .15s, color .15s;
+}
+.adm-nav-link svg { flex: none; }
+.adm-nav-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.adm-nav-link:hover { background: var(--tb-nav-hover); color: var(--tb-nav-hover-text); }
+.adm-nav-link.is-active { background: var(--tb-nav-active); color: var(--tb-nav-on-active); font-weight: 700; }
+.adm-nav-dot { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--tb-nav-on-active); }
+.adm-nav-badge { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; border-radius: 999px; background: var(--tb-nav-badge); color: var(--tb-nav-badge-text); font-size: 12px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+.adm-nav-badge.is-live { background: transparent; color: var(--tb-nav-live); padding: 0; text-transform: uppercase; letter-spacing: .06em; }
+.adm-nav-live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--tb-nav-live); animation: adm-pulse 1.6s ease-in-out infinite; }
+
+/* quick summary box (replaces the template's "Message" box) */
+.adm-shell-summary { flex: none; padding: 14px; border-radius: 16px; background: var(--tb-nav-surface); color: var(--tb-nav-text); }
+.adm-shell .adm-shell-summary-title { display: flex; align-items: center; justify-content: space-between; margin: 0 0 8px; color: var(--tb-nav-strong); font-size: .9em; line-height: 1.3; font-weight: 700; }
+.adm-shell-summary-live { padding: 2px 8px; border-radius: 999px; background: var(--tb-nav-badge); color: var(--tb-nav-badge-text); font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
+.adm-shell-summary dl { display: grid; gap: 6px; margin: 0; }
+.adm-shell-summary dl > div { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.adm-shell-summary dt { display: inline-flex; align-items: center; gap: 8px; font-size: max(12px, .85em); }
+.adm-shell-summary dd { margin: 0; color: var(--tb-nav-strong); font-weight: 700; font-size: .9em; }
+.adm-shell-summary-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--tb-nav-strong); }
+
+.adm-shell-sidebar-foot { flex: none; display: grid; gap: 4px; }
+.adm-shell-logout {
+  display: flex; align-items: center; gap: 12px; width: 100%; height: 48px; padding: 0 8px;
+  border: 0; border-radius: 999px; background: transparent; color: var(--tb-nav-strong);
+  font: inherit; font-weight: 700; cursor: pointer; text-align: left;
+}
+.adm-shell-logout:hover { background: var(--tb-nav-hover); }
+.adm-shell-logout-icon { display: grid; place-items: center; width: 36px; height: 36px; flex: none; border-radius: 50%; background: var(--tb-nav-strong); color: var(--tb-nav-active-ink); }
+/* Collapse toggle: top-right corner of the expanded sidebar; first row (centred) when collapsed. */
+.adm-shell-collapse { position: absolute; z-index: 1; top: 12px; right: 12px; display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 10px; background: var(--tb-nav-hover); color: var(--tb-nav-strong); cursor: pointer; flex: none; }
+.adm-shell-collapse:hover { background: var(--tb-nav-active); color: var(--tb-nav-on-active); }
+.adm-shell-nav-icon.adm-btn--ghost { color: var(--tb-nav-strong); }
+.adm-shell-nav-icon.adm-btn--ghost:hover { background: var(--tb-nav-hover); color: var(--tb-nav-strong); }
+
+/* Collapsed: icons only, tooltips carry the labels, badges shrink to dots. */
+.adm-shell.is-collapsed {
+  .adm-shell-sidebar { padding: 18px 10px 12px; }
+  .adm-shell-avatar { width: 48px; height: 48px; border-width: 3px; font-size: 1em; }
+  .adm-shell-profile-text, .adm-nav-text, .adm-nav-badge-text, .adm-nav-dot { display: none; }
+  .adm-nav-link, .adm-shell-logout { justify-content: center; padding: 0; gap: 0; }
+  .adm-shell-collapse { position: static; align-self: center; }
+  .adm-nav-badge { position: absolute; top: 6px; right: 8px; width: 10px; height: 10px; padding: 0; border-radius: 50%; background: var(--tb-nav-live); box-shadow: 0 0 0 2px var(--tb-nav-bg); }
+  .adm-nav-badge:not(.is-live) { background: var(--tb-nav-count-dot); }
+  .adm-nav-badge .adm-nav-live-dot { display: none; }
+}
+
+/* ---------- main column ---------- */
+.adm-shell-main { min-width: 0; margin-left: calc(var(--adm-sidebar-w) + var(--adm-gap) * 2); transition: margin-left .2s ease; }
+.adm-shell-topbar {
+  position: sticky; top: 0; z-index: 30; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  height: var(--adm-topbar-h); padding: var(--adm-gap) var(--adm-gutter) 0 0;
+  background: var(--tb-bg);
+}
+.adm-shell-topbar-start, .adm-shell-topbar-end { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.adm-shell-crumb ol { display: flex; align-items: center; gap: 8px; margin: 0; padding: 0; list-style: none; font-size: .9em; color: var(--tb-secondary); white-space: nowrap; }
+.adm-shell-crumb li + li::before { content: "/"; margin-right: 8px; color: var(--tb-border-strong); }
+.adm-shell-crumb a { color: var(--tb-secondary); text-decoration: none; border-radius: 4px; }
+.adm-shell-crumb a:hover { color: var(--tb-accent-text); text-decoration: underline; }
+.adm-shell-crumb a:focus-visible { outline: 3px solid var(--tb-focus); outline-offset: 2px; }
+.adm-shell-crumb [aria-current="page"] { color: var(--tb-heading); font-weight: 700; }
+
+.adm-shell-search {
+  display: inline-flex; align-items: center; gap: 8px; width: 260px; height: 38px; padding: 0 12px;
+  border: 1px solid transparent; border-radius: 999px; background: var(--tb-surface); color: var(--tb-muted);
+  box-shadow: var(--tb-shadow-sm); font: inherit; font-size: .9em; cursor: pointer; text-align: left;
+}
+.adm-shell-search:hover { color: var(--tb-text); }
+.adm-shell-search:focus-visible { border-color: var(--tb-accent); outline: 3px solid var(--tb-focus); outline-offset: 2px; }
+.adm-shell-search-text { flex: 1; }
+.adm-shell kbd, .adm-cmdk kbd { display: inline-flex; align-items: center; height: 20px; padding: 0 6px; border: 1px solid var(--tb-border-strong); border-radius: 5px; background: var(--tb-surface); color: var(--tb-muted); font: 600 12px/1 var(--tb-font-mono); }
+.adm-theme-trigger { border-radius: 999px; }
+.adm-theme-trigger .adm-theme-trigger-label { font-weight: 600; }
+
+.adm-shell-content { min-width: 0; }
+.adm-shell-content:focus { outline: none; }
+.adm-shell-workspace { max-width: 1600px; margin: 0 auto; padding: 16px var(--adm-gutter) var(--adm-gutter) 0; min-width: 0; }
+
+/* ---------- drawer mode (< 1024px) ---------- */
+.adm-shell.is-drawer-mode {
+  --adm-sidebar-w: 0px;
+  --adm-gap: 0px;
+  .adm-shell-sidebar { top: 12px; bottom: 12px; left: 12px; width: 270px; max-width: calc(100vw - 24px); transform: translateX(calc(-100% - 24px)); transition: transform .22s ease; }
+  &.is-drawer-open .adm-shell-sidebar { transform: none; }
+  .adm-shell-topbar { padding: 0 var(--adm-gutter); }
+  .adm-shell-workspace { padding: 8px var(--adm-gutter) var(--adm-gutter); }
+}
+.adm-shell-backdrop { position: fixed; inset: 0; z-index: 35; border: 0; background: var(--tb-overlay); cursor: pointer; }
+
+@media (max-width: 1023px) {
+  .adm-shell-search { width: auto; }
+  .adm-shell-search-text, .adm-shell-search kbd { display: none; }
+}
+@media (max-width: 640px) {
+  .adm-shell { --adm-gutter: 16px; --adm-topbar-h: 56px; }
+  .adm-shell-crumb li:first-child { display: none; }
+  .adm-shell-crumb li + li::before { display: none; }
+  .adm-theme-trigger .adm-theme-trigger-label { display: none; }
+  .adm-theme-trigger { width: 40px; padding: 0; }
+}
+
+/* ---------- command palette (portaled) ---------- */
+body[data-admin-appearance] .adm-cmdk {
+  position: fixed; z-index: 61; top: 12vh; left: 50%; transform: translateX(-50%);
+  width: min(640px, calc(100vw - 24px)); max-height: 70vh; display: flex; flex-direction: column; overflow: hidden;
+  background: var(--tb-surface); color: var(--tb-text); border: 1px solid var(--tb-border); border-radius: var(--tb-radius-card); box-shadow: var(--tb-shadow-lg);
+  font-family: var(--admin-font, system-ui, sans-serif); font-size: var(--admin-font-size, 15px);
+  [cmdk-root] { display: flex; flex-direction: column; min-height: 0; }
+  .adm-cmdk-input { display: flex; align-items: center; gap: 10px; padding: 0 14px; border-bottom: 1px solid var(--tb-border); color: var(--tb-muted); }
+  .adm-cmdk-input input { flex: 1; height: 52px; min-height: 0; border: 0; padding: 0; background: transparent; color: var(--tb-text); font: inherit; font-size: 1.02em; }
+  .adm-cmdk-input input:focus { outline: none; }
+  .adm-cmdk-input input::placeholder { color: var(--tb-muted); }
+  .adm-cmdk-list { overflow-y: auto; padding: 8px; max-height: calc(70vh - 100px); overscroll-behavior: contain; }
+  [cmdk-group-heading] { padding: 8px 10px 4px; color: var(--tb-muted); font-size: 12px; font-weight: 650; text-transform: uppercase; letter-spacing: .05em; }
+  .adm-cmdk-item { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 8px; color: var(--tb-text); cursor: pointer; }
+  .adm-cmdk-item svg { flex: none; color: var(--tb-muted); }
+  .adm-cmdk-item[data-selected="true"] { background: var(--tb-accent-soft); color: var(--tb-accent-text); }
+  .adm-cmdk-item[data-selected="true"] svg { color: var(--tb-accent-text); }
+  .adm-cmdk-text { display: grid; min-width: 0; }
+  .adm-cmdk-text span, .adm-cmdk-text small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .adm-cmdk-text small { color: var(--tb-muted); font-size: 12.5px; }
+  .adm-cmdk-enter { margin-left: auto; opacity: 0; }
+  .adm-cmdk-item[data-selected="true"] .adm-cmdk-enter { opacity: 1; }
+  .adm-cmdk-note { display: flex; align-items: center; gap: 6px; margin: 0; padding: 10px; color: var(--tb-muted); font-size: .9em; }
+  .adm-cmdk-foot { display: flex; gap: 16px; flex-wrap: wrap; padding: 8px 14px; border-top: 1px solid var(--tb-border); color: var(--tb-muted); font-size: 12px; }
+  .adm-cmdk-foot span { display: inline-flex; align-items: center; gap: 4px; }
+  .adm-spin { animation: adm-spin .8s linear infinite; }
+}
+
+/* index.html sets this before React when the stored Admin theme resolves to dark. */
+html[data-tb-boot="dark"], html[data-tb-boot="dark"] body { background: #0b1412; color-scheme: dark; }
+html[data-tb-boot="dark"] .route-loading { background: #0b1412; color: #e6eeec; }
+
+@media (prefers-reduced-motion: reduce) {
+  .adm-shell-sidebar, .adm-shell-main, .adm-nav-link, .adm-nav-live-dot { transition: none !important; animation: none !important; }
+}
+
+/* ---------- task bell (topbar) ---------- */
+.adm-bell {
+  position: relative; display: grid; place-items: center; width: 40px; height: 40px; padding: 0;
+  border: 1px solid transparent; border-radius: 10px; background: transparent; color: var(--tb-text); cursor: pointer;
+}
+.adm-bell:hover { background: var(--tb-surface-2); }
+.adm-bell:focus-visible { outline: 3px solid var(--tb-focus); outline-offset: 2px; }
+.adm-bell[data-state="open"] { background: var(--tb-accent-soft); color: var(--tb-accent-text); }
+.adm-bell-count {
+  position: absolute; top: 3px; right: 2px; min-width: 18px; height: 18px; padding: 0 5px; display: grid; place-items: center;
+  border-radius: 999px; border: 2px solid var(--tb-surface); background: var(--tb-accent); color: var(--tb-on-accent);
+  font-size: 12px; font-weight: 800; line-height: 1;
+}
+
+body[data-admin-appearance] .adm-tasks {
+  z-index: 70; width: min(420px, calc(100vw - 24px)); max-height: min(560px, calc(100dvh - 90px)); display: flex; flex-direction: column;
+  background: var(--tb-surface); color: var(--tb-text); border: 1px solid var(--tb-border); border-radius: var(--tb-radius-card);
+  box-shadow: var(--tb-shadow-lg); font-family: var(--admin-font, system-ui, sans-serif); font-size: var(--admin-font-size, 15px);
+  &:focus { outline: none; }
+  .adm-tasks-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px 12px; border-bottom: 1px solid var(--tb-border); }
+  .adm-tasks-title { margin: 0; font-size: 1.05em; font-weight: 700; color: var(--tb-text); }
+  .adm-tasks-meta { margin: 2px 0 0; color: var(--tb-muted); font-size: 12px; }
+  .adm-tasks-body { overflow-y: auto; padding: 8px; overscroll-behavior: contain; }
+  .adm-tasks-group + .adm-tasks-group { margin-top: 8px; }
+  .adm-tasks-heading { display: flex; align-items: center; gap: 6px; margin: 4px 8px 6px; color: var(--tb-muted); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+  .adm-tasks-heading span { margin-left: auto; color: var(--tb-muted); }
+  .adm-tasks-group.is-urgent .adm-tasks-heading { color: var(--tb-danger); }
+  ul { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+  .adm-task {
+    display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; width: 100%; padding: 10px;
+    border: 1px solid transparent; border-radius: 10px; background: transparent; color: var(--tb-text); font: inherit; text-align: left; cursor: pointer;
+  }
+  .adm-task:hover { background: var(--tb-surface-2); }
+  .adm-task:focus-visible { outline: 3px solid var(--tb-focus); outline-offset: -1px; }
+  .adm-task-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: var(--tb-warning-soft); color: var(--tb-warning); }
+  .is-urgent .adm-task-icon { background: var(--tb-danger-soft); color: var(--tb-danger); }
+  .adm-task-text { display: grid; gap: 2px; min-width: 0; }
+  .adm-task-title { font-weight: 650; font-size: .93em; color: var(--tb-text); }
+  .adm-task-detail { color: var(--tb-muted); font-size: max(12px, .85em); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .adm-task-action { display: inline-flex; align-items: center; gap: 2px; color: var(--tb-accent-text); font-size: max(12px, .85em); font-weight: 650; white-space: nowrap; }
+  .adm-tasks-empty { display: grid; justify-items: center; gap: 6px; padding: 28px 12px; color: var(--tb-success); text-align: center; }
+  .adm-tasks-empty p { margin: 0; color: var(--tb-text); font-weight: 600; }
+  .adm-tasks-error { margin: 8px; padding: 10px 12px; border-radius: 8px; background: var(--tb-danger-soft); color: var(--tb-danger); }
+  .adm-tasks-note { margin: 8px 8px 4px; color: var(--tb-muted); font-size: 12px; }
+}
+
+/* realtime + unseen markers for the task bell */
+.adm-bell.has-unseen::after {
+  content: ""; position: absolute; bottom: 6px; right: 7px; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--tb-danger-solid); box-shadow: 0 0 0 2px var(--tb-bg);
+}
+body[data-admin-appearance] .adm-tasks {
+  .adm-tasks-meta { display: flex; align-items: center; gap: 6px; }
+  .adm-tasks-live { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--tb-border-strong); }
+  .adm-tasks-live.is-live { background: var(--tb-success-solid); animation: adm-pulse 1.6s ease-in-out infinite; }
+  .adm-task-new { margin-left: 8px; padding: 1px 8px; border-radius: 999px; background: var(--tb-accent); color: var(--tb-on-accent); font-size: 12px; font-weight: 700; vertical-align: 1px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  body[data-admin-appearance] .adm-tasks .adm-tasks-live.is-live { animation: none; }
+}
+
+/* ---------- setup guide: topbar button + checklist dialog (components/admin/shell/SetupGuide.tsx) ---------- */
+.adm-guide-trigger {
+  display: inline-flex; align-items: center; gap: 6px; height: 40px; min-width: 40px; padding: 0 10px; justify-content: center;
+  border: 1px solid transparent; border-radius: 10px; background: transparent; color: var(--tb-text); font: inherit; cursor: pointer;
+}
+.adm-guide-trigger:hover { background: var(--tb-surface-2); }
+.adm-guide-trigger:focus-visible { outline: 3px solid var(--tb-focus); outline-offset: 2px; }
+.adm-guide-trigger.is-pending { background: var(--tb-accent-soft); color: var(--tb-accent-text); border-color: var(--tb-accent-border); }
+.adm-guide-trigger[data-state="open"] { background: var(--tb-accent-soft); color: var(--tb-accent-text); }
+.adm-guide-trigger-count { font-size: 12px; font-weight: 800; }
+
+body[data-admin-appearance] .adm-dialog.adm-guide {
+  /* Three rows: fixed top (title + progress), scrolling step list, fixed footer. */
+  width: min(700px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: 0; padding: 0; overflow: hidden;
+  .adm-guide-top { flex: none; display: grid; gap: 14px; padding: 22px 22px 16px; border-bottom: 1px solid var(--tb-border); }
+  /* position: relative keeps sr-only labels (absolute) inside the scroller, so the dialog itself never scrolls. */
+  .adm-guide-body { position: relative; flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: grid; gap: 12px; align-content: start; padding: 16px 22px; }
+  .adm-guide-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .adm-guide-titles { min-width: 0; }
+  .adm-dialog-title { font-size: 1.3em; color: var(--tb-heading); }
+  .adm-guide-desc { margin: 4px 0 0; color: var(--tb-secondary); }
+
+  .adm-guide-progress { display: grid; gap: 8px; }
+  .adm-guide-progress-text { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: .92em; color: var(--tb-secondary); }
+  .adm-guide-progress-text strong { color: var(--tb-text); }
+  .adm-guide-bar { height: 8px; border-radius: 999px; background: var(--tb-surface-2); overflow: hidden; }
+  .adm-guide-bar span { display: block; height: 100%; border-radius: inherit; background: var(--tb-accent); transition: width .3s ease; }
+
+  .adm-guide-done {
+    display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 12px;
+    background: var(--tb-success-soft); border: 1px solid var(--tb-success-border); color: var(--tb-success);
+    p { margin: 0; color: var(--tb-text); }
+    a { color: var(--tb-accent-text); font-weight: 650; }
+    a:focus-visible { outline: 3px solid var(--tb-focus); outline-offset: 2px; border-radius: 4px; }
+  }
+
+  .adm-guide-steps { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .adm-guide-step {
+    display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px;
+    padding: 12px 14px; border: 1px solid var(--tb-border); border-radius: 12px; background: var(--tb-surface);
+  }
+  .adm-guide-step.is-current { border-color: var(--tb-accent); background: var(--tb-accent-soft); }
+  .adm-guide-marker {
+    display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; align-self: start;
+    border: 2px solid var(--tb-border-strong); color: var(--tb-secondary); font-weight: 750; font-size: .9em;
+  }
+  .is-done .adm-guide-marker { border-color: var(--tb-success-border); background: var(--tb-success-soft); color: var(--tb-success); }
+  .is-current .adm-guide-marker { border-color: var(--tb-accent); background: var(--tb-accent); color: var(--tb-on-accent); }
+  .is-locked .adm-guide-marker { color: var(--tb-muted); }
+  .adm-guide-step-text { display: grid; gap: 2px; min-width: 0; }
+  .adm-guide-step-text p { margin: 0; }
+  .adm-guide-step-title { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-weight: 650; color: var(--tb-text); }
+  .adm-guide-tag { padding: 1px 8px; border-radius: 999px; background: var(--tb-accent); color: var(--tb-on-accent); font-size: 12px; font-weight: 700; }
+  .adm-guide-tag.is-done { background: var(--tb-success-soft); color: var(--tb-success); }
+  .adm-guide-step-why { color: var(--tb-secondary); font-size: max(12px, .88em); }
+  .adm-guide-step-status { color: var(--tb-text); font-size: max(12px, .85em); font-weight: 600; }
+  .is-locked .adm-guide-step-status { color: var(--tb-muted); font-weight: 500; }
+  .adm-guide-step-action { justify-self: end; }
+
+  .adm-guide-foot { flex: none; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; padding: 14px 22px; border-top: 1px solid var(--tb-border); background: var(--tb-surface); }
+  .adm-guide-foot > :last-child { margin-left: auto; }
+  .adm-guide-optout { display: inline-flex; align-items: center; gap: 8px; color: var(--tb-text); cursor: pointer; font-size: .92em; }
+  .adm-guide-optout input { width: 18px; height: 18px; margin: 0; accent-color: var(--tb-accent); cursor: pointer; }
+  .adm-guide-optout input:focus-visible { outline: 3px solid var(--tb-focus); outline-offset: 2px; }
+  .adm-guide-hint { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; color: var(--tb-muted); font-size: 12px; }
+}
+@media (max-width: 560px) {
+  body[data-admin-appearance] .adm-dialog.adm-guide {
+    .adm-guide-top { padding: 18px 16px 14px; }
+    .adm-guide-body { padding: 14px 16px; }
+    .adm-guide-foot { padding: 12px 16px; }
+    .adm-guide-step { grid-template-columns: auto minmax(0, 1fr); padding: 12px; }
+    .adm-guide-step-action { grid-column: 2; justify-self: start; }
+    .adm-guide-hint { display: none; }
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  body[data-admin-appearance] .adm-guide-bar span { transition: none; }
+}
+
+/* lazy-page placeholder: same header frame as a loaded page (see RouteSkeleton in AdminLayout) */
+.adm-route-loading-body { min-height: 60vh; border-radius: var(--tb-radius-card); background: var(--tb-surface); box-shadow: var(--tb-shadow-sm); }

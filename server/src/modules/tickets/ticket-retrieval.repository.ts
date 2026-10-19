@@ -9,6 +9,7 @@ export async function findConfirmedOrdersByEmail(email: string) {
          WHERE o.buyer_email = ?
            AND o.status = 'confirmed'
            AND e.status IN ('published', 'ongoing')
+           AND e.visibility = 'visible'
            AND e.end_time > NOW(3)
            AND EXISTS (
              SELECT 1

@@ -22,6 +22,7 @@ import { checkinRouter } from "./modules/checkins/checkin.routes.js";
 
 import { adminReportsRouter, adminCheckinsRouter } from "./modules/reports/report.routes.js";
 import { adminDashboardRouter } from "./modules/dashboard/admin-dashboard.routes.js";
+import { adminPlatformSettingsRouter } from "./modules/platform-settings/platform-settings.routes.js";
 
 export const app = express();
 
@@ -73,6 +74,7 @@ app.use("/api/admin/events", adminEventsRouter);
 app.use("/api/admin/ticket-types", adminTicketTypesRouter);
 app.use("/api/admin/uploads", adminUploadsRouter);
 app.use("/api/admin/dashboard", adminDashboardRouter);
+app.use("/api/admin/platform-settings", adminPlatformSettingsRouter);
 
 // Route dùng để kiểm tra RBAC Admin
 app.get(

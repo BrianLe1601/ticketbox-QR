@@ -8,6 +8,10 @@ import { startEventLifecycleJob } from "./jobs/event-lifecycle.job.js";
 import { startScheduledPublishJob } from "./jobs/scheduled-publish.job.js";
 import { syncEventLifecycleStatuses } from "./modules/events/event-lifecycle.service.js";
 import { createEventRealtimeGateway } from "./realtime/event-status.gateway.js";
+import { createAdminSignalsGateway } from "./realtime/admin-signals.gateway.js";
+import { findActiveUserById } from "./modules/auth/auth.repository.js";
+import { getAdminSignalFingerprint } from "./modules/dashboard/admin-dashboard.repository.js";
+import { verifyAccessToken } from "./utils/jwt.js";
 
 import { startTicketEmailJob } from "./jobs/ticket-email.job.js";
 
@@ -30,6 +34,12 @@ async function startServer(): Promise<void> {
     console.log(`Health check: http://localhost:${env.PORT}/api/health`);
   });
   const eventRealtimeGateway = createEventRealtimeGateway(server);
+  const adminSignalsGateway = createAdminSignalsGateway(server, {
+    verifyToken: verifyAccessToken,
+    findActiveAdmin: async (userId) => (await findActiveUserById(userId))?.role === "admin",
+    fingerprint: getAdminSignalFingerprint,
+    allowedOrigins: [new URL(env.CLIENT_URL).origin],
+  });
 
   const expireOrdersInterval = startExpireOrdersJob();
   const stopAuthSessionCleanup = startAuthSessionCleanupJob();
@@ -50,6 +60,7 @@ async function startServer(): Promise<void> {
     scheduledPublishJob.stop();
     eventLifecycleJob.stop();
     await eventRealtimeGateway.close();
+    await adminSignalsGateway.close();
     await stopTicketEmail();
     server.close(async () => {
       await pool.end();

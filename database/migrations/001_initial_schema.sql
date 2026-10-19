@@ -103,6 +103,7 @@ CREATE TABLE categories (
     slug            VARCHAR(100) NOT NULL,
     description     VARCHAR(500) NULL,
     icon            VARCHAR(50) NULL,
+    kind            ENUM('music', 'other') NOT NULL DEFAULT 'other',
     is_active       BOOLEAN NOT NULL DEFAULT TRUE,
     sort_order      INT UNSIGNED NOT NULL DEFAULT 0,
     created_at      DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
@@ -121,12 +122,57 @@ CREATE TABLE categories (
 CREATE INDEX idx_categories_active_order
     ON categories(is_active, sort_order, name);
 
-INSERT INTO categories(name, slug, description, icon, sort_order) VALUES
-    ('Music & Concerts', 'music', 'Concerts, festivals and live music.', 'music', 10),
-    ('Conferences', 'conference', 'Conferences, seminars and professional events.', 'monitor', 20),
-    ('Food & Drinks', 'food', 'Food, beverage and culinary events.', 'utensils', 30),
-    ('Sports & Fitness', 'sports', 'Sports, races and fitness activities.', 'dumbbell', 40),
-    ('Art & Culture', 'art', 'Art, exhibitions and cultural events.', 'palette', 50);
+-- Music genres are the default catalogue for new concerts. The five general
+-- categories below are legacy history and stay kind='other' until an Admin
+-- classifies them; they can only be selected after the Admin switches the
+-- platform category scope to 'all'.
+INSERT INTO categories(name, slug, description, icon, kind, sort_order) VALUES
+    ('Pop', 'pop', 'Pop concerts.', 'music', 'music', 5),
+    ('Rock', 'rock', 'Rock concerts.', 'guitar', 'music', 6),
+    ('EDM', 'edm', 'EDM and electronic music concerts.', 'music', 'music', 7),
+    ('Acoustic', 'acoustic', 'Acoustic and unplugged concerts.', 'guitar', 'music', 8),
+    ('Music & Concerts', 'music', 'Concerts, festivals and live music.', 'music', 'other', 10),
+    ('Conferences', 'conference', 'Conferences, seminars and professional events.', 'monitor', 'other', 20),
+    ('Food & Drinks', 'food', 'Food, beverage and culinary events.', 'utensils', 'other', 30),
+    ('Sports & Fitness', 'sports', 'Sports, races and fitness activities.', 'dumbbell', 'other', 40),
+    ('Art & Culture', 'art', 'Art, exhibitions and cultural events.', 'palette', 'other', 50);
+
+-- =========================================================
+-- 3b. PLATFORM SETTINGS
+-- Exactly one row. Holds the single concert venue (copied into each new Event
+-- as a purchase-time snapshot) and the Admin-selected Category scope. The row
+-- is also the lock that serializes venue-schedule changes across Admins; lock
+-- it before any Event row.
+-- Venue columns stay NULL until an Admin configures them; nothing is invented.
+-- =========================================================
+CREATE TABLE platform_settings (
+    id                  TINYINT UNSIGNED NOT NULL,
+    venue_name          VARCHAR(150) NULL,
+    venue_address       VARCHAR(255) NULL,
+    venue_city          VARCHAR(100) NULL,
+    venue_capacity      INT UNSIGNED NULL,
+    category_scope      ENUM('music_only', 'all') NOT NULL DEFAULT 'music_only',
+    updated_by          BIGINT UNSIGNED NULL,
+    created_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at          DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
+                                      ON UPDATE CURRENT_TIMESTAMP(3),
+
+    CONSTRAINT pk_platform_settings PRIMARY KEY (id),
+    CONSTRAINT fk_platform_settings_updated_by
+        FOREIGN KEY (updated_by) REFERENCES users(id)
+        ON UPDATE RESTRICT ON DELETE RESTRICT,
+    CONSTRAINT chk_platform_settings_singleton CHECK (id = 1),
+    CONSTRAINT chk_platform_settings_venue_complete CHECK (
+        (venue_name IS NULL AND venue_address IS NULL
+            AND venue_city IS NULL AND venue_capacity IS NULL)
+        OR (venue_name IS NOT NULL AND CHAR_LENGTH(TRIM(venue_name)) > 0
+            AND venue_address IS NOT NULL AND CHAR_LENGTH(TRIM(venue_address)) > 0
+            AND venue_city IS NOT NULL AND CHAR_LENGTH(TRIM(venue_city)) > 0
+            AND venue_capacity IS NOT NULL AND venue_capacity > 0)
+    )
+) ENGINE = InnoDB;
+
+INSERT INTO platform_settings(id) VALUES (1);
 
 -- =========================================================
 -- 4. EVENTS
@@ -201,6 +247,10 @@ CREATE TABLE events (
     ),
     CONSTRAINT chk_events_sales_before_end CHECK (
         sales_end_at <= end_time
+    ),
+    -- A ticket sold after the gates close could never be used.
+    CONSTRAINT chk_events_sales_before_checkin_end CHECK (
+        sales_end_at <= checkin_end_at
     ),
     CONSTRAINT chk_events_sales_start_before_event CHECK (
         sales_start_at < start_time
@@ -682,9 +732,29 @@ CREATE TRIGGER trg_events_creator_admin_bi
 BEFORE INSERT ON events
 FOR EACH ROW
 BEGIN
+    DECLARE v_settings_lock TINYINT UNSIGNED DEFAULT NULL;
+    DECLARE v_venue_conflict BIGINT UNSIGNED DEFAULT NULL;
+
     IF NEW.status <> 'draft' THEN
         SIGNAL SQLSTATE '45000'
             SET MESSAGE_TEXT = 'Events must be created as Drafts';
+    END IF;
+
+    -- The deployment has exactly one venue. Its occupancy is the closed
+    -- interval [checkin_start_at, end_time]; touching boundaries conflict and
+    -- only cancelled Events release the venue. Locking the platform row first
+    -- serializes concurrent Admins (the service takes the same lock earlier).
+    SELECT id INTO v_settings_lock FROM platform_settings WHERE id = 1 FOR UPDATE;
+    SELECT id INTO v_venue_conflict
+      FROM events
+     WHERE status <> 'cancelled'
+       AND checkin_start_at <= NEW.end_time
+       AND end_time >= NEW.checkin_start_at
+     ORDER BY checkin_start_at, id
+     LIMIT 1;
+    IF v_venue_conflict IS NOT NULL THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Venue schedule conflicts with another Event';
     END IF;
 
     IF NOT EXISTS (
@@ -716,9 +786,33 @@ CREATE TRIGGER trg_events_creator_admin_bu
 BEFORE UPDATE ON events
 FOR EACH ROW
 BEGIN
+    DECLARE v_settings_lock TINYINT UNSIGNED DEFAULT NULL;
+    DECLARE v_venue_conflict BIGINT UNSIGNED DEFAULT NULL;
+
     IF NEW.created_by <> OLD.created_by THEN
         SIGNAL SQLSTATE '45000'
             SET MESSAGE_TEXT = 'events.created_by is immutable';
+    END IF;
+
+    -- Re-check venue occupancy only when the occupied interval changes, so
+    -- lifecycle/visibility updates on legacy rows are never blocked.
+    IF NEW.status <> 'cancelled'
+       AND (NEW.start_time <> OLD.start_time
+            OR NEW.end_time <> OLD.end_time
+            OR NEW.checkin_start_at <> OLD.checkin_start_at) THEN
+        SELECT id INTO v_settings_lock FROM platform_settings WHERE id = 1 FOR UPDATE;
+        SELECT id INTO v_venue_conflict
+          FROM events
+         WHERE id <> OLD.id
+           AND status <> 'cancelled'
+           AND checkin_start_at <= NEW.end_time
+           AND end_time >= NEW.checkin_start_at
+         ORDER BY checkin_start_at, id
+         LIMIT 1;
+        IF v_venue_conflict IS NOT NULL THEN
+            SIGNAL SQLSTATE '45000'
+                SET MESSAGE_TEXT = 'Venue schedule conflicts with another Event';
+        END IF;
     END IF;
 
     IF NEW.category_id <> OLD.category_id AND NOT EXISTS (
@@ -767,7 +861,7 @@ BEGIN
           AND (
               COALESCE(tt.sales_start_at, NEW.sales_start_at)
                   >= COALESCE(tt.sales_end_at, NEW.sales_end_at)
-              OR COALESCE(tt.sales_end_at, NEW.sales_end_at) > NEW.end_time
+              OR COALESCE(tt.sales_end_at, NEW.sales_end_at) > NEW.checkin_end_at
           )
         LIMIT 1
     ) THEN
@@ -788,7 +882,7 @@ BEGIN
               AND tt.capacity > 0
               AND COALESCE(tt.sales_start_at, NEW.sales_start_at)
                     < COALESCE(tt.sales_end_at, NEW.sales_end_at)
-              AND COALESCE(tt.sales_end_at, NEW.sales_end_at) <= NEW.end_time
+              AND COALESCE(tt.sales_end_at, NEW.sales_end_at) <= NEW.checkin_end_at
             LIMIT 1
        ) THEN
         SIGNAL SQLSTATE '45000'
@@ -925,14 +1019,15 @@ BEGIN
     DECLARE v_venue_capacity BIGINT UNSIGNED DEFAULT NULL;
     DECLARE v_event_sales_start DATETIME(3);
     DECLARE v_event_sales_end DATETIME(3);
-    DECLARE v_event_end DATETIME(3);
+    -- Ticket sales must close by the end of check-in (which is never after the Event end).
+    DECLARE v_checkin_end DATETIME(3);
     DECLARE v_event_status VARCHAR(12);
     DECLARE v_allocated BIGINT UNSIGNED DEFAULT 0;
 
     -- All Ticket allocation changes lock the parent Event first. This is the
     -- common serialization point for concurrent tier creation and resizing.
-    SELECT venue_capacity, sales_start_at, sales_end_at, end_time, status
-      INTO v_venue_capacity, v_event_sales_start, v_event_sales_end, v_event_end,
+    SELECT venue_capacity, sales_start_at, sales_end_at, checkin_end_at, status
+      INTO v_venue_capacity, v_event_sales_start, v_event_sales_end, v_checkin_end,
            v_event_status
       FROM events
      WHERE id = NEW.event_id
@@ -960,9 +1055,9 @@ BEGIN
 
     IF COALESCE(NEW.sales_start_at, v_event_sales_start)
           >= COALESCE(NEW.sales_end_at, v_event_sales_end)
-       OR COALESCE(NEW.sales_end_at, v_event_sales_end) > v_event_end THEN
+       OR COALESCE(NEW.sales_end_at, v_event_sales_end) > v_checkin_end THEN
         SIGNAL SQLSTATE '45000'
-            SET MESSAGE_TEXT = 'Ticket sales window is outside the Event operating window';
+            SET MESSAGE_TEXT = 'Ticket sales window is outside the Event sales/check-in window';
     END IF;
 END$$
 
@@ -973,7 +1068,8 @@ BEGIN
     DECLARE v_venue_capacity BIGINT UNSIGNED DEFAULT NULL;
     DECLARE v_event_sales_start DATETIME(3);
     DECLARE v_event_sales_end DATETIME(3);
-    DECLARE v_event_end DATETIME(3);
+    -- Ticket sales must close by the end of check-in (which is never after the Event end).
+    DECLARE v_checkin_end DATETIME(3);
     DECLARE v_event_status VARCHAR(12);
     DECLARE v_event_visibility VARCHAR(10);
     DECLARE v_allocated BIGINT UNSIGNED DEFAULT 0;
@@ -983,8 +1079,8 @@ BEGIN
             SET MESSAGE_TEXT = 'ticket_types.event_id is immutable';
     END IF;
 
-    SELECT venue_capacity, sales_start_at, sales_end_at, end_time, status, visibility
-      INTO v_venue_capacity, v_event_sales_start, v_event_sales_end, v_event_end,
+    SELECT venue_capacity, sales_start_at, sales_end_at, checkin_end_at, status, visibility
+      INTO v_venue_capacity, v_event_sales_start, v_event_sales_end, v_checkin_end,
            v_event_status, v_event_visibility
       FROM events
      WHERE id = NEW.event_id
@@ -1018,9 +1114,9 @@ BEGIN
 
     IF COALESCE(NEW.sales_start_at, v_event_sales_start)
           >= COALESCE(NEW.sales_end_at, v_event_sales_end)
-       OR COALESCE(NEW.sales_end_at, v_event_sales_end) > v_event_end THEN
+       OR COALESCE(NEW.sales_end_at, v_event_sales_end) > v_checkin_end THEN
         SIGNAL SQLSTATE '45000'
-            SET MESSAGE_TEXT = 'Ticket sales window is outside the Event operating window';
+            SET MESSAGE_TEXT = 'Ticket sales window is outside the Event sales/check-in window';
     END IF;
 
     IF OLD.is_active = TRUE AND NEW.is_active = FALSE

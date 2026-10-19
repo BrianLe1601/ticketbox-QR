@@ -13,5 +13,16 @@ export interface ScanResult {
   code: ResultCode;
   message: string;
   checkedAt: Date;
-  ticket: { code: string; holderName: string | null; checkedInAt: Date | null } | null;
+  /** ticketTypeName is the purchase snapshot (order_items.ticket_type_name); never sent for WRONG_EVENT. */
+  ticket: { code: string; holderName: string | null; ticketTypeName: string | null; checkedInAt: Date | null } | null;
+}
+
+/** Gate-wide attendance of one Event (not one Staff member). */
+export interface Attendance {
+  /** Distinct Tickets with a SUCCESS scan: the same predicate as Admin Reports "admissions". */
+  admitted: number;
+  /** Tickets of confirmed Orders that are still valid (issued or checked in). */
+  validTickets: number;
+  /** Valid Tickets not yet checked in. */
+  remaining: number;
 }

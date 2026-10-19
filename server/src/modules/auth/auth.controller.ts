@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 
 import { AppError } from "../../utils/app-error.js";
-import type { ChangeAdminPasswordInput, LoginInput, UpdateAdminProfileInput } from "./auth.schema.js";
+import type { ChangeAdminPasswordInput, LoginInput, PasswordResetConfirmInput, PasswordResetRequestInput, UpdateAdminProfileInput } from "./auth.schema.js";
 import {
   getCurrentUser,
   login,
@@ -10,6 +10,8 @@ import {
   refreshSession,
   updateAdminProfile,
   changeAdminPassword,
+  confirmPasswordReset,
+  requestPasswordReset,
 } from "./auth.service.js";
 import { env } from "../../config/env.js";
 import { REFRESH_COOKIE } from "./refresh-token.js";
@@ -105,5 +107,23 @@ export async function changeAdminPasswordController(req: Request, res: Response,
     await changeAdminPassword(req.authUser!.id, req.body as ChangeAdminPasswordInput);
     res.clearCookie(REFRESH_COOKIE, { httpOnly: true, secure: env.NODE_ENV === "production", sameSite: "strict", path: "/api/auth" });
     res.status(200).json({ success: true, message: "Đã đổi mật khẩu. Vui lòng đăng nhập lại.", data: null });
+  } catch (error) { next(error); }
+}
+
+// Same answer whether or not the email belongs to an Admin; the link is mailed after the response.
+export async function requestPasswordResetController(req: Request, res: Response, next: NextFunction) {
+  try {
+    assertTrustedOrigin(req);
+    await requestPasswordReset(req.body as PasswordResetRequestInput, req.ip ?? "unknown");
+    res.status(202).json({ success: true, message: "Nếu email thuộc một tài khoản Quản trị, liên kết đặt lại mật khẩu sẽ được gửi trong vài phút.", data: null });
+  } catch (error) { next(error); }
+}
+
+export async function confirmPasswordResetController(req: Request, res: Response, next: NextFunction) {
+  try {
+    assertTrustedOrigin(req);
+    await confirmPasswordReset(req.body as PasswordResetConfirmInput);
+    res.clearCookie(REFRESH_COOKIE, { httpOnly: true, secure: env.NODE_ENV === "production", sameSite: "strict", path: "/api/auth" });
+    res.status(200).json({ success: true, message: "Đã đặt lại mật khẩu. Vui lòng đăng nhập bằng mật khẩu mới.", data: null });
   } catch (error) { next(error); }
 }

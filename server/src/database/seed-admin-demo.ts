@@ -3,9 +3,15 @@ import type { PoolConnection, ResultSetHeader, RowDataPacket } from "mysql2/prom
 import { env } from "../config/env.js";
 import { syncEventLifecycleStatuses } from "../modules/events/event-lifecycle.service.js";
 import { pool } from "./pool.js";
+import { explainVenueConflict, resolveSeedVenue, type SeedVenue } from "./seed-venue.js";
+import { alignDemoCheckinDay, createPresentationFixtures } from "./admin-demo-presentation-fixtures.js";
 
 const DEMO_EVENT_PREFIX = "demo-admin-";
 const COVER_URL = "https://res.cloudinary.com/demo/image/upload/sample.jpg";
+// Placeholder used only when no Admin has configured the single platform venue.
+const DEMO_PLACEHOLDER_VENUE: SeedVenue = { name: "TicketBox Demo Center", address: "18 Nguyễn Huệ", city: "Hồ Chí Minh", capacity: 1000 };
+const DEMO_REQUIRED_CAPACITY = 300;
+let venue: SeedVenue = DEMO_PLACEHOLDER_VENUE;
 
 interface IdRow extends RowDataPacket { id: number }
 interface PasswordRow extends RowDataPacket { passwordHash: string | null }
@@ -66,6 +72,7 @@ interface TicketFixture {
 // Keep all relative fixtures on one exact clock reference. Calling Date.now()
 // separately can make a nominal two-hour lead a few milliseconds too short.
 const seedReferenceTime = Date.now();
+const presentationFixtures = createPresentationFixtures(new Date(seedReferenceTime));
 
 function fromNow(days: number, hours = 0): Date {
   return new Date(seedReferenceTime + days * 86_400_000 + hours * 3_600_000);
@@ -74,43 +81,53 @@ function fromNow(days: number, hours = 0): Date {
 const categories: CategoryFixture[] = [
   {
     key: "music",
-    name: "[DEMO] Âm nhạc & Biểu diễn",
-    slug: "demo-admin-music",
-    description: "Category active để kiểm thử Event âm nhạc và trạng thái được tham chiếu.",
+    name: "[DEMO] Pop",
+    slug: "demo-admin-pop",
+    description: "Concert nhạc Pop; kiểm thử danh mục đang hoạt động và sự kiện liên kết.",
     icon: "music",
     sortOrder: 910,
     active: true,
   },
   {
     key: "technology",
-    name: "[DEMO] Công nghệ & Hội nghị",
-    slug: "demo-admin-technology",
-    description: "Category active cho hội nghị, workshop và Event có nhiều Ticket Type.",
-    icon: "monitor",
+    name: "[DEMO] Rock",
+    slug: "demo-admin-rock",
+    description: "Concert nhạc Rock có nhiều hạng vé.",
+    icon: "guitar",
     sortOrder: 920,
     active: true,
   },
   {
     key: "community",
-    name: "[DEMO] Cộng đồng & Trải nghiệm",
-    slug: "demo-admin-community",
-    description: "Category active để kiểm thử Event đang diễn ra và check-in.",
-    icon: "users",
+    name: "[DEMO] EDM",
+    slug: "demo-admin-edm",
+    description: "Concert EDM; kiểm thử vận hành cổng và check-in.",
+    icon: "music",
     sortOrder: 930,
     active: true,
   },
   {
     key: "archived",
-    name: "[DEMO] Danh mục đã ngưng",
-    slug: "demo-admin-archived",
-    description: "Category inactive, không được chọn cho Event mới.",
+    name: "[DEMO] Acoustic — Đã ngưng",
+    slug: "demo-admin-acoustic",
+    description: "Thể loại Acoustic tạm ngưng; không được chọn cho concert mới.",
     icon: "archive",
     sortOrder: 940,
     active: false,
   },
+  {
+    key: "acoustic",
+    name: "[DEMO] Acoustic",
+    slug: "demo-admin-acoustic-active",
+    description: "Concert Acoustic đang hoạt động; tách khỏi danh mục vô hiệu hóa dùng cho tình huống kiểm thử.",
+    icon: "guitar",
+    sortOrder: 935,
+    active: true,
+  },
 ];
 
 const staffFixtures: StaffFixture[] = [
+  ...presentationFixtures.map((fixture) => fixture.staff),
   {
     key: "google-pending",
     fullName: "[DEMO] Google Chờ Duyệt",
@@ -168,10 +185,11 @@ const staffFixtures: StaffFixture[] = [
 ];
 
 const events: EventFixture[] = [
+  ...presentationFixtures.map((fixture) => fixture.event),
   {
     key: "draft-incomplete",
     categoryKey: "music",
-    name: "[DEMO] Draft — Thiếu ảnh và loại vé",
+    name: "[DEMO] Concert Pop — Nháp thiếu ảnh và hạng vé",
     slug: "demo-admin-draft-incomplete",
     capacity: 120,
     start: fromNow(30),
@@ -185,7 +203,7 @@ const events: EventFixture[] = [
   {
     key: "draft-ready",
     categoryKey: "technology",
-    name: "[DEMO] Draft — Sẵn sàng xuất bản",
+    name: "[DEMO] Concert Rock — Nháp sẵn sàng công bố",
     slug: "demo-admin-draft-ready",
     capacity: 200,
     start: fromNow(20),
@@ -200,7 +218,7 @@ const events: EventFixture[] = [
   {
     key: "published-on-sale",
     categoryKey: "music",
-    name: "[DEMO] Published — Đang mở bán",
+    name: "[DEMO] Concert Pop — Đang mở bán",
     slug: "demo-admin-published-on-sale",
     capacity: 300,
     start: fromNow(14),
@@ -214,7 +232,7 @@ const events: EventFixture[] = [
   {
     key: "published-coming-soon",
     categoryKey: "technology",
-    name: "[DEMO] Published — Sắp mở bán",
+    name: "[DEMO] Concert Rock — Sắp mở bán",
     slug: "demo-admin-published-coming-soon",
     capacity: 100,
     start: fromNow(45),
@@ -228,7 +246,7 @@ const events: EventFixture[] = [
   {
     key: "published-hidden",
     categoryKey: "community",
-    name: "[DEMO] Published — Đang ẩn và tạm dừng bán",
+    name: "[DEMO] Concert EDM — Đang ẩn và tạm dừng bán",
     slug: "demo-admin-published-hidden",
     capacity: 80,
     start: fromNow(25),
@@ -242,7 +260,7 @@ const events: EventFixture[] = [
   {
     key: "ongoing",
     categoryKey: "community",
-    name: "[DEMO] Ongoing — Đang mở cổng check-in",
+    name: "[DEMO] Concert EDM — Đang mở cổng check-in",
     slug: "demo-admin-ongoing-checkin",
     capacity: 150,
     start: fromNow(0, -1),
@@ -256,7 +274,7 @@ const events: EventFixture[] = [
   {
     key: "completed",
     categoryKey: "music",
-    name: "[DEMO] Completed — Lịch sử chỉ đọc",
+    name: "[DEMO] Concert Pop — Đã kết thúc",
     slug: "demo-admin-completed-history",
     capacity: 90,
     start: fromNow(-5),
@@ -270,7 +288,7 @@ const events: EventFixture[] = [
   {
     key: "cancelled",
     categoryKey: "technology",
-    name: "[DEMO] Cancelled — Đã hủy và đóng bán",
+    name: "[DEMO] Concert Rock — Đã hủy và đóng bán",
     slug: "demo-admin-cancelled-history",
     capacity: 120,
     start: fromNow(35),
@@ -283,9 +301,16 @@ const events: EventFixture[] = [
   },
 ];
 
+// Also keep the original relative scenarios valid when the seed runs at night.
+// Fixed presentation fixtures already satisfy the same-day constraint.
+for (const fixture of events) {
+  Object.assign(fixture, alignDemoCheckinDay(fixture.start, fixture.checkinStart, fixture.key === "ongoing"));
+}
+
 const ticketTypes: TicketFixture[] = [
-  { eventKey: "draft-ready", name: "Community Free", description: "Vé miễn phí để kiểm tra price = 0.", price: 0, capacity: 120, maxPerOrder: 4 },
-  { eventKey: "draft-ready", name: "VIP Workshop", description: "Vé trả phí giới hạn số lượng.", price: 450_000, capacity: 80, maxPerOrder: 2 },
+  ...presentationFixtures.flatMap((fixture) => fixture.ticketTypes),
+  { eventKey: "draft-ready", name: "Vé concert miễn phí", description: "Vé miễn phí để kiểm tra price = 0.", price: 0, capacity: 120, maxPerOrder: 4 },
+  { eventKey: "draft-ready", name: "VIP Concert", description: "Vé trả phí giới hạn số lượng.", price: 450_000, capacity: 80, maxPerOrder: 2 },
   { eventKey: "published-on-sale", name: "General Admission", description: "Tier chính đang mở bán.", price: 200_000, capacity: 180, maxPerOrder: 5 },
   { eventKey: "published-on-sale", name: "VIP Front Row", description: "Tier VIP giá cao.", price: 650_000, capacity: 80, maxPerOrder: 2 },
   { eventKey: "published-on-sale", name: "Late Release", description: "Tier có sales window riêng trong tương lai.", price: 250_000, capacity: 40, maxPerOrder: 3, salesStart: fromNow(10), salesEnd: fromNow(14, 4) },
@@ -373,10 +398,10 @@ async function upsertCategories(connection: PoolConnection) {
   const ids = new Map<string, number>();
   for (const fixture of categories) {
     await connection.execute(
-      `INSERT INTO categories(name,slug,description,icon,is_active,sort_order)
-       VALUES (?,?,?,?,TRUE,?)
+      `INSERT INTO categories(name,slug,description,icon,kind,is_active,sort_order)
+       VALUES (?,?,?,?,'music',TRUE,?)
        ON DUPLICATE KEY UPDATE name=VALUES(name),description=VALUES(description),
-         icon=VALUES(icon),is_active=TRUE,sort_order=VALUES(sort_order)`,
+         icon=VALUES(icon),kind='music',is_active=TRUE,sort_order=VALUES(sort_order)`,
       [fixture.name, fixture.slug, fixture.description, fixture.icon, fixture.sortOrder],
     );
     const [rows] = await connection.execute<IdRow[]>(
@@ -437,23 +462,27 @@ async function createEvents(
   for (const fixture of events) {
     const categoryId = categoryIds.get(fixture.categoryKey);
     if (!categoryId) throw new Error(`Missing Category key: ${fixture.categoryKey}`);
-    const [result] = await connection.execute<ResultSetHeader>(
-      `INSERT INTO events
-        (name,slug,description,category_id,venue,address,city,venue_capacity,
-         cover_image_url,cover_image_alt,start_time,end_time,sales_start_at,sales_end_at,
-         checkin_start_at,checkin_end_at,scheduled_publish_at,created_by)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [
-        fixture.name, fixture.slug,
-        `Dữ liệu Admin demo cô lập cho kịch bản ${fixture.key}. Không dùng ở production.`,
-        categoryId, "TicketBox Demo Center", "18 Nguyễn Huệ", "Hồ Chí Minh",
-        fixture.capacity, fixture.cover ? COVER_URL : null,
-        fixture.cover ? `${fixture.name} cover` : null, fixture.start, fixture.end,
-        fixture.salesStart, fixture.salesEnd, fixture.checkinStart, fixture.checkinEnd,
-        fixture.scheduledPublishAt ?? null, adminId,
-      ],
-    );
-    ids.set(fixture.key, result.insertId);
+    try {
+      const [result] = await connection.execute<ResultSetHeader>(
+        `INSERT INTO events
+          (name,slug,description,category_id,venue,address,city,venue_capacity,
+           cover_image_url,cover_image_alt,start_time,end_time,sales_start_at,sales_end_at,
+           checkin_start_at,checkin_end_at,scheduled_publish_at,created_by)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [
+          fixture.name, fixture.slug,
+          `Dữ liệu Admin demo cô lập cho kịch bản ${fixture.key}. Không dùng ở production.`,
+          categoryId, venue.name, venue.address, venue.city,
+          venue.capacity, fixture.cover ? COVER_URL : null,
+          fixture.cover ? `${fixture.name} cover` : null, fixture.start, fixture.end,
+          fixture.salesStart, fixture.salesEnd, fixture.checkinStart, fixture.checkinEnd,
+          fixture.scheduledPublishAt ?? null, adminId,
+        ],
+      );
+      ids.set(fixture.key, result.insertId);
+    } catch (error) {
+      throw explainVenueConflict(error, "seed:admin-demo");
+    }
   }
   return ids;
 }
@@ -502,6 +531,19 @@ async function applyEventStatesAndAssignments(
   eventIds: Map<string, number>,
   staffIds: Map<string, number>,
 ) {
+  // Each concert keeps its own gate Staff account so every demo Event has a
+  // distinct person; the single venue means the concerts run on separate days.
+  // Publication still uses schema guards.
+  for (const fixture of presentationFixtures) {
+    await createAssignment(
+      connection, requiredId(eventIds, fixture.event.key),
+      requiredId(staffIds, fixture.staff.key), adminId,
+    );
+    await connection.execute(
+      "UPDATE events SET status='published',published_at=? WHERE id=?",
+      [new Date(seedReferenceTime), requiredId(eventIds, fixture.event.key)],
+    );
+  }
   await createAssignment(
     connection, requiredId(eventIds, "completed"), requiredId(staffIds, "google-inactive"),
     adminId, false, fromNow(-12), fromNow(-6),
@@ -636,7 +678,9 @@ async function verifySummary(connection: PoolConnection) {
       WHERE e.slug LIKE ? AND es.is_active=TRUE`,
     [`${DEMO_EVENT_PREFIX}%`],
   );
-  if (categoryCount !== 4 || eventCount !== 8 || staffCount !== 6 || tierCount !== 10 || assignmentCount !== 6) {
+  if (categoryCount !== categories.length || eventCount !== events.length
+    || staffCount !== staffFixtures.length || tierCount !== ticketTypes.length
+    || assignmentCount !== 6 + presentationFixtures.length) {
     throw new Error(
       `Admin demo verification failed: categories=${categoryCount}, events=${eventCount}, `
       + `staff=${staffCount}, ticketTypes=${tierCount}, assignments=${assignmentCount}`,
@@ -645,8 +689,8 @@ async function verifySummary(connection: PoolConnection) {
   if (
     inactiveCategoryCount !== 1 || terminalEventCount !== 2
     || pendingStaffCount !== 1 || rejectedStaffCount !== 1
-    || activeStaffCount !== 2 || inactiveStaffCount !== 2
-    || activeAssignmentCount !== 4
+    || activeStaffCount !== 2 + presentationFixtures.length || inactiveStaffCount !== 2
+    || activeAssignmentCount !== 4 + presentationFixtures.length
   ) {
     throw new Error(
       `Admin demo state verification failed: inactiveCategories=${inactiveCategoryCount}, `
@@ -667,6 +711,7 @@ async function seedAdminDemo() {
     await connection.beginTransaction();
     const admin = await findAdmin(connection);
     await cleanupDemoEvents(connection, admin.id);
+    venue = await resolveSeedVenue(connection, admin.id, DEMO_PLACEHOLDER_VENUE, DEMO_REQUIRED_CAPACITY);
     await resetDemoStaffRelationships(connection);
     const categoryIds = await upsertCategories(connection);
     const staffIds = await upsertStaff(connection, admin.id, admin.passwordHash);
@@ -678,10 +723,12 @@ async function seedAdminDemo() {
     await connection.commit();
     const lifecycle = await syncEventLifecycleStatuses();
 
-    console.log("[seed:admin-demo] completed: 18 primary demo records");
+    console.log(`[seed:admin-demo] completed: ${summary.categoryCount + summary.eventCount + summary.staffCount} primary demo records`);
     console.log(`[seed:admin-demo] Categories: ${summary.categoryCount}; Events: ${summary.eventCount}; Staff: ${summary.staffCount}`);
     console.log(`[seed:admin-demo] Ticket Types: ${summary.tierCount}; Assignments: ${summary.assignmentCount}`);
     console.log(`[seed:admin-demo] Lifecycle sync — started: ${lifecycle.started}; completed: ${lifecycle.completed}`);
+    console.log("[seed:admin-demo] 10 sequential concerts, one per day starting tomorrow (Vietnam UTC+7): sales open now through 16:30 on the day; check-in 13:00–16:30; Event 15:00–17:00.");
+    console.log("[seed:admin-demo] Staff: demo.staff.presentation.01@ticketbox.local through .10@ticketbox.local; local password matches the seeded Admin password hash.");
     console.log(`[seed:admin-demo] Re-run safely replaces only ${DEMO_EVENT_PREFIX}* Events and resets demo.staff.* accounts`);
   } catch (error) {
     await connection.rollback();

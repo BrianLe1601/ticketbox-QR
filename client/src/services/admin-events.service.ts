@@ -13,11 +13,13 @@ export interface AdminEvent {
 }
 export interface EventPayload {
   name:string; description:string|null; category:string;
-  venue:string; address:string; city:string; venueCapacity:number; coverImageUrl:string|null;
+  coverImageUrl:string|null;
   coverImagePublicId:string|null; coverImageAlt:string|null;
   startTime:string; endTime:string; salesStartAt:string; salesEndAt:string;
   checkinStartAt:string; checkinEndAt:string; scheduledPublishAt:string|null;
 }
+/** Venue text is never typed per Event; update may only re-apply the platform venue. */
+export interface EventUpdatePayload extends EventPayload { syncVenue?:boolean; confirmPublicVenueChange?:boolean }
 
 const auth=()=>getStoredToken();
 export async function listAdminEvents(){
@@ -31,9 +33,21 @@ export async function listAdminEvents(){
   }
   return {data,meta:{total:data.length,page:1,limit:Math.max(1,data.length)}};
 }
+/** Every Event in one lifecycle status (server-filtered, all pages). Used for live gate signals. */
+export async function listAdminEventsByStatus(status:EventStatus){
+  const limit=50;
+  const data:AdminEvent[]=[];
+  for(let page=1;page<=100;page+=1){
+    const response=await apiRequest<AdminEvent[]>(`/admin/events?status=${status}&page=${page}&limit=${limit}`,{},auth());
+    data.push(...response.data);
+    const total=response.meta?.total??data.length;
+    if(data.length>=total||response.data.length<limit)break;
+  }
+  return data;
+}
 export async function getAdminEvent(id:number){return (await apiRequest<AdminEvent>(`/admin/events/${id}`,{},auth())).data;}
 export async function createAdminEvent(body:EventPayload){return (await apiRequest<AdminEvent>("/admin/events",{method:"POST",body:JSON.stringify(body)},auth())).data;}
-export async function updateAdminEvent(id:number,body:EventPayload){return (await apiRequest<AdminEvent>(`/admin/events/${id}`,{method:"PATCH",body:JSON.stringify(body)},auth())).data;}
+export async function updateAdminEvent(id:number,body:EventUpdatePayload){return (await apiRequest<AdminEvent>(`/admin/events/${id}`,{method:"PATCH",body:JSON.stringify(body)},auth())).data;}
 export async function getPublishReadiness(id:number){return (await apiRequest<PublishReadiness>(`/admin/events/${id}/publish-readiness`,{},auth())).data;}
 export async function publishAdminEvent(id:number){return (await apiRequest<AdminEvent>(`/admin/events/${id}/publish`,{method:"POST"},auth())).data;}
 export async function scheduleAdminEvent(id:number,scheduledPublishAt:string|null){return (await apiRequest<AdminEvent>(`/admin/events/${id}/publish-schedule`,{method:"PATCH",body:JSON.stringify({scheduledPublishAt})},auth())).data;}

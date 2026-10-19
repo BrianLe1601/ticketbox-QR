@@ -1,0 +1,47 @@
+/* Admin Nhật ký check-in — Tổng quan Bento reference: result KPI filters, one log table card and a
+   read-only detail panel. Tokens only; imported by AdminCheckinLogsPage. The Event popover and the
+   panel are portaled, so rules also match body[data-admin-appearance]. */
+
+:is(.admin-room, body[data-admin-appearance]) {
+  .ckp-kpis { grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); }
+  .bento-card > .adm-filterbar { margin: 0; }
+
+  /* table cells */
+  .ck-time, .ck-ticket, .ck-person { display: grid; gap: 2px; min-width: 0; }
+  .ck-time strong { color: var(--tb-heading); }
+  .ck-time span, .ck-ticket span, .ck-person span { color: var(--tb-secondary); font-size: max(12px, .85em); }
+  .ck-ticket strong { color: var(--tb-text); white-space: nowrap; }
+  .ck-ticket.is-unknown strong { color: var(--tb-danger); font-weight: 650; }
+  .ck-person strong, .ck-person span, .ck-event { overflow-wrap: anywhere; }
+  .ck-event { display: block; min-width: 140px; color: var(--tb-text); }
+  .ck-mono { font-family: var(--tb-font-mono); letter-spacing: .01em; }
+  .ck-muted { color: var(--tb-secondary); }
+  .ck-row-rejected > td:first-child { box-shadow: inset 3px 0 0 var(--tb-danger-border); }
+  .ck-empty { display: grid; justify-items: center; gap: 4px; padding: 28px 12px; color: var(--tb-secondary); text-align: center; }
+  .ck-empty svg { color: var(--tb-muted); }
+  .ck-empty strong { color: var(--tb-text); }
+  .ck-foot { margin: 0; color: var(--tb-secondary); font-size: max(12px, .85em); }
+
+  /* detail panel */
+  .ck-detail { display: grid; gap: 18px; }
+  .ck-detail h3 { margin: 0 0 4px; color: var(--tb-heading); font-size: 1em; }
+  .ck-verdict { display: grid; justify-items: start; gap: 8px; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--tb-border); }
+  .ck-verdict p { margin: 0; color: var(--tb-text); }
+  .ck-verdict.is-ok { background: var(--tb-success-soft); border-color: var(--tb-success-border); }
+  .ck-verdict.is-warn { background: var(--tb-warning-soft); border-color: var(--tb-warning-border); }
+  .ck-verdict.is-bad { background: var(--tb-danger-soft); border-color: var(--tb-danger-border); }
+  .ck-dl { display: grid; margin: 0; }
+  .ck-dl-row { display: grid; grid-template-columns: minmax(110px, 40%) minmax(0, 1fr); gap: 12px; padding: 8px 0; border-bottom: 1px dashed var(--tb-grid); }
+  .ck-dl-row:last-child { border-bottom: 0; }
+  .ck-dl dt { color: var(--tb-secondary); }
+  .ck-dl dd { margin: 0; color: var(--tb-text); font-weight: 600; overflow-wrap: anywhere; }
+  .ck-link { display: inline-flex; align-items: center; gap: 6px; color: var(--tb-accent-text); font-weight: 650; text-decoration: underline; text-underline-offset: 3px; }
+  .ck-link:hover { color: var(--tb-heading); }
+  .ck-link:focus-visible { outline: 3px solid var(--tb-focus); outline-offset: 2px; border-radius: 4px; }
+  .ck-note { margin: 0; color: var(--tb-secondary); font-size: max(12px, .85em); }
+
+  @media (max-width: 640px) {
+    .ckp-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .ck-dl-row { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  }
+}

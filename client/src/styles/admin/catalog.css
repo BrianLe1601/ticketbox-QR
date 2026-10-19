@@ -1,0 +1,12 @@
+/* /admin/_ui catalogue layout only. */
+.admin-room {
+  .catalog-stack { display: grid; gap: 12px; }
+  .catalog-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .catalog-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 16px; align-items: start; }
+  .catalog-domain { min-width: 90px; color: var(--tb-muted); font-size: 12px; }
+  .catalog-swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  .catalog-swatch { display: grid; gap: 4px; }
+  .catalog-swatch span { height: 44px; border-radius: 8px; border: 1px solid var(--tb-border-strong); }
+  .catalog-swatch strong { font-size: .9em; color: var(--tb-text); }
+  .catalog-swatch code { font-size: 12px; color: var(--tb-muted); }
+}

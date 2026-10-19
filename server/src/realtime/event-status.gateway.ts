@@ -7,6 +7,7 @@ import {
   publishEventStatusChanges,
   subscribeToEventStatusChanges,
 } from "../modules/events/event-status.publisher.js";
+import { registerWebSocketRoute } from "./upgrade-router.js";
 
 const EVENT_SOCKET_PATH = "/ws/events";
 const HEARTBEAT_INTERVAL_MS = 30_000;
@@ -21,10 +22,13 @@ export interface EventRealtimeGateway {
 }
 
 export function createEventRealtimeGateway(server: HttpServer): EventRealtimeGateway {
+  // noServer + shared upgrade router, so another gateway (/ws/admin) can live on the same server.
   const webSocketServer = new WebSocketServer({
-    server,
-    path: EVENT_SOCKET_PATH,
+    noServer: true,
     perMessageDeflate: false,
+  });
+  const unregister = registerWebSocketRoute(server, EVENT_SOCKET_PATH, (request, socket, head) => {
+    webSocketServer.handleUpgrade(request, socket, head, (client) => webSocketServer.emit("connection", client, request));
   });
 
   webSocketServer.on("connection", (socket: TrackedWebSocket) => {
@@ -68,6 +72,7 @@ export function createEventRealtimeGateway(server: HttpServer): EventRealtimeGat
     close: async () => {
       clearInterval(heartbeat);
       unsubscribe();
+      unregister();
       for (const client of webSocketServer.clients) client.terminate();
       await new Promise<void>((resolve) => {
         webSocketServer.close(() => resolve());

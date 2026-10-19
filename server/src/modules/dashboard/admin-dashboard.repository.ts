@@ -139,3 +139,41 @@ export async function getDashboardSalesTrend(days = 7): Promise<DashboardSalesTr
   return rows;
 }
 
+/** Topics the Admin realtime channel watches. Values are opaque change markers, never shown. */
+export type AdminSignalTopic =
+  | "staff" | "refunds" | "publishFailures" | "pendingOrders" | "confirmedOrders"
+  | "checkins" | "events" | "staffing";
+
+export type AdminSignalFingerprint = Record<AdminSignalTopic, string>;
+
+interface FingerprintRow extends RowDataPacket, AdminSignalFingerprint {}
+
+/**
+ * One cheap read-only query whose result changes whenever a Dashboard figure or an Admin task
+ * may have changed (count + newest marker per topic). Used only while an Admin is connected.
+ */
+export async function getAdminSignalFingerprint(): Promise<AdminSignalFingerprint> {
+  const query = `
+    SELECT
+      (SELECT CONCAT(COUNT(*), ':', COALESCE(MAX(id), 0)) FROM users
+        WHERE role = 'staff' AND staff_approval_status = 'pending') AS staff,
+      (SELECT CONCAT(COUNT(*), ':', COALESCE(MAX(updated_at), '')) FROM refunds
+        WHERE status = 'pending') AS refunds,
+      (SELECT CONCAT(COUNT(*), ':', COALESCE(MAX(last_publish_attempt_at), '')) FROM events
+        WHERE status = 'draft' AND publish_failure_reason IS NOT NULL) AS publishFailures,
+      (SELECT CONCAT(COUNT(*), ':', COALESCE(MAX(id), 0)) FROM orders
+        WHERE status = 'pending_payment') AS pendingOrders,
+      (SELECT CONCAT(COUNT(*), ':', COALESCE(MAX(confirmed_at), '')) FROM orders
+        WHERE status = 'confirmed') AS confirmedOrders,
+      (SELECT CONCAT(COUNT(*), ':', COALESCE(MAX(id), 0)) FROM checkin_logs
+        WHERE checked_at >= CURRENT_DATE()) AS checkins,
+      (SELECT CONCAT(COUNT(*), ':', COALESCE(MAX(updated_at), '')) FROM events) AS events,
+      (SELECT CONCAT(SUM(is_active), ':', COALESCE(MAX(id), 0), ':', COALESCE(MAX(revoked_at), ''))
+        FROM event_staff) AS staffing
+  `;
+  const [rows] = await pool.query<FingerprintRow[]>(query);
+  const row = rows[0];
+  const topics: AdminSignalTopic[] = ["staff", "refunds", "publishFailures", "pendingOrders", "confirmedOrders", "checkins", "events", "staffing"];
+  return Object.fromEntries(topics.map((topic) => [topic, String(row?.[topic] ?? "")])) as AdminSignalFingerprint;
+}
+

@@ -31,8 +31,10 @@ export interface CheckinResult {
   code: 'SUCCESS' | 'ALREADY_CHECKED_IN' | 'WRONG_EVENT' | 'CANCELLED' | 'UNPAID'
     | 'INVALID' | 'EVENT_NOT_AVAILABLE' | 'STAFF_NOT_ASSIGNED';
   message: string; checkedAt: string;
-  ticket: { code: string; holderName: string | null; checkedInAt: string | null } | null;
+  ticket: { code: string; holderName: string | null; ticketTypeName?: string | null; checkedInAt: string | null } | null;
 }
+/** Gate-wide counters of one open Event (all Staff), from GET /staff/events/:id/attendance. */
+export interface GateAttendance { admitted: number; validTickets: number; remaining: number }
 export interface CheckinLog {
   id: number; code: CheckinResult['code']; scannedCode: string; message: string; checkedAt: string;
 }
@@ -67,6 +69,8 @@ export const getAssignmentCheckins = (
   const suffix = params.size ? `?${params.toString()}` : '';
   return apiRequest<CheckinLog[]>(`/staff/assignments/${assignmentId}/checkins${suffix}`, { signal }, token);
 };
+export const getGateAttendance = (eventId: number, token: string | null, signal?: AbortSignal) =>
+  apiRequest<GateAttendance>(`/staff/events/${eventId}/attendance`, { signal }, token);
 export const getRecentCheckins = (eventId: number, token: string | null, signal?: AbortSignal) =>
   apiRequest<CheckinLog[]>(`/staff/events/${eventId}/checkins`, { signal }, token);
 export const submitCheckin = (eventId: number, code: string, token: string | null) =>

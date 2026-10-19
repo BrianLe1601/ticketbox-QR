@@ -1,5 +1,8 @@
-import type { ResultSetHeader, RowDataPacket } from "mysql2/promise";
+import type { PoolConnection, ResultSetHeader, RowDataPacket } from "mysql2/promise";
 import { pool } from "../../database/pool.js";
+import { AppError } from "../../utils/app-error.js";
+import type { Queryable } from "../platform-settings/platform-settings.repository.js";
+import type { VenueSnapshot } from "../platform-settings/platform-settings.service.js";
 import type { AdminEventListInput, CreateAdminEventInput, UpdateAdminEventInput } from "./admin-events.schema.js";
 
 export interface AdminEventRow extends RowDataPacket {
@@ -19,14 +22,14 @@ const SELECT = `e.*, c.slug category,
   COUNT(DISTINCT tt.id) ticket_type_count,
   COUNT(DISTINCT CASE WHEN tt.is_active=TRUE AND tt.capacity>0 AND tt.max_per_order>0
     AND (tt.sales_start_at IS NULL OR tt.sales_end_at IS NULL OR tt.sales_start_at < tt.sales_end_at)
-    AND (tt.sales_end_at IS NULL OR tt.sales_end_at <= e.end_time) THEN tt.id END) valid_ticket_type_count,
+    AND (tt.sales_end_at IS NULL OR tt.sales_end_at <= e.checkin_end_at) THEN tt.id END) valid_ticket_type_count,
   COALESCE(SUM(tt.capacity),0) allocated_capacity,
   COALESCE(SUM(tt.sold_quantity),0) sold_quantity,
   (SELECT COUNT(*) FROM orders po WHERE po.event_id=e.id AND po.status='pending_payment') pending_order_count,
   (SELECT COUNT(*) FROM orders co WHERE co.event_id=e.id AND co.status='confirmed') confirmed_order_count,
   (SELECT COUNT(*) FROM event_staff es WHERE es.event_id=e.id AND es.is_active=TRUE) active_staff_count`;
 
-function toDatabaseDate(value: string | null | undefined): string | null | undefined {
+export function toDatabaseDate(value: string | null | undefined): string | null | undefined {
   if (value === undefined) return undefined;
   if (value === null) return null;
   const bangkokOffsetMilliseconds = 7 * 60 * 60 * 1000;
@@ -55,8 +58,7 @@ export async function findAdminEvent(id:number, forUpdate=false, connection=pool
 
 function dbValues(input:CreateAdminEventInput|UpdateAdminEventInput){
   return {
-    name:input.name, description:input.description, venue:input.venue,
-    address:input.address, city:input.city, venue_capacity:input.venueCapacity,
+    name:input.name, description:input.description,
     cover_image_url:input.coverImageUrl, cover_image_public_id:input.coverImagePublicId,
     cover_image_alt:input.coverImageAlt,
     start_time:toDatabaseDate(input.startTime), end_time:toDatabaseDate(input.endTime),
@@ -66,20 +68,57 @@ function dbValues(input:CreateAdminEventInput|UpdateAdminEventInput){
   };
 }
 
-export async function insertAdminEvent(input:CreateAdminEventInput, categoryId:number, slug:string, adminId:number){
-  const [result]=await pool.execute<ResultSetHeader>(`INSERT INTO events
+export async function insertAdminEvent(input:CreateAdminEventInput, categoryId:number, slug:string, adminId:number, venue:VenueSnapshot, db:Pick<PoolConnection,"execute">=pool){
+  try{
+  const [result]=await db.execute<ResultSetHeader>(`INSERT INTO events
     (name,slug,description,category_id,venue,address,city,venue_capacity,cover_image_url,cover_image_public_id,cover_image_alt,start_time,end_time,sales_start_at,sales_end_at,checkin_start_at,checkin_end_at,status,scheduled_publish_at,created_by)
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'draft',?,?)`,
-    [input.name,slug,input.description??null,categoryId,input.venue,input.address,input.city,input.venueCapacity,input.coverImageUrl??null,input.coverImagePublicId??null,input.coverImageAlt??null,toDatabaseDate(input.startTime)!,toDatabaseDate(input.endTime)!,toDatabaseDate(input.salesStartAt)!,toDatabaseDate(input.salesEndAt)!,toDatabaseDate(input.checkinStartAt)!,toDatabaseDate(input.checkinEndAt)!,toDatabaseDate(input.scheduledPublishAt)??null,adminId]);
+    [input.name,slug,input.description??null,categoryId,venue.name,venue.address,venue.city,venue.capacity,input.coverImageUrl??null,input.coverImagePublicId??null,input.coverImageAlt??null,toDatabaseDate(input.startTime)!,toDatabaseDate(input.endTime)!,toDatabaseDate(input.salesStartAt)!,toDatabaseDate(input.salesEndAt)!,toDatabaseDate(input.checkinStartAt)!,toDatabaseDate(input.checkinEndAt)!,toDatabaseDate(input.scheduledPublishAt)??null,adminId]);
   return result.insertId;
+  }catch(error){throw translateVenueConflict(error);}
 }
 
-export async function updateAdminEventRecord(id:number,input:UpdateAdminEventInput,categoryId?:number){
+/** Explicit Ticket Type sales end furthest in the future (null when every tier follows the Event). */
+export async function latestTicketSalesEnd(eventId:number){
+  const [rows]=await pool.query<RowDataPacket[]>("SELECT MAX(sales_end_at) latest FROM ticket_types WHERE event_id=?",[eventId]);
+  return (rows[0]?.latest as Date|null)??null;
+}
+
+/** The schedule triggers are the last line of defense; map their SIGNALs to stable API errors. */
+export function translateVenueConflict(error:unknown){
+  const message=(error as {sqlMessage?:string}|null)?.sqlMessage??"";
+  if(message.includes("Venue schedule conflicts"))return new AppError(409,"Địa điểm đã có sự kiện khác trong khoảng thời gian này","VENUE_SCHEDULE_CONFLICT");
+  if(message.includes("Event schedule would invalidate a Ticket sales window"))return new AppError(409,"Có hạng vé bán quá giờ đóng check-in hoặc giờ kết thúc mới. Dời giờ kết thúc bán của hạng vé trước","TICKET_SALES_OUTSIDE_EVENT_WINDOW");
+  return error;
+}
+
+export async function updateAdminEventRecord(id:number,input:UpdateAdminEventInput,categoryId?:number,venue?:VenueSnapshot,db:Pick<PoolConnection,"execute">=pool){
   const values=dbValues(input); const sets:string[]=[]; const params:(string|number|null)[]=[];
   for(const [column,value] of Object.entries(values)){if(value!==undefined){sets.push(`${column}=?`);params.push(value as string|number|null);}}
   if(categoryId!==undefined){sets.push("category_id=?");params.push(categoryId);}
+  if(venue){sets.push("venue=?","address=?","city=?","venue_capacity=?");params.push(venue.name,venue.address,venue.city,venue.capacity);}
   if(!sets.length)return;
-  await pool.execute(`UPDATE events SET ${sets.join(", ")}, publish_failure_reason=NULL WHERE id=?`,[...params,id]);
+  try{await db.execute(`UPDATE events SET ${sets.join(", ")}, publish_failure_reason=NULL WHERE id=?`,[...params,id]);}
+  catch(error){throw translateVenueConflict(error);}
+}
+
+/** Locks the Event row only (after the platform settings row); returns its current status. */
+export async function lockEventStatus(conn:Queryable,id:number){
+  const [rows]=await conn.query<RowDataPacket[]>("SELECT status FROM events WHERE id=? FOR UPDATE",[id]);
+  return (rows[0]?.status as AdminEventRow["status"]|undefined)??null;
+}
+
+/** Orders that can still produce tickets, plus any issued ticket: either one locks the venue text. */
+export async function countSalesActivity(conn:Queryable,eventId:number){
+  const [rows]=await conn.query<RowDataPacket[]>(`SELECT
+    (SELECT COUNT(*) FROM orders WHERE event_id=? AND status IN ('pending_payment','confirmed')) liveOrders,
+    (SELECT COUNT(*) FROM tickets t JOIN order_items oi ON oi.id=t.order_item_id JOIN orders o ON o.id=oi.order_id WHERE o.event_id=?) issuedTickets`,[eventId,eventId]);
+  return {liveOrders:Number(rows[0]?.liveOrders??0),issuedTickets:Number(rows[0]?.issuedTickets??0)};
+}
+
+export async function allocatedCapacity(conn:Queryable,eventId:number){
+  const [rows]=await conn.query<RowDataPacket[]>("SELECT COALESCE(SUM(capacity),0) total FROM ticket_types WHERE event_id=?",[eventId]);
+  return Number(rows[0]?.total??0);
 }
 
 export async function deleteDraftEvent(id:number){

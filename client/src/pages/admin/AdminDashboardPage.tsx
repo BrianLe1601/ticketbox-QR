@@ -1,685 +1,342 @@
 import {
-  AlertCircle,
-  AlertTriangle,
-  ArrowRight,
-  CalendarDays,
-  CheckCircle2,
-  CreditCard,
-  DollarSign,
-  Radio,
-  RefreshCw,
-  ShieldAlert,
-  Ticket,
-  TrendingUp,
-  UserCheck,
-  Users,
+  ArrowDownRight, ArrowRight, ArrowUpRight, CalendarDays, Clock3, Minus, PackageCheck, RefreshCw, ScanLine, Search, Users,
+  type LucideIcon,
 } from "lucide-react";
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useOutletContext } from "react-router-dom";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
 
+import {
+  BentoCard, BentoGrid, Button, ButtonLink, DonutRing, EmptyState, ErrorState, Gauge, PageHeader, PageLayout, SegmentedControl, Skeleton, SparkBars,
+} from "@/components/admin/ui";
 import { useAuth } from "@/context/AuthContext";
-import {
-  getAdminDashboardSummary,
-  type DashboardSummary,
-} from "@/services/admin-dashboard.service";
+import type { AdminOutletContext } from "@/layouts/AdminLayout";
+import { formatMoney, formatMoneyCompact, formatNumber, formatTime } from "@/lib/admin-format";
+import { buildSuggestions, sellThrough, startsInLabel, upcomingEvents } from "@/lib/admin-insights";
+import { cn } from "@/lib/utils";
+import type { AdminEvent } from "@/services/admin-events.service";
+import { getStoredToken } from "@/services/auth.service";
+import { loadReport } from "@/services/report.service";
+import "@/styles/admin/dashboard.css";
 
-function formatVND(amount: number): string {
-  return new Intl.NumberFormat("vi-VN", {
-    style: "currency",
-    currency: "VND",
-  }).format(amount);
-}
+interface GateStats { admissions: number; soldTickets: number }
+type TableScope = "ongoing" | "upcoming";
 
-function formatDateTimeShort(isoStr: string | null): string {
-  if (!isoStr) return "—";
-  return new Date(isoStr).toLocaleString("vi-VN", {
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
+const RINGS = ["var(--tb-ring-1)", "var(--tb-ring-2)", "var(--tb-ring-3)", "var(--tb-ring-4)"];
 
-function formatCompactNumber(value: number): string {
-  return new Intl.NumberFormat("vi-VN", {
-    notation: "compact",
-    maximumFractionDigits: 1,
-  }).format(value);
-}
-
-function formatTrendDate(value: string): string {
-  const [, month, day] = value.split("-");
+function dayMonth(iso: string) {
+  const [, month, day] = iso.split("-");
   return `${day}/${month}`;
 }
 
-interface DashboardTooltipProps {
-  active?: boolean;
-  label?: string;
-  payload?: Array<{ value?: number }>;
-  kind: "revenue" | "tickets";
+function vnDay(iso: string) {
+  const date = new Date(new Date(iso).getTime() + 7 * 3_600_000);
+  return { day: String(date.getUTCDate()).padStart(2, "0"), month: `TH${date.getUTCMonth() + 1}` };
 }
 
-function DashboardChartTooltip({ active, label, payload, kind }: DashboardTooltipProps) {
+/** Admissions for open gates. Fetched once per visit/refresh, never polled: every report call
+ *  creates an Admin snapshot and polling would evict the one the Reports page is exporting. */
+function useGateStats(events: AdminEvent[], refreshKey: number) {
+  const ids = events.map((event) => event.id).join(",");
+  const [stats, setStats] = useState<{ key: string; byId: Record<number, GateStats | null> }>({ key: "", byId: {} });
+  const key = `${ids}#${refreshKey}`;
+  useEffect(() => {
+    if (!ids) return;
+    const controller = new AbortController();
+    const token = getStoredToken();
+    Promise.all(ids.split(",").map(async (id) => {
+      try {
+        const response = await loadReport({ eventId: id, from: "", to: "", groupBy: "day" }, 1, null, token, controller.signal);
+        return [Number(id), { admissions: response.data.admissions, soldTickets: response.data.soldTickets }] as const;
+      } catch {
+        return [Number(id), null] as const;
+      }
+    })).then((entries) => { if (!controller.signal.aborted) setStats({ key: `${ids}#${refreshKey}`, byId: Object.fromEntries(entries) }); });
+    return () => controller.abort();
+  }, [ids, refreshKey]);
+  return { byId: stats.byId, loading: Boolean(ids) && stats.key !== key };
+}
+
+function TrendTip({ active, payload, label }: { active?: boolean; payload?: Array<{ dataKey?: string; value?: number }>; label?: string }) {
   if (!active || !payload?.length || !label) return null;
-  const value = Number(payload[0]?.value ?? 0);
+  const tickets = Number(payload.find((p) => p.dataKey === "ticketsSold")?.value ?? 0);
+  const revenue = Number(payload.find((p) => p.dataKey === "revenue")?.value ?? 0);
   return (
-    <div className="admin-chart-tooltip">
-      <span>Ngày {formatTrendDate(label)}</span>
-      <strong>{kind === "revenue" ? formatVND(value) : `${value.toLocaleString("vi-VN")} vé`}</strong>
+    <div className="bento-tip">
+      <span>Ngày {dayMonth(label)}</span>
+      <strong className="tb-num">{formatNumber(tickets)} vé · {formatMoneyCompact(revenue)}</strong>
     </div>
   );
 }
 
+/** Day-over-day change from the real 7-day series (no invented trend). */
+function Change({ today, yesterday, money }: { today: number; yesterday: number; money?: boolean }) {
+  const diff = today - yesterday;
+  const Icon: LucideIcon = diff > 0 ? ArrowUpRight : diff < 0 ? ArrowDownRight : Minus;
+  const text = diff === 0 ? "bằng hôm qua" : `${diff > 0 ? "+" : "−"}${money ? formatMoneyCompact(Math.abs(diff)) : formatNumber(Math.abs(diff))} so với hôm qua`;
+  return <span className={cn("bento-change", diff > 0 && "is-up", diff < 0 && "is-down")}><Icon size={14} aria-hidden="true" />{text}</span>;
+}
+
 export function AdminDashboardPage() {
   const { user } = useAuth();
-  const navigate = useNavigate();
-
-  const [summary, setSummary] = useState<DashboardSummary | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { signals, openSearch } = useOutletContext<AdminOutletContext>();
+  const { summary, activeEvents, openGates, loading, error, updatedAt, refresh } = signals;
+  const [refreshKey, setRefreshKey] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // null = automatic: show events happening now when there are any, otherwise upcoming ones.
+  const [scopeChoice, setScope] = useState<TableScope | null>(null);
+  const [insightPage, setInsightPage] = useState(0);
+  const gate = useGateStats(openGates, refreshKey);
 
-  async function loadSummary(isRefresh = false) {
-    if (isRefresh) setRefreshing(true);
-    else setLoading(true);
-    setError(null);
+  const trend = useMemo(() => summary?.salesTrend ?? [], [summary]);
+  const totals = trend.reduce((acc, point) => ({ tickets: acc.tickets + point.ticketsSold, revenue: acc.revenue + point.revenue }), { tickets: 0, revenue: 0 });
+  const peak = trend.reduce<(typeof trend)[number] | null>((best, point) => (!best || point.ticketsSold > best.ticketsSold ? point : best), null);
+  const today = trend.at(-1);
+  const yesterday = trend.at(-2);
+  const upcoming = useMemo(() => upcomingEvents(activeEvents, new Date(), 12), [activeEvents]);
+  const rings = upcoming.slice(0, 4);
+  // Counts come from every active Event, not the 12-item list, so the pill labels stay exact.
+  const ongoingCount = activeEvents.filter((event) => event.status === "ongoing").length;
+  const upcomingCount = useMemo(() => upcomingEvents(activeEvents, new Date(), Infinity).filter((event) => event.status !== "ongoing").length, [activeEvents]);
+  const scope: TableScope = scopeChoice ?? (ongoingCount > 0 ? "ongoing" : "upcoming");
+  const tableRows = upcoming.filter((event) => (scope === "ongoing") === (event.status === "ongoing")).slice(0, 6);
+  const staffed = activeEvents.filter((event) => event.activeStaffCount > 0).length;
+  const firstLoad = loading && !summary;
 
-    try {
-      const data = await getAdminDashboardSummary();
-      setSummary(data);
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Không thể kết nối đến máy chủ để lấy số liệu tổng quan.",
-      );
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
+  const gateEvent = openGates[0];
+  const gateStats = gateEvent ? gate.byId[gateEvent.id] : undefined;
+  const gateRatio = gateStats && gateStats.soldTickets > 0 ? gateStats.admissions / gateStats.soldTickets : 0;
+  const staffRatio = activeEvents.length ? staffed / activeEvents.length : 0;
+
+  const insights = useMemo(() => {
+    const unstaffed = upcoming.filter((event) => event.status !== "ongoing" && event.activeStaffCount === 0);
+    const list: Array<{ id: string; kind: "staff" | "stock"; title: string; text: string; to: string; action: string }> = [];
+    if (unstaffed.length) list.push({ id: "staff", kind: "staff", title: "Cần phân công nhân sự", text: `Có ${unstaffed.length} sự kiện sắp tới chưa có nhân viên phụ trách check-in.`, to: "/admin/staff", action: "Phân công" });
+    for (const s of buildSuggestions(activeEvents)) list.push({ id: s.id, kind: "stock", title: s.title, text: s.detail, to: s.to, action: s.action });
+    if (!list.some((item) => item.kind === "stock")) list.push({ id: "stock-ok", kind: "stock", title: "Tồn kho & lịch sự kiện", text: "Hiện không có sự kiện nào bán chậm hoặc sắp hết vé.", to: "/admin/ticket-types", action: "Xem hạng vé" });
+    return list;
+  }, [upcoming, activeEvents]);
+  const pageCount = Math.max(1, Math.ceil(insights.length / 2));
+  const page = Math.min(insightPage, pageCount - 1);
+
+  async function onRefresh() {
+    setRefreshing(true);
+    try { await refresh(); setRefreshKey((value) => value + 1); } finally { setRefreshing(false); }
   }
 
-  useEffect(() => {
-    let active = true;
-    void getAdminDashboardSummary()
-      .then((data) => {
-        if (active) {
-          setSummary(data);
-          setLoading(false);
-        }
-      })
-      .catch((err: Error) => {
-        if (active) {
-          setError(
-            err.message || "Không thể kết nối đến máy chủ để lấy số liệu tổng quan.",
-          );
-          setLoading(false);
-        }
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  const hasAlerts =
-    summary &&
-    (summary.alerts.unstaffedUpcomingEvents.length > 0 ||
-      summary.alerts.scheduledPublishFailedEvents.length > 0 ||
-      summary.staff.pendingApproval > 0 ||
-      summary.refunds.pendingCount > 0);
-  const salesTrend = summary?.salesTrend ?? [];
-  const periodRevenue = salesTrend.reduce((sum, point) => sum + point.revenue, 0);
-  const periodTickets = salesTrend.reduce((sum, point) => sum + point.ticketsSold, 0);
-
   return (
-    <div className={`admin-dashboard ${hasAlerts ? "has-alerts" : ""}`}>
-      {/* 1. Welcome & System Header */}
-      <section className="admin-welcome">
-        <div>
-          <div className="admin-live-label">
-            <Radio size={13} /> ĐIỀU HÀNH TRỰC TIẾP
-          </div>
-          <h2>Xin chào, {user?.fullName || "Quản trị viên"}</h2>
-          <p>
-            Trung tâm kiểm soát vận hành TicketBoxQR. Giám sát sự kiện thời gian thực,
-            đáp ứng vé vào cổng và phối hợp nhân sự tại chỗ.
-          </p>
-        </div>
+    <PageLayout className="dash">
+      <PageHeader
+        title="Tổng quan"
+        description={`Xin chào, ${user?.fullName ?? "Quản trị viên"}.`}
+        meta={updatedAt ? <span className="tb-num"><Clock3 size={13} aria-hidden="true" /> Cập nhật lúc {formatTime(updatedAt, true)} · tự cập nhật mỗi phút</span> : null}
+        actions={<Button icon={RefreshCw} loading={refreshing} onClick={() => void onRefresh()}>Làm mới</Button>}
+      />
 
-        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-          <button
-            type="button"
-            className="events-secondary-button"
-            onClick={() => void loadSummary(true)}
-            disabled={loading || refreshing}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "6px",
-              padding: "8px 14px",
-              borderRadius: "10px",
-              border: "1px solid rgba(56, 189, 248, 0.25)",
-              background: "rgba(6, 21, 40, 0.7)",
-              color: "#38bdf8",
-              cursor: "pointer",
-              fontSize: "12px",
-              fontWeight: 600,
-            }}
-          >
-            <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
-            <span>{refreshing ? "Đang đồng bộ..." : "Đồng bộ lại"}</span>
-          </button>
+      {error && !summary && <ErrorState title="Không tải được số liệu tổng quan" description={error} onRetry={() => void onRefresh()} retrying={refreshing} />}
 
-          <div className="admin-clock">
-            <span>SYS.TIME (VN)</span>
-            <strong>
-              {new Date().toLocaleTimeString("vi-VN", {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}{" "}
-              - {new Date().toLocaleDateString("vi-VN")}
-            </strong>
-          </div>
-        </div>
-      </section>
-
-      {/* Error Banner */}
-      {error && (
-        <div className="categories-error" role="alert" style={{ marginBottom: "20px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <AlertCircle size={18} />
-            <span>{error}</span>
-          </div>
-          <button type="button" onClick={() => void loadSummary(false)}>
-            Thử lại
-          </button>
-        </div>
-      )}
-
-      {/* 2. Key Operational Metrics (4 main cards) */}
-      <section className="admin-stat-grid" aria-label="Chỉ số hoạt động chính">
-        {/* Card 1: Active Events */}
-        <article
-          className="admin-stat-card cyan"
-          onClick={() => navigate("/admin/events")}
-          style={{ cursor: "pointer" }}
-          title="Bấm để xem danh sách sự kiện"
+      <BentoGrid>
+        {/* Row 1A — sales */}
+        <BentoCard
+          span={7}
+          title="Vé bán 7 ngày"
+          subtitle="Chỉ tính đơn đã xác nhận"
+          actions={peak && peak.ticketsSold > 0 ? <span className="bento-peak tb-num">Cao nhất {dayMonth(peak.date)} · {formatNumber(peak.ticketsSold)} vé · {formatMoneyCompact(peak.revenue)}</span> : undefined}
         >
-          <div className="admin-stat-icon">
-            <CalendarDays size={21} />
-          </div>
-          <div>
-            <span>Sự kiện đang hoạt động</span>
-            <strong>{loading ? "..." : summary?.events.active ?? 0}</strong>
-            <small>
-              {loading
-                ? "Đang tải dữ liệu..."
-                : `${summary?.events.draft ?? 0} nháp, ${summary?.events.scheduled ?? 0} hẹn giờ`}
-            </small>
-          </div>
-          <TrendingUp className="admin-stat-signal" size={18} />
-        </article>
-
-        {/* Card 2: Issued Tickets */}
-        <article
-          className="admin-stat-card violet"
-          onClick={() => navigate("/admin/ticket-types")}
-          style={{ cursor: "pointer" }}
-          title="Bấm để quản lý các hạng vé"
-        >
-          <div className="admin-stat-icon">
-            <Ticket size={21} />
-          </div>
-          <div>
-            <span>Vé đã phát hành</span>
-            <strong>{loading ? "..." : summary?.tickets.issued ?? 0}</strong>
-            <small>
-              {loading
-                ? "Đang tải dữ liệu..."
-                : `${summary?.orders.confirmed ?? 0} đơn hàng thành công`}
-            </small>
-          </div>
-          <TrendingUp className="admin-stat-signal" size={18} />
-        </article>
-
-        {/* Card 3: Today Checkins */}
-        <article
-          className="admin-stat-card green"
-          onClick={() => navigate("/admin/checkins")}
-          style={{ cursor: "pointer" }}
-          title="Bấm để xem nhật ký check-in"
-        >
-          <div className="admin-stat-icon">
-            <CheckCircle2 size={21} />
-          </div>
-          <div>
-            <span>Check-in thành công</span>
-            <strong>{loading ? "..." : summary?.checkins.todaySuccess ?? 0}</strong>
-            <small>{loading ? "Đang tải dữ liệu..." : "Lượt quét hợp lệ hôm nay"}</small>
-          </div>
-          <TrendingUp className="admin-stat-signal" size={18} />
-        </article>
-
-        {/* Card 4: Staff On Duty */}
-        <article
-          className="admin-stat-card amber"
-          onClick={() => navigate("/admin/staff")}
-          style={{ cursor: "pointer" }}
-          title="Bấm để quản lý nhân sự & phân công"
-        >
-          <div className="admin-stat-icon">
-            <Users size={21} />
-          </div>
-          <div>
-            <span>Nhân sự trực cổng</span>
-            <strong>{loading ? "..." : summary?.staff.activeOnDuty ?? 0}</strong>
-            <small>
-              {loading
-                ? "Đang tải dữ liệu..."
-                : summary?.staff.pendingApproval
-                  ? `${summary.staff.pendingApproval} tài khoản chờ duyệt`
-                  : "Đang được phân công sự kiện"}
-            </small>
-          </div>
-          <TrendingUp className="admin-stat-signal" size={18} />
-        </article>
-      </section>
-
-      {/* 3. Secondary Metrics: Financial & Orders Overview */}
-      <section
-        className="admin-secondary-metrics"
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-          gap: "14px",
-          marginTop: "16px",
-        }}
-        aria-label="Tài chính và giao dịch"
-      >
-        <div
-          className="admin-secondary-metric"
-          style={{
-            padding: "16px 18px",
-            borderRadius: "14px",
-            border: "1px solid rgba(120, 174, 215, 0.16)",
-            background:
-              "linear-gradient(135deg, rgba(4, 18, 36, 0.75), rgba(2, 10, 22, 0.65))",
-            display: "flex",
-            alignItems: "center",
-            gap: "14px",
-          }}
-        >
-          <div
-            className="admin-secondary-metric-icon"
-            style={{
-              width: "42px",
-              height: "42px",
-              borderRadius: "10px",
-              background: "rgba(16, 185, 129, 0.12)",
-              border: "1px solid rgba(16, 185, 129, 0.25)",
-              color: "#34d399",
-              display: "grid",
-              placeItems: "center",
-              flexShrink: 0,
-            }}
-          >
-            <DollarSign size={20} />
-          </div>
-          <div>
-            <span style={{ fontSize: "11px", color: "#7a93a8", fontWeight: 700 }}>
-              TỔNG THANH TOÁN MÔ PHỎNG
-            </span>
-            <div
-              style={{
-                fontSize: "18px",
-                fontWeight: 800,
-                color: "#f1fbff",
-                marginTop: "2px",
-              }}
-            >
-              {loading ? "..." : formatVND(summary?.orders.totalRevenue ?? 0)}
+          <ul className="bento-legend" aria-label="Chú thích">
+            <li><span className="is-1" aria-hidden="true" />Vé bán <strong className="tb-num">{formatNumber(totals.tickets)}</strong></li>
+            <li><span className="is-2" aria-hidden="true" />Doanh thu (mô phỏng) <strong className="tb-num">{formatMoney(totals.revenue)}</strong></li>
+          </ul>
+          {firstLoad ? <Skeleton height="220px" /> : totals.tickets === 0 && totals.revenue === 0 ? (
+            <EmptyState compact icon={PackageCheck} title="Chưa có đơn xác nhận trong 7 ngày qua" />
+          ) : (
+            <div className="bento-chart" role="img" aria-label={`Vé bán và doanh thu theo ngày, 7 ngày gần nhất: tổng ${formatNumber(totals.tickets)} vé, ${formatMoney(totals.revenue)}`}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={trend} margin={{ top: 8, right: 4, left: 0, bottom: 0 }} barGap={4}>
+                  <CartesianGrid stroke="var(--tb-grid)" strokeDasharray="4 4" vertical={false} />
+                  <XAxis dataKey="date" tickFormatter={dayMonth} tickLine={false} axisLine={false} tick={{ fill: "var(--tb-secondary)", fontSize: 12 }} />
+                  <YAxis yAxisId="tickets" allowDecimals={false} tickLine={false} axisLine={false} width={32} tick={{ fill: "var(--tb-secondary)", fontSize: 12 }} />
+                  <YAxis yAxisId="revenue" orientation="right" tickLine={false} axisLine={false} width={64} tick={{ fill: "var(--tb-secondary)", fontSize: 12 }} tickFormatter={(value: number) => formatMoneyCompact(value)} />
+                  <ChartTooltip content={<TrendTip />} cursor={{ fill: "var(--tb-accent-soft)" }} />
+                  <Bar yAxisId="tickets" dataKey="ticketsSold" fill="var(--tb-chart-1)" radius={[6, 6, 0, 0]} maxBarSize={22} />
+                  <Bar yAxisId="revenue" dataKey="revenue" fill="var(--tb-chart-2)" radius={[6, 6, 0, 0]} maxBarSize={22} />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
-            <small style={{ fontSize: "10.5px", color: "#64748b" }}>
-              Từ {summary?.orders.confirmed ?? 0} đơn xác nhận; không có giao dịch tiền thật
-            </small>
-          </div>
-        </div>
+          )}
+        </BentoCard>
 
-        <div
-          className="admin-secondary-metric"
-          style={{
-            padding: "16px 18px",
-            borderRadius: "14px",
-            border: "1px solid rgba(120, 174, 215, 0.16)",
-            background:
-              "linear-gradient(135deg, rgba(4, 18, 36, 0.75), rgba(2, 10, 22, 0.65))",
-            display: "flex",
-            alignItems: "center",
-            gap: "14px",
-          }}
-        >
-          <div
-            className="admin-secondary-metric-icon"
-            style={{
-              width: "42px",
-              height: "42px",
-              borderRadius: "10px",
-              background: "rgba(56, 189, 248, 0.12)",
-              border: "1px solid rgba(56, 189, 248, 0.25)",
-              color: "#38bdf8",
-              display: "grid",
-              placeItems: "center",
-              flexShrink: 0,
-            }}
-          >
-            <CreditCard size={20} />
-          </div>
-          <div>
-            <span style={{ fontSize: "11px", color: "#7a93a8", fontWeight: 700 }}>
-              ĐƠN HÀNG CHỜ THANH TOÁN
-            </span>
-            <div
-              style={{
-                fontSize: "18px",
-                fontWeight: 800,
-                color: "#f1fbff",
-                marginTop: "2px",
-              }}
-            >
-              {loading ? "..." : `${summary?.orders.pending ?? 0} đơn`}
-            </div>
-            <small style={{ fontSize: "10.5px", color: "#64748b" }}>
-              Đang giữ chỗ vé trong phiên
-            </small>
-          </div>
-        </div>
-
-        <div
-          className="admin-secondary-metric"
-          style={{
-            padding: "16px 18px",
-            borderRadius: "14px",
-            border: "1px solid rgba(120, 174, 215, 0.16)",
-            background:
-              "linear-gradient(135deg, rgba(4, 18, 36, 0.75), rgba(2, 10, 22, 0.65))",
-            display: "flex",
-            alignItems: "center",
-            gap: "14px",
-          }}
-        >
-          <div
-            className="admin-secondary-metric-icon"
-            style={{
-              width: "42px",
-              height: "42px",
-              borderRadius: "10px",
-              background: "rgba(244, 63, 94, 0.12)",
-              border: "1px solid rgba(244, 63, 94, 0.25)",
-              color: "#fb7185",
-              display: "grid",
-              placeItems: "center",
-              flexShrink: 0,
-            }}
-          >
-            <ShieldAlert size={20} />
-          </div>
-          <div>
-            <span style={{ fontSize: "11px", color: "#7a93a8", fontWeight: 700 }}>
-              HOÀN TIỀN CHỜ XỬ LÝ
-            </span>
-            <div
-              style={{
-                fontSize: "18px",
-                fontWeight: 800,
-                color: "#f1fbff",
-                marginTop: "2px",
-              }}
-            >
-              {loading ? "..." : `${summary?.refunds.pendingCount ?? 0} yêu cầu`}
-            </div>
-            <small style={{ fontSize: "10.5px", color: "#64748b" }}>
-              Giá trị: {formatVND(summary?.refunds.pendingAmount ?? 0)}
-            </small>
-          </div>
-        </div>
-      </section>
-
-      {/* 4. Operational Alerts & Warnings (if any) */}
-      {hasAlerts && (
-        <section
-          className="admin-operations-alerts"
-          style={{
-            marginTop: "18px",
-            padding: "18px 20px",
-            borderRadius: "16px",
-            border: "1px solid rgba(245, 158, 11, 0.3)",
-            background: "linear-gradient(135deg, rgba(29, 21, 6, 0.8), rgba(18, 13, 3, 0.9))",
-          }}
-          aria-label="Cảnh báo vận hành cần xử lý"
-        >
-          <div
-            className="admin-operations-alerts-heading"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "10px",
-              marginBottom: "14px",
-              color: "#fbbf24",
-            }}
-          >
-            <AlertTriangle size={20} />
-            <h3 style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: "#fef08a" }}>
-              CẢNH BÁO VẬN HÀNH CẦN QUẢN TRỊ VIÊN XỬ LÝ
-            </h3>
-          </div>
-
-          <div className="admin-operations-alerts-list" style={{ display: "grid", gap: "10px" }}>
-            {/* Unstaffed Upcoming Events */}
-            {summary.alerts.unstaffedUpcomingEvents.map((evt) => (
-              <div
-                key={evt.id}
-                className="admin-operation-alert-row"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "10px 14px",
-                  borderRadius: "10px",
-                  background: "rgba(245, 158, 11, 0.1)",
-                  border: "1px solid rgba(245, 158, 11, 0.2)",
-                  fontSize: "12.5px",
-                }}
-              >
-                <div>
-                  <strong style={{ color: "#fef08a" }}>{evt.name}</strong>
-                  <span style={{ color: "#a89060", marginLeft: "10px" }}>
-                    Bắt đầu: {formatDateTimeShort(evt.startTime)} — Chưa có nhân viên trực cổng!
-                  </span>
-                </div>
-                <button
-                  className="admin-operation-alert-action"
-                  type="button"
-                  onClick={() => navigate("/admin/staff")}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "4px",
-                    padding: "4px 10px",
-                    borderRadius: "6px",
-                    border: "1px solid rgba(245, 158, 11, 0.4)",
-                    background: "rgba(245, 158, 11, 0.2)",
-                    color: "#fef08a",
-                    fontSize: "11px",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                  }}
+        {/* Row 1B — gate gauges */}
+        <BentoCard span={5} title="Trực cổng check-in" subtitle={gateEvent ? "Sự kiện đang mở cổng" : "Không có cổng đang mở"}
+          actions={<ButtonLink to={gateEvent ? `/admin/checkins?eventId=${gateEvent.id}` : "/admin/checkins"} size="sm" variant="primary" icon={ScanLine}>Nhật ký</ButtonLink>}>
+          <div className="bento-gauges">
+            <figure className="bento-gauge">
+              {firstLoad || (gateEvent && gate.loading) ? <Skeleton height="120px" /> : (
+                <Gauge
+                  value={gateRatio}
+                  label={gateEvent ? `Đã vào cổng ${gateStats ? `${gateStats.admissions} trên ${gateStats.soldTickets} vé` : "chưa tải được"}` : "Không có cổng đang mở"}
+                  zones={[{ to: 0.4, color: "var(--tb-gauge-bad)" }, { to: 0.75, color: "var(--tb-gauge-mid)" }, { to: 1, color: "var(--tb-gauge-good)" }]}
                 >
-                  Phân công ngay <ArrowRight size={12} />
-                </button>
-              </div>
-            ))}
-
-            {/* Scheduled Publish Failures */}
-            {summary.alerts.scheduledPublishFailedEvents.map((evt) => (
-              <div
-                key={evt.id}
-                className="admin-operation-alert-row"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "10px 14px",
-                  borderRadius: "10px",
-                  background: "rgba(244, 63, 94, 0.12)",
-                  border: "1px solid rgba(244, 63, 94, 0.25)",
-                  fontSize: "12.5px",
-                }}
-              >
-                <div>
-                  <strong style={{ color: "#fca5a5" }}>{evt.name}</strong>
-                  <span style={{ color: "#f87171", marginLeft: "10px" }}>
-                    Lỗi hẹn giờ công bố: {evt.publishFailureReason}
-                  </span>
-                </div>
-                <button
-                  className="admin-operation-alert-action"
-                  type="button"
-                  onClick={() => navigate("/admin/events")}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "4px",
-                    padding: "4px 10px",
-                    borderRadius: "6px",
-                    border: "1px solid rgba(244, 63, 94, 0.4)",
-                    background: "rgba(244, 63, 94, 0.2)",
-                    color: "#fee2e2",
-                    fontSize: "11px",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                  }}
+                  <strong className="tb-num">{gateEvent ? (gateStats ? `${formatNumber(gateStats.admissions)} / ${formatNumber(gateStats.soldTickets)} vé` : "—") : "0"}</strong>
+                </Gauge>
+              )}
+              <figcaption>
+                <span className="bento-gauge-name">{gateEvent ? gateEvent.name : upcoming[0] ? `Tiếp theo: ${upcoming[0].name}` : "Chưa có sự kiện sắp tới"}</span>
+                <span className="bento-gauge-rate tb-num">
+                  {gateEvent ? `Đã vào cổng · ${Math.round(gateRatio * 100)}%` : upcoming[0] ? startsInLabel(upcoming[0].startTime, upcoming[0].status) : "—"}
+                </span>
+              </figcaption>
+            </figure>
+            <figure className="bento-gauge">
+              {firstLoad ? <Skeleton height="120px" /> : (
+                <Gauge
+                  value={staffRatio}
+                  label={`${staffed} trên ${activeEvents.length} sự kiện đang hoạt động có nhân viên trực`}
+                  zones={[{ to: 0.5, color: "var(--tb-gauge-bad)" }, { to: 0.8, color: "var(--tb-gauge-mid)" }, { to: 1, color: "var(--tb-gauge-good)" }]}
                 >
-                  Xem sự kiện <ArrowRight size={12} />
-                </button>
-              </div>
-            ))}
+                  <strong className="tb-num">{formatNumber(staffed)} / {formatNumber(activeEvents.length)}</strong>
+                </Gauge>
+              )}
+              <figcaption>
+                <span className="bento-gauge-name">Sự kiện có nhân viên trực</span>
+                <span className="bento-gauge-rate tb-num">Đã phân công · {Math.round(staffRatio * 100)}%</span>
+              </figcaption>
+            </figure>
+          </div>
+        </BentoCard>
 
-            {/* Pending Staff Approval */}
-            {summary.staff.pendingApproval > 0 && (
-              <div
-                className="admin-operation-alert-row"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "10px 14px",
-                  borderRadius: "10px",
-                  background: "rgba(56, 189, 248, 0.1)",
-                  border: "1px solid rgba(56, 189, 248, 0.2)",
-                  fontSize: "12.5px",
-                }}
-              >
-                <div>
-                  <strong style={{ color: "#7dd3fc" }}>Nhân sự Google mới:</strong>
-                  <span style={{ color: "#93c5fd", marginLeft: "10px" }}>
-                    Có {summary.staff.pendingApproval} tài khoản nhân viên đang chờ duyệt quyền truy cập cổng.
-                  </span>
+        {/* Row 2 — stock rings */}
+        <BentoCard span={12} title="Tồn kho vé" subtitle="Tỷ lệ đã bán của các sự kiện sắp tới"
+          actions={<ButtonLink to="/admin/ticket-types" size="sm" variant="ghost" iconRight={ArrowRight}>Hạng vé</ButtonLink>}>
+          {firstLoad ? <Skeleton height="96px" /> : rings.length === 0 ? (
+            <EmptyState compact icon={CalendarDays} title="Không có sự kiện đã công bố sắp diễn ra" />
+          ) : (
+            <ul className="bento-rings">
+              {rings.map((event, index) => {
+                const { day, month } = vnDay(event.startTime);
+                return (
+                  <li key={event.id}>
+                    <Link to={`/admin/ticket-types?eventId=${event.id}`} className="bento-ring">
+                      <DonutRing value={sellThrough(event)} color={RINGS[index % RINGS.length]} />
+                      <span className="bento-ring-text">
+                        <strong className="bento-ring-name">{event.name}</strong>
+                        <span className="bento-ring-sub">
+                          {event.status === "ongoing" ? `Đang diễn ra · ${formatTime(event.startTime)}` : event.visibility === "hidden" ? `${day} ${month} · Đang ẩn` : `${day} ${month} · ${startsInLabel(event.startTime, event.status)}`}
+                        </span>
+                        <span className="bento-ring-count tb-num">{formatNumber(event.soldQuantity)}<small>/{formatNumber(event.allocatedCapacity)} vé</small></span>
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </BentoCard>
+
+        {/* Row 3A — events table */}
+        <BentoCard span={6} title={scope === "ongoing" ? "Sự kiện đang diễn ra" : "Sự kiện sắp tới"}
+          actions={<>
+            <button type="button" className="bento-search" onClick={openSearch} aria-keyshortcuts="Control+K Meta+K"><Search size={14} aria-hidden="true" />Tìm nhanh<kbd aria-hidden="true">Ctrl K</kbd></button>
+            <SegmentedControl<TableScope> size="sm" ariaLabel="Phạm vi sự kiện" value={scope} onChange={setScope} options={[{ value: "ongoing", label: `Đang diễn ra (${ongoingCount})` }, { value: "upcoming", label: `Sắp tới (${upcomingCount})` }]} />
+          </>}>
+          {firstLoad ? <Skeleton height="200px" /> : tableRows.length === 0 ? (
+            <EmptyState compact icon={CalendarDays} title={scope === "upcoming" ? "Không có sự kiện đã công bố sắp diễn ra" : "Không có sự kiện đang diễn ra"} />
+          ) : (
+            <div className="bento-table-wrap">
+              <table className="bento-table">
+                <caption className="sr-only">{scope === "ongoing" ? "Sự kiện đang diễn ra" : "Sự kiện sắp tới"} và phân công</caption>
+                <thead><tr><th scope="col">Sự kiện</th><th scope="col">Vé đã bán</th><th scope="col">Trạng thái</th><th scope="col">Nhân sự trực</th></tr></thead>
+                <tbody>
+                  {tableRows.map((event) => {
+                    const { day, month } = vnDay(event.startTime);
+                    const status = event.status === "ongoing" ? { text: "Đang diễn ra", tone: "live" } : event.visibility === "hidden" ? { text: "Đang ẩn", tone: "bad" } : { text: "Đã công bố", tone: "good" };
+                    return (
+                      <tr key={event.id}>
+                        <td>
+                          <Link to={`/admin/events?focus=${event.id}`} className="bento-event">
+                            <span className={cn("bento-date", event.status === "ongoing" && "is-live")} aria-hidden="true"><strong>{day}</strong><small>{month}</small></span>
+                            <span className="bento-event-name">{event.name}</span>
+                          </Link>
+                        </td>
+                        <td><span className="bento-pill tb-num">{formatNumber(event.soldQuantity)} / {formatNumber(event.allocatedCapacity)}</span></td>
+                        <td><span className={cn("bento-status", `is-${status.tone}`)}><span aria-hidden="true" />{status.text}</span></td>
+                        <td>{event.activeStaffCount
+                          ? <strong className="bento-staff"><Users size={14} aria-hidden="true" />{event.activeStaffCount} nhân viên</strong>
+                          : <span className="bento-staff is-warn"><Users size={14} aria-hidden="true" />Chưa có nhân viên</span>}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </BentoCard>
+
+        {/* Row 3B — order analytics */}
+        <BentoCard span={3} title="Phân tích đơn hàng" subtitle="Thanh toán là mô phỏng">
+          {firstLoad ? <Skeleton height="200px" /> : (
+            <ul className="bento-metrics">
+              <li>
+                <span className="bento-metric-text">
+                  <span className="bento-metric-label">Giá trị đơn (mô phỏng)</span>
+                  <strong className="bento-metric-value tb-num">{formatMoneyCompact(summary?.orders.totalRevenue)}</strong>
+                  {today && yesterday ? <Change today={today.revenue} yesterday={yesterday.revenue} money /> : null}
+                </span>
+                <SparkBars values={trend.map((point) => point.revenue)} color="var(--tb-spark-1)" />
+              </li>
+              <li>
+                <span className="bento-metric-text">
+                  <span className="bento-metric-label">Vé bán 7 ngày</span>
+                  <strong className="bento-metric-value tb-num">{formatNumber(totals.tickets)}</strong>
+                  {today && yesterday ? <Change today={today.ticketsSold} yesterday={yesterday.ticketsSold} /> : null}
+                </span>
+                <SparkBars values={trend.map((point) => point.ticketsSold)} color="var(--tb-spark-2)" />
+              </li>
+              <li>
+                <span className="bento-metric-text">
+                  <span className="bento-metric-label">Đơn chờ thanh toán</span>
+                  <strong className="bento-metric-value tb-num">{formatNumber(summary?.orders.pending)}</strong>
+                  <span className="bento-metric-note">Đang giữ vé · {formatNumber(summary?.orders.confirmed)} đơn đã xác nhận</span>
+                </span>
+              </li>
+              <li>
+                <span className="bento-metric-text">
+                  <span className="bento-metric-label">Check-in hôm nay</span>
+                  <strong className="bento-metric-value tb-num">{formatNumber(summary?.checkins.todaySuccess)}</strong>
+                  <span className="bento-metric-note">Lượt quét hợp lệ · {formatNumber(summary?.tickets.issued)} vé chưa vào</span>
+                </span>
+              </li>
+            </ul>
+          )}
+        </BentoCard>
+
+        {/* Row 3C — suggestions */}
+        <BentoCard span={3} title="Gợi ý vận hành" subtitle="Tự động từ lịch và tồn kho">
+          {firstLoad ? <Skeleton height="200px" /> : (
+            <>
+              <ul className="bento-notes" aria-live="polite">
+                {insights.slice(page * 2, page * 2 + 2).map((item) => (
+                  <li key={item.id} className="bento-note">
+                    <span className={cn("bento-note-icon", `is-${item.kind}`)} aria-hidden="true">{item.kind === "staff" ? <Users size={18} /> : <PackageCheck size={18} />}</span>
+                    <div className="bento-note-body">
+                      <strong>{item.title}</strong>
+                      <p>{item.text}</p>
+                      <Link to={item.to} className="bento-note-link">{item.action}<ArrowRight size={13} aria-hidden="true" /></Link>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              {pageCount > 1 && (
+                <div className="bento-dots" role="group" aria-label="Trang gợi ý">
+                  {Array.from({ length: pageCount }, (_, index) => (
+                    <button key={index} type="button" className={cn(index === page && "is-active")} aria-label={`Trang ${index + 1}`} aria-pressed={index === page} onClick={() => setInsightPage(index)} />
+                  ))}
                 </div>
-                <button
-                  className="admin-operation-alert-action"
-                  type="button"
-                  onClick={() => navigate("/admin/staff")}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "4px",
-                    padding: "4px 10px",
-                    borderRadius: "6px",
-                    border: "1px solid rgba(56, 189, 248, 0.4)",
-                    background: "rgba(56, 189, 248, 0.2)",
-                    color: "#e0f2fe",
-                    fontSize: "11px",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                  }}
-                >
-                  Duyệt ngay <UserCheck size={12} />
-                </button>
-              </div>
-            )}
-          </div>
-        </section>
-      )}
-
-      {/* 5. Revenue & ticket-sales charts */}
-      <section className="admin-panel-grid">
-        <article className="admin-command-panel admin-chart-panel">
-          <div className="admin-panel-heading">
-            <div>
-              <span>DOANH THU 7 NGÀY</span>
-              <h3>Thanh toán mô phỏng đã xác nhận</h3>
-            </div>
-            <DollarSign size={20} />
-          </div>
-          <div className="admin-chart-summary">
-            <strong>{loading ? "..." : formatVND(periodRevenue)}</strong>
-            <span>Tổng giá trị đơn confirmed trong 7 ngày gần nhất</span>
-          </div>
-          <div className="admin-chart-body" aria-label="Biểu đồ doanh thu 7 ngày gần nhất">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={salesTrend} margin={{ top: 10, right: 8, left: -14, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="dashboardRevenueFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#34d399" stopOpacity={0.42} />
-                    <stop offset="100%" stopColor="#34d399" stopOpacity={0.02} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid stroke="rgba(148, 163, 184, 0.09)" vertical={false} />
-                <XAxis dataKey="date" tickFormatter={formatTrendDate} tickLine={false} axisLine={false} />
-                <YAxis tickFormatter={(value: number) => formatCompactNumber(value)} tickLine={false} axisLine={false} width={50} />
-                <Tooltip content={<DashboardChartTooltip kind="revenue" />} cursor={{ stroke: "rgba(52, 211, 153, .3)" }} />
-                <Area type="monotone" dataKey="revenue" stroke="#34d399" strokeWidth={2} fill="url(#dashboardRevenueFill)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </article>
-
-        <article className="admin-command-panel admin-chart-panel">
-          <div className="admin-panel-heading">
-            <div>
-              <span>VÉ BÁN RA 7 NGÀY</span>
-              <h3>Số vé trong đơn đã xác nhận</h3>
-            </div>
-            <Ticket size={20} />
-          </div>
-          <div className="admin-chart-summary violet">
-            <strong>{loading ? "..." : `${periodTickets.toLocaleString("vi-VN")} vé`}</strong>
-            <span>Không tính đơn chờ thanh toán, hết hạn hoặc đã hủy</span>
-          </div>
-          <div className="admin-chart-body" aria-label="Biểu đồ vé bán ra 7 ngày gần nhất">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={salesTrend} margin={{ top: 10, right: 8, left: -22, bottom: 0 }}>
-                <CartesianGrid stroke="rgba(148, 163, 184, 0.09)" vertical={false} />
-                <XAxis dataKey="date" tickFormatter={formatTrendDate} tickLine={false} axisLine={false} />
-                <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={42} />
-                <Tooltip content={<DashboardChartTooltip kind="tickets" />} cursor={{ fill: "rgba(167, 139, 250, .08)" }} />
-                <Bar dataKey="ticketsSold" fill="#a78bfa" radius={[5, 5, 1, 1]} maxBarSize={34} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </article>
-      </section>
-    </div>
+              )}
+            </>
+          )}
+        </BentoCard>
+      </BentoGrid>
+    </PageLayout>
   );
 }

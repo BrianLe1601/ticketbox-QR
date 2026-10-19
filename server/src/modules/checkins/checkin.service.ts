@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { AppError } from '../../utils/app-error.js';
 import * as repo from './checkin.repository.js';
 import { resultMessages } from './checkin.types.js';
-import type { ResultCode, ScanResult } from './checkin.types.js';
+import type { Attendance, ResultCode, ScanResult } from './checkin.types.js';
 import type { AssignmentListQuery, AssignmentLogsQuery } from './checkin.schema.js';
 
 const hashCode = (value: string) => createHash('sha256').update(value).digest('hex');
@@ -63,6 +63,20 @@ export async function getOverview(staffId: number) {
   };
 }
 
+/**
+ * Gate-wide counters for one open gate. Same access rule as the scan choices (active assignment,
+ * published/ongoing Event inside its check-in window); read-only, no locks.
+ */
+export async function getAttendance(eventId: number, staffId: number): Promise<Attendance> {
+  if (!await repo.isOpenAssignedEvent(staffId, eventId)) {
+    if (!await repo.hasActiveAssignment(staffId, eventId)) {
+      throw new AppError(403, resultMessages.STAFF_NOT_ASSIGNED, 'STAFF_NOT_ASSIGNED');
+    }
+    throw new AppError(409, resultMessages.EVENT_NOT_AVAILABLE, 'EVENT_NOT_AVAILABLE');
+  }
+  return repo.attendance(eventId);
+}
+
 export async function getRecentLogs(eventId: number, staffId: number) {
   return repo.transaction(async (conn) => {
     if (!await repo.lockEvent(conn, eventId)) throw AppError.notFound('Không tìm thấy sự kiện.');
@@ -83,6 +97,8 @@ export async function checkIn(eventId: number, staffId: number, rawCode: string)
     if (!event) throw AppError.notFound('Không tìm thấy sự kiện.', 'EVENT_NOT_FOUND');
     const assigned = await repo.hasAssignment(conn, eventId, staffId);
     let now = await repo.databaseNow(conn);
+    // Purchase snapshot read with the unlocked lookup; lockTicket keeps locking the Ticket row only.
+    let ticketTypeName: string | null = null;
     const finish = async (code: ResultCode, ticket: repo.TicketRow | undefined = undefined): Promise<ScanResult> => {
       await repo.appendLog(conn, {
         eventId, staffId, ticketId: ticket?.id ?? null, code, hash: hashCode(scanned),
@@ -92,7 +108,7 @@ export async function checkIn(eventId: number, staffId: number, rawCode: string)
       return {
         code, message: resultMessages[code], checkedAt: now,
         ticket: ticket && code !== 'WRONG_EVENT' ? {
-          code: ticket.code, holderName: ticket.holderName,
+          code: ticket.code, holderName: ticket.holderName, ticketTypeName,
           checkedInAt: code === 'SUCCESS' ? now : ticket.checkedInAt,
         } : null,
       };
@@ -105,6 +121,7 @@ export async function checkIn(eventId: number, staffId: number, rawCode: string)
     if (isQr && !/^[a-f0-9]{64}$/.test(credential)) return finish('INVALID');
     const found = await repo.findTicket(conn, isQr ? hashCode(credential) : credential, isQr);
     if (!found) return finish('INVALID');
+    ticketTypeName = found.ticketTypeName ?? null;
     if (found.eventId !== eventId) return finish('WRONG_EVENT', found);
     const orderStatus = await repo.lockOrder(conn, found.orderId);
     const ticket = await repo.lockTicket(conn, found.id);

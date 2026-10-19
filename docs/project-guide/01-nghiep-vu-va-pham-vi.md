@@ -131,6 +131,8 @@ Các trang Public: `/`, `/events`, `/events/:id`, `/checkout/:id`, `/orders/:id`
 
 Khách tìm Event theo từ khóa, danh mục, thành phố và cách sắp xếp, xem phân trang và chi tiết; chọn hạng vé/số lượng dựa trên dữ liệu API. Public chỉ đọc Event được phép hiển thị. Giá thanh toán được Backend đọc lại từ database, không lấy giá người dùng tự gửi lên.
 
+Từ khóa và danh mục trên trang danh sách đồng bộ với URL khi tìm từ Header hoặc dùng Back/Forward. Lọc thời gian 7/30 ngày được Backend áp dụng trước phân trang; danh sách và tổng số cùng dùng một bộ lọc. Bỏ qua query `time` giữ hành vi API cũ.
+
 ### Xác minh email
 
 | Thuộc tính | Giá trị/hành vi hiện có |
@@ -180,6 +182,8 @@ Phân biệt ba mã:
 | Ticket code `TKT-…` và QR token | Một vé cụ thể; Staff có thể nhập ticket code hoặc quét QR |
 
 Nhấn thanh toán lại sau confirmed bị từ chối; code không tạo thêm Payment/Ticket. Hệ thống không có webhook đối soát ngân hàng trong luồng này. Các status Payment pending/failed/cancelled tồn tại trong schema không chứng minh giao diện có đầy đủ mọi kịch bản của cổng thanh toán thật.
+
+Trang Order hiển thị riêng pending, confirmed, expired và cancelled. Tải lại đơn confirmed không hiển thị hết hạn hoặc cho thanh toán lại; khách kiểm tra email hoặc dùng form Tìm lại vé hiện có. Lookup token vẫn ở sessionStorage của tab để đọc lại đơn sau thanh toán, không đưa vào URL. Nếu mất phản hồi thanh toán, Frontend đọc lại trạng thái; nếu chưa đọc được thì khóa nút thanh toán và cho thử tải trạng thái lại.
 
 ## 9. Tài — Email, tìm lại vé và Admin Orders
 
@@ -239,11 +243,11 @@ Nguồn: [Admin Orders service](../../server/src/modules/orders/admin-orders.ser
 
 Các từ chối nghiệp vụ được lưu log; lỗi trước khi vào nghiệp vụ như thiếu token, sai role hoặc payload không hợp lệ đi qua middleware nên không đồng nghĩa mọi HTTP error đều có checkin_logs. Log lưu hash/mã che, không lưu QR thô. Giới hạn quét hiện là 180 request/phút theo Staff.
 
-Nguồn: [Scanner](../../client/src/components/checkin/CameraScanner.tsx), [Staff page](../../client/src/pages/staff/StaffHomePage.tsx), [Check-in service](../../server/src/modules/checkins/checkin.service.ts).
+Nguồn: [Scanner](../../client/src/components/checkin/CameraScanner.tsx), [Staff check-in page](../../client/src/pages/staff/StaffCheckinPage.tsx), [Event scanner](../../client/src/components/checkin/EventScanner.tsx), [Check-in service](../../server/src/modules/checkins/checkin.service.ts).
 
 ## 11. Khôi — Logs, Reports và Excel
 
-Admin dùng `/admin/checkins` và `/admin/reports`; cả hai cùng dùng `AdminOperationsPage` với hai chế độ.
+Admin dùng `/admin/checkins` (`AdminCheckinLogsPage`) và `/admin/reports` (`AdminReportsPage`); hai trang dùng chung ô chọn sự kiện và bộ lọc thời gian, bộ lọc nằm trên URL.
 
 Logs lọc Event, từ ngày/đến ngày, Staff và mã kết quả; phân trang 20 dòng ở UI; xuất tối đa 10.000 dòng theo bộ lọc. API xuất giới hạn 5 request/phút theo tài khoản Admin.
 
@@ -265,7 +269,7 @@ Ví dụ kỳ này chỉ có khoản hoàn cho đơn mua từ kỳ trước thì
 
 ExcelJS tạo `.xlsx` với sheet bộ lọc và sheet dữ liệu, tiêu đề, định dạng số tiền, bộ lọc và cố định hàng đầu. Đây là xuất số liệu dạng bảng; code Reports hiện không render biểu đồ Recharts.
 
-Nguồn: [Report repository](../../server/src/modules/reports/report.repository.ts), [Excel export](../../server/src/modules/reports/report.export.ts), [màn hình Reports/Logs](../../client/src/pages/admin/AdminOperationsPage.tsx).
+Nguồn: [Report repository](../../server/src/modules/reports/report.repository.ts), [Excel export](../../server/src/modules/reports/report.export.ts), [màn hình Báo cáo](../../client/src/pages/admin/AdminReportsPage.tsx), [màn hình Nhật ký](../../client/src/pages/admin/AdminCheckinLogsPage.tsx).
 
 ## 12. Hủy Event — điểm giao giữa ba thành viên
 
@@ -323,6 +327,8 @@ Lệnh `npm` trong phiên shell rà soát đang trỏ đến `npm-cli.js` không
 
 Lần 25/09 đã ghi nhận user MySQL thiếu quyền tạo database test. Chưa kiểm tra lại quyền đó ngày 27/09; không khẳng định nó vẫn thiếu chỉ dựa trên lịch sử.
 
+Kiểm chứng bổ sung ngày 12/10/2026 cho Public (mục 2, 3, 5, 6): server `npm test -- --exclude '**/*.integration.test.ts'` qua 217 test; client `node --test tests/public-workflows.test.cjs tests/recaptcha.test.cjs` qua 18 test. Skill verify scope `all` qua typecheck/build server và lint/build client. Chrome với API giả lập đã kiểm tra tìm kiếm Header trên cùng route, Back/Forward, lọc tuần với sắp xếp Mới thêm và tải thêm, tải lại đơn confirmed/cancelled/expired, mất phản hồi thanh toán, lỗi mạng và thử lại, QR sau thành công, F5 và form tìm lại vé trên mobile. MySQL thật chạy truy vấn danh sách với mọi bộ lọc thời gian/cách sắp xếp và truy vấn tìm lại vé trong transaction READ ONLY, sau đó rollback; không sửa schema/dữ liệu. Đây không phải full integration trên database test hay xác minh reCAPTCHA/SMTP thật.
+
 ## 15. Các tình huống nghiệm thu đủ cho luồng đã chốt
 
 | Người phụ trách | Tình huống cần chứng minh |
@@ -338,4 +344,4 @@ Lần 25/09 đã ghi nhận user MySQL thiếu quyền tạo database test. Chư
 - [03 — Công cụ, toàn bộ package trực tiếp và mục đích](03-cong-cu-va-thu-vien.md).
 - [04 — Danh mục package đã khóa, gồm phụ thuộc gián tiếp](04-package-lock-inventory.md).
 
-Thứ tự đọc code dễ nhất: `client/src/routes/AppRoutes.tsx` → trang mình phụ trách → `client/src/services` → route Backend tương ứng → controller → service → repository → bảng/trigger trong schema → test của module.
+Thứ tự đọc code dễ nhất: `client/src/routes/router.tsx` → trang mình phụ trách → `client/src/services` → route Backend tương ứng → controller → service → repository → bảng/trigger trong schema → test của module.

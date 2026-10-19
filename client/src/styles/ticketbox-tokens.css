@@ -1,0 +1,156 @@
+/* TicketBox operational design tokens ("concert control desk").
+   Shared by Admin, Staff and Login only; Public pages never read these.
+
+   Scopes
+   - elements:  .admin-room, .staff-portal-room, .login-page  (data-theme="light|dark")
+   - portals:   body[data-admin-appearance] / body[data-staff-appearance] (value = theme),
+                set by the layouts so Radix portals inherit the same tokens.
+
+   Palette notes
+   - Warm paper background, ink-blue text, indigo accent taken from the logo.
+   - Amber ("stub") marks ticket-related emphasis; hot pink ("live") is reserved for
+     Events that are happening now. Every status also carries text/icon, never colour alone.
+   - Dark is the same system at night: same roles, adjusted for >= 4.5:1 text contrast. */
+
+:is(.admin-room, .staff-portal-room, .login-page, body[data-admin-appearance], body[data-staff-appearance]) {
+  color-scheme: light;
+
+  /* surfaces */
+  --tb-bg: #f6f3ec;
+  --tb-surface: #ffffff;
+  --tb-surface-2: #faf8f3;
+  --tb-subtle: #efebe2;
+  --tb-border: #ddd5c4;
+  --tb-border-strong: #bfb5a0;
+
+  /* text */
+  --tb-text: #1c2236;
+  --tb-muted: #4f5a74;
+  --tb-faint: #667089;
+
+  /* accent (indigo) */
+  --tb-accent: #3347d6;
+  --tb-accent-hover: #2a3cc0;
+  --tb-accent-text: #2a3bb8;
+  --tb-accent-soft: #eceffd;
+  --tb-accent-border: #c5cdf7;
+  --tb-on-accent: #ffffff;
+
+  /* ticket stub (amber) and live (pink) emphasis */
+  --tb-stub: #b45309;
+  --tb-stub-soft: #fff4e0;
+  --tb-live: #c2185b;
+  --tb-live-soft: #fde8f1;
+  --tb-live-border: #f3bcd3;
+
+  /* status */
+  --tb-success: #0b6b4f;
+  --tb-success-solid: #12805c;
+  --tb-success-soft: #e4f5ee;
+  --tb-success-border: #b3e0cf;
+  --tb-warning: #8a4b08;
+  --tb-warning-soft: #fff3dc;
+  --tb-warning-border: #f1d39a;
+  --tb-danger: #ad1f3a;
+  --tb-danger-solid: #c2253f;
+  --tb-danger-soft: #fdecee;
+  --tb-danger-border: #f3c1c9;
+  --tb-on-solid: #ffffff;
+
+  /* effects */
+  --tb-shadow-rgb: 28 34 54;
+  --tb-overlay: rgb(28 34 54 / 42%);
+  --tb-focus: #2740e6;
+
+  /* geometry and rhythm */
+  --tb-radius: 12px;
+  --tb-radius-sm: 8px;
+  --tb-control-h: 40px;
+  --tb-control-h-touch: 48px;
+  --tb-space-1: 4px;
+  --tb-space-2: 8px;
+  --tb-space-3: 12px;
+  --tb-space-4: 16px;
+  --tb-space-5: 24px;
+  --tb-font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+
+:is(
+  .admin-room[data-theme="dark"],
+  .staff-portal-room[data-theme="dark"],
+  .login-page[data-theme="dark"],
+  body[data-admin-appearance="dark"],
+  body[data-staff-appearance="dark"]
+) {
+  color-scheme: dark;
+
+  --tb-bg: #0f111a;
+  --tb-surface: #181b27;
+  --tb-surface-2: #1d2130;
+  --tb-subtle: #242839;
+  --tb-border: #2f3449;
+  --tb-border-strong: #4a5270;
+
+  --tb-text: #eceef7;
+  --tb-muted: #b0b7cd;
+  --tb-faint: #9199b3;
+
+  --tb-accent: #8b9bff;
+  --tb-accent-hover: #a3b0ff;
+  --tb-accent-text: #aab6ff;
+  --tb-accent-soft: #20264a;
+  --tb-accent-border: #3b4582;
+  --tb-on-accent: #0c1033;
+
+  --tb-stub: #f0a43a;
+  --tb-stub-soft: #33270f;
+  --tb-live: #ff86b0;
+  --tb-live-soft: #3a1b29;
+  --tb-live-border: #6d3049;
+
+  --tb-success: #5fd3a5;
+  --tb-success-solid: #3cc596;
+  --tb-success-soft: #12302a;
+  --tb-success-border: #205a48;
+  --tb-warning: #f3c273;
+  --tb-warning-soft: #33270f;
+  --tb-warning-border: #5e4718;
+  --tb-danger: #ff909f;
+  --tb-danger-solid: #ff6f84;
+  --tb-danger-soft: #3a1a20;
+  --tb-danger-border: #6b2e39;
+  --tb-on-solid: #14070a;
+
+  --tb-shadow-rgb: 0 0 0;
+  --tb-overlay: rgb(4 5 10 / 66%);
+  --tb-focus: #b3bdff;
+}
+
+/* Shared utilities used by the Admin/Staff/Login components. */
+:is(.admin-room, .staff-portal-room, .login-page) .tb-num { font-variant-numeric: tabular-nums; }
+:is(.admin-room, .staff-portal-room, .login-page) .tb-mono { font-family: var(--tb-font-mono); }
+
+/* Theme switch (Sáng / Tối). One control, same markup everywhere. */
+.tb-theme-toggle {
+  display: inline-flex; align-items: center; gap: 8px; min-height: var(--tb-control-h);
+  padding: 6px 12px; border: 1px solid var(--tb-border); border-radius: 999px;
+  background: var(--tb-surface); color: var(--tb-text); font: inherit; font-size: .9em; font-weight: 600;
+  cursor: pointer; transition: background-color .15s, border-color .15s;
+}
+.tb-theme-toggle:hover { background: var(--tb-subtle); border-color: var(--tb-border-strong); }
+/* reCAPTCHA (public Checkout/Retrieval only) stays loaded after SPA navigation; never show its badge in Admin/Staff. */
+body:is([data-admin-appearance], [data-staff-appearance]) .grecaptcha-badge { visibility: hidden !important; }
+.tb-theme-toggle:focus-visible { outline: 3px solid var(--tb-focus); outline-offset: 2px; }
+.tb-theme-toggle svg { flex: none; }
+@media (max-width: 520px) { .tb-theme-toggle .tb-theme-label { display: none; } .tb-theme-toggle { padding: 8px 10px; } }
+@media (prefers-reduced-motion: reduce) { .tb-theme-toggle { transition: none; } }
+
+/* Route progress (components/shared/RouteProgress.tsx): Admin/Staff/Login only, while the router loads a page chunk. */
+.tb-route-progress { position: fixed; z-index: 1000; inset: 0 0 auto 0; height: 3px; overflow: hidden; background: var(--tb-accent-soft); pointer-events: none; }
+.tb-route-progress span { display: block; width: 40%; height: 100%; border-radius: 0 3px 3px 0; background: var(--tb-accent); animation: tb-route-progress 1.1s ease-in-out infinite; }
+@keyframes tb-route-progress { from { transform: translateX(-100%); } to { transform: translateX(260%); } }
+@media (prefers-reduced-motion: reduce) { .tb-route-progress span { width: 100%; animation: none; opacity: .7; } }
+.route-error { display: grid; place-content: center; justify-items: center; gap: 4px; min-height: 100vh; padding: 24px; text-align: center; }
+.route-error p { margin: 0; }
+.route-error-reload { display: inline-flex; align-items: center; margin-top: 12px; min-height: 44px; padding: 0 18px; border: 0; border-radius: 999px; background: #287a64; color: #fff; font: inherit; font-weight: 700; text-decoration: none; cursor: pointer; }
+.route-error-reload:focus-visible { outline: 3px solid #287a64; outline-offset: 3px; }
