@@ -12,6 +12,9 @@ export async function scan(req: Request, res: Response) {
 export async function listLogs(req: Request, res: Response) {
   sendSuccess(res, await service.getRecentLogs(Number(req.params.eventId), req.authUser!.id));
 }
+export async function attendance(req: Request, res: Response) {
+  sendSuccess(res, await service.getAttendance(Number(req.params.eventId), req.authUser!.id));
+}
 export async function overview(req: Request, res: Response) {
   sendSuccess(res, await service.getOverview(req.authUser!.id));
 }
