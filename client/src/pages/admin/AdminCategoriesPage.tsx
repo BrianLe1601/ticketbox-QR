@@ -1,727 +1,231 @@
-import {
-  AlertTriangle,
-  ArrowUpDown,
-  CalendarDays,
-  CheckCircle2,
-  Edit3,
-  FolderTree,
-  Plus,
-  Power,
-  RefreshCw,
-  Search,
-  Trash2,
-  X,
-  XCircle,
-} from "lucide-react";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { createPortal } from "react-dom";
-import { useNavigate } from "react-router-dom";
-import { ApiRequestError } from "@/services/api";
-import { digitsOnly } from "@/lib/utils";
-import {
-  createAdminCategory,
-  deleteAdminCategory,
-  listAdminCategories,
-  updateAdminCategory,
-  type AdminCategory,
-} from "@/services/admin-categories.service";
-import "@/styles/admin-categories.css";
+import { ArrowRight, Clock3, FolderTree, Plus, RefreshCw } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-const emptyForm = {
-  name: "",
-  slug: "",
-  description: "",
-  icon: "",
-  sortOrder: "0",
-  isActive: true,
-};
+import { CategoryFormPanel } from "@/components/admin/categories/CategoryFormPanel";
+import { CategoryList, type CategoryHandlers } from "@/components/admin/categories/CategoryList";
+import {
+  BentoCard, BentoGrid, Button, ButtonLink, ConfirmDialog, EmptyState, ErrorState, FilterBar, PageHeader, PageLayout, SkeletonBlock, notify,
+  type FilterChip,
+} from "@/components/admin/ui";
+import { formatNumber, formatTime } from "@/lib/admin-format";
+import {
+  categoryErrorText, filterCategories, inDisplayOrder, moveItem, orderChanges, revertChanges, summarizeCategories,
+  type CategoryStatusFilter, type OrderChange,
+} from "@/lib/admin-category-view";
+import { cn } from "@/lib/utils";
+import { deleteAdminCategory, listAdminCategories, updateAdminCategory, type AdminCategory } from "@/services/admin-categories.service";
+import { getPlatformSettings, type PlatformSettings } from "@/services/admin-platform-settings.service";
+import "@/styles/admin/categories.css";
 
-type StatusFilter = "all" | "active" | "inactive";
-type SortOption = "order" | "name" | "events";
+const STATUS: Array<{ value: CategoryStatusFilter; label: string; empty: string }> = [
+  { value: "all", label: "Tổng danh mục", empty: "Chưa có danh mục nào" },
+  { value: "active", label: "Đang hoạt động", empty: "Không có danh mục đang hoạt động" },
+  { value: "inactive", label: "Đã vô hiệu hóa", empty: "Không có danh mục đã vô hiệu hóa" },
+];
 
 export function AdminCategoriesPage() {
-  const navigate = useNavigate();
   const [items, setItems] = useState<AdminCategory[]>([]);
-  const [form, setForm] = useState(emptyForm);
-  const [editingItem, setEditingItem] = useState<AdminCategory | null>(null);
-  const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [platform, setPlatform] = useState<PlatformSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [formError, setFormError] = useState("");
-  const [deleteTarget, setDeleteTarget] = useState<AdminCategory | null>(null);
-  const [togglingId, setTogglingId] = useState<number | null>(null);
+  const [at, setAt] = useState(0);
+  const [status, setStatus] = useState<CategoryStatusFilter>("all");
+  const [query, setQuery] = useState("");
+  const [busy, setBusyState] = useState(false);
+  // Toast "Hoàn tác" callbacks outlive the render that created them, so the guard reads a ref.
+  const busyRef = useRef(false);
+  const setBusy = (value: boolean) => { busyRef.current = value; setBusyState(value); };
+  const [form, setForm] = useState<{ open: boolean; id: number | null; key: number }>({ open: false, id: null, key: 0 });
+  const [removeTarget, setRemoveTarget] = useState<AdminCategory | null>(null);
+  const [removeError, setRemoveError] = useState("");
 
-  // Filters & Search
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [sortOption, setSortOption] = useState<SortOption>("order");
-
-  async function loadData() {
-    setLoading(true);
-    setError("");
-    try {
-      const data = await listAdminCategories(true);
-      setItems(data);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Không thể tải danh sách danh mục.");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const load = useCallback((showError: boolean) => listAdminCategories(true).then(
+    (data) => { setItems(data); setError(""); setAt(Date.now()); return true; },
+    (cause: unknown) => { if (showError) setError(categoryErrorText(cause, "Không tải được danh mục.")); return false; },
+  ).finally(() => setLoading(false)), []);
 
   useEffect(() => {
-    let active = true;
-    void listAdminCategories(true)
-      .then((data) => {
-        if (active) {
-          setItems(data);
-          setLoading(false);
-        }
-      })
-      .catch((e: Error) => {
-        if (active) {
-          setError(e.message || "Không thể tải danh sách danh mục.");
-          setLoading(false);
-        }
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
+    void load(true);
+    void getPlatformSettings().then(setPlatform).catch(() => {});
+  }, [load]);
 
-  // Keyboard accessibility and body scroll lock for modals
-  useEffect(() => {
-    if (!open && !deleteTarget) return;
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        if (deleteTarget) setDeleteTarget(null);
-        else if (open) setOpen(false);
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.body.style.overflow = prevOverflow;
-      window.removeEventListener("keydown", onKeyDown);
-    };
-  }, [open, deleteTarget]);
+  const summary = useMemo(() => summarizeCategories(items), [items]);
+  const ordered = useMemo(() => inDisplayOrder(items), [items]);
+  const visible = useMemo(() => inDisplayOrder(filterCategories(items, status, query, "order")), [items, status, query]);
+  const reorderable = status === "all" && !query.trim() && items.length > 1;
+  const music = items.filter((item) => item.kind === "music").length;
+  const selectable = items.filter((item) => item.selectableForNewEvent).length;
+  const editing = form.id ? items.find((item) => item.id === form.id) ?? null : null;
 
-  // Summary Metrics
-  const metrics = useMemo(() => {
-    const total = items.length;
-    const active = items.filter((c) => c.isActive).length;
-    const inactive = total - active;
-    const totalEvents = items.reduce((acc, c) => acc + (c.eventCount || 0), 0);
-    return { total, active, inactive, totalEvents };
-  }, [items]);
-
-  // Filtered and Sorted list
-  const displayItems = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    const filtered = items.filter((item) => {
-      if (statusFilter === "active" && !item.isActive) return false;
-      if (statusFilter === "inactive" && item.isActive) return false;
-      if (!query) return true;
-      const matchName = item.name.toLowerCase().includes(query);
-      const matchSlug = item.slug.toLowerCase().includes(query);
-      const matchDesc = (item.description ?? "").toLowerCase().includes(query);
-      return matchName || matchSlug || matchDesc;
-    });
-
-    return filtered.sort((a, b) => {
-      if (sortOption === "name") {
-        return a.name.localeCompare(b.name, "vi", { sensitivity: "base" });
-      }
-      if (sortOption === "events") {
-        return (b.eventCount || 0) - (a.eventCount || 0);
-      }
-      return a.sortOrder - b.sortOrder;
-    });
-  }, [items, searchQuery, statusFilter, sortOption]);
-
-  function handleOpenCreate() {
-    setEditingItem(null);
-    setForm(emptyForm);
-    setFormError("");
-    setOpen(true);
-  }
-
-  function handleOpenEdit(item: AdminCategory) {
-    setEditingItem(item);
-    setForm({
-      name: item.name,
-      slug: item.slug,
-      description: item.description ?? "",
-      icon: item.icon ?? "",
-      sortOrder: String(item.sortOrder),
-      isActive: item.isActive,
-    });
-    setFormError("");
-    setOpen(true);
-  }
-
-  async function handleSubmit(event: FormEvent) {
-    event.preventDefault();
+  /** PATCH each changed sortOrder in turn. A failure part-way reloads the server order (no batch API). */
+  async function applyOrder(changes: OrderChange[], done: string, undo?: OrderChange[]) {
+    if (!changes.length || busyRef.current) return;
+    const previous = items;
+    setItems((list) => list.map((item) => { const change = changes.find((entry) => entry.id === item.id); return change ? { ...item, sortOrder: change.to } : item; }));
     setBusy(true);
-    setFormError("");
-
-    const isSlugLocked = Boolean(editingItem && editingItem.eventCount > 0);
-    const sortOrder = form.sortOrder === "" ? 0 : Number(form.sortOrder);
-    if (!Number.isInteger(sortOrder) || sortOrder < 0 || sortOrder > 10000) {
-      setFormError("Thứ tự hiển thị phải là số nguyên từ 0 đến 10000.");
-      setBusy(false);
-      return;
-    }
-
-    const payload = {
-      name: form.name.trim(),
-      slug: isSlugLocked && editingItem ? editingItem.slug : form.slug.trim().toLowerCase(),
-      description: form.description.trim() || null,
-      icon: form.icon.trim() || null,
-      sortOrder,
-      isActive: form.isActive,
-    };
-
     try {
-      if (editingItem) {
-        await updateAdminCategory(editingItem.id, payload);
-      } else {
-        await createAdminCategory(payload);
-      }
-      setOpen(false);
-      await loadData();
-    } catch (e) {
-      setFormError(e instanceof ApiRequestError ? e.message : "Không thể lưu danh mục.");
+      for (const change of changes) await updateAdminCategory(change.id, { sortOrder: change.to });
+      notify.success(done, undo ? { action: { label: "Hoàn tác", onClick: () => void applyOrder(undo, "Đã hoàn tác thứ tự") } } : undefined);
+    } catch (cause) {
+      setItems(previous);
+      notify.error("Không lưu được thứ tự", { description: `${categoryErrorText(cause, "Lỗi máy chủ.")} Đã tải lại thứ tự hiện có trên máy chủ.` });
+      await load(false);
     } finally {
       setBusy(false);
     }
   }
 
-  async function handleConfirmDelete() {
-    if (!deleteTarget) return;
+  function reorder(fromId: number, toId: number) {
+    const changes = orderChanges(moveItem(ordered, fromId, toId));
+    const name = items.find((item) => item.id === fromId)?.name ?? "danh mục";
+    void applyOrder(changes, `Đã lưu thứ tự: ${name} ở vị trí ${moveItem(ordered, fromId, toId).findIndex((item) => item.id === fromId) + 1}`, revertChanges(changes));
+  }
+
+  async function toggle(item: AdminCategory, silent = false) {
+    if (busyRef.current) return;
     setBusy(true);
-    setError("");
     try {
-      await deleteAdminCategory(deleteTarget.id);
-      setDeleteTarget(null);
-      await loadData();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Không thể xóa danh mục.");
+      const saved = await updateAdminCategory(item.id, { isActive: !item.isActive });
+      setItems((list) => list.map((entry) => (entry.id === saved.id ? saved : entry)));
+      if (!silent) {
+        notify.success(saved.isActive ? "Đã kích hoạt lại danh mục" : "Đã vô hiệu hóa danh mục", {
+          description: saved.isActive ? saved.name : `${saved.name} · sự kiện đã có vẫn giữ danh mục này`,
+          action: { label: "Hoàn tác", onClick: () => void toggle(saved, true) },
+        });
+      }
+    } catch (cause) {
+      notify.error("Không đổi được trạng thái", { description: categoryErrorText(cause, "Lỗi máy chủ.") });
     } finally {
       setBusy(false);
     }
   }
 
-  async function handleToggleActive(item: AdminCategory) {
-    setTogglingId(item.id);
-    setError("");
+  const handlers: CategoryHandlers = {
+    edit: (item) => setForm((current) => ({ open: true, id: item.id, key: current.key + 1 })),
+    toggle: (item) => void toggle(item),
+    remove: (item) => { setRemoveError(""); setRemoveTarget(item); },
+    reorder,
+    move: (item, offset) => {
+      const index = ordered.findIndex((entry) => entry.id === item.id);
+      const neighbour = ordered[index + offset];
+      if (neighbour) reorder(item.id, neighbour.id);
+    },
+  };
+
+  async function confirmRemove() {
+    if (!removeTarget || busyRef.current) return;
+    setBusy(true); setRemoveError("");
     try {
-      await updateAdminCategory(item.id, { isActive: !item.isActive });
-      await loadData();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Không thể cập nhật trạng thái danh mục.");
+      await deleteAdminCategory(removeTarget.id);
+      setItems((list) => list.filter((item) => item.id !== removeTarget.id));
+      notify.success("Đã xóa danh mục", { description: removeTarget.name });
+      setRemoveTarget(null);
+    } catch (cause) {
+      setRemoveError(categoryErrorText(cause, "Không xóa được danh mục."));
     } finally {
-      setTogglingId(null);
+      setBusy(false);
     }
   }
+
+  function selectStatus(next: CategoryStatusFilter) {
+    setStatus(next);
+    if (next === "all") setQuery(""); // the total restores the complete list
+  }
+
+  const chips: FilterChip[] = [
+    ...(status !== "all" ? [{ id: "status", label: `Trạng thái: ${STATUS.find((s) => s.value === status)?.label}`, onRemove: () => selectStatus("all") }] : []),
+    ...(query.trim() ? [{ id: "query", label: `Từ khóa: “${query.trim()}”`, onRemove: () => setQuery("") }] : []),
+  ];
 
   return (
-    <section className="categories-page">
-      {/* 1. Header Hero */}
-      <header className="categories-header">
-        <div>
-          <span className="events-eyebrow">
-            <FolderTree size={14} /> PHÂN LOẠI SỰ KIỆN
-          </span>
-          <h2>Quản lý danh mục</h2>
-          <p>
-            Cấu hình các nhóm sự kiện dùng chung toàn hệ thống, kiểm soát việc mở bán và hiển thị công khai.
-          </p>
-        </div>
-        <button className="events-primary-button" onClick={handleOpenCreate} type="button">
-          <Plus size={17} /> Tạo danh mục
-        </button>
-      </header>
+    <PageLayout className="catp">
+      <PageHeader
+        title="Danh mục"
+        description="Thể loại âm nhạc của concert và thứ tự chúng hiện trên trang khách."
+        meta={at ? <span className="tb-num"><Clock3 size={13} aria-hidden="true" /> Cập nhật lúc {formatTime(new Date(at), true)}</span> : null}
+        actions={<>
+          <Button icon={RefreshCw} disabled={busy} onClick={() => { void load(false).then((ok) => { if (!ok) notify.error("Không làm mới được"); }); }}>Làm mới</Button>
+          <Button variant="primary" icon={Plus} disabled={loading || busy} onClick={() => setForm((current) => ({ open: true, id: null, key: current.key + 1 }))}>Thêm danh mục</Button>
+        </>}
+      />
 
-      {/* Error alert banner */}
-      {error && (
-        <div className="categories-error" role="alert">
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <AlertTriangle size={18} />
-            <span>{error}</span>
-          </div>
-          <button type="button" onClick={() => void loadData()}>
-            Thử lại
-          </button>
-        </div>
-      )}
-
-      {/* 2. Overview Metrics Cards (Quick Filters) */}
-      <section className="categories-metrics-grid" aria-label="Thống kê và bộ lọc nhanh danh mục">
-        <button
-          type="button"
-          className={`cat-metric-card admin-cat-metric-btn ${statusFilter === "all" ? "active" : ""}`}
-          onClick={() => {
-            setStatusFilter("all");
-            setSearchQuery("");
-          }}
-          aria-pressed={statusFilter === "all"}
-          aria-label="Xem tất cả danh mục"
-        >
-          <div className="cat-metric-top">
-            <span className="cat-metric-label">Tổng danh mục</span>
-            <div className="cat-metric-icon">
-              <FolderTree size={16} />
-            </div>
-          </div>
-          <strong className="cat-metric-val">{loading ? "—" : metrics.total}</strong>
-          <small className="cat-metric-sub">Bấm để xem toàn bộ ({metrics.total})</small>
-        </button>
-
-        <button
-          type="button"
-          className={`cat-metric-card admin-cat-metric-btn ${statusFilter === "active" ? "active" : ""}`}
-          onClick={() => setStatusFilter("active")}
-          aria-pressed={statusFilter === "active"}
-          aria-label="Lọc danh mục đang hoạt động"
-        >
-          <div className="cat-metric-top">
-            <span className="cat-metric-label">Đang hoạt động</span>
-            <div className="cat-metric-icon active">
-              <CheckCircle2 size={16} />
-            </div>
-          </div>
-          <strong className="cat-metric-val">{loading ? "—" : metrics.active}</strong>
-          <small className="cat-metric-sub">Sẵn sàng cho sự kiện mới</small>
-        </button>
-
-        <button
-          type="button"
-          className={`cat-metric-card admin-cat-metric-btn ${statusFilter === "inactive" ? "active" : ""}`}
-          onClick={() => setStatusFilter("inactive")}
-          aria-pressed={statusFilter === "inactive"}
-          aria-label="Lọc danh mục đã vô hiệu hóa"
-        >
-          <div className="cat-metric-top">
-            <span className="cat-metric-label">Đã vô hiệu hóa</span>
-            <div className="cat-metric-icon inactive">
-              <XCircle size={16} />
-            </div>
-          </div>
-          <strong className="cat-metric-val">{loading ? "—" : metrics.inactive}</strong>
-          <small className="cat-metric-sub">Tạm ngưng nhận sự kiện</small>
-        </button>
-
-        <article className="cat-metric-card static-info" aria-label="Tổng số sự kiện đang gắn thẻ">
-          <div className="cat-metric-top">
-            <span className="cat-metric-label">Sự kiện liên kết</span>
-            <div className="cat-metric-icon events">
-              <CalendarDays size={16} />
-            </div>
-          </div>
-          <strong className="cat-metric-val">{loading ? "—" : metrics.totalEvents}</strong>
-          <small className="cat-metric-sub">Tổng số sự kiện đang gắn thẻ</small>
-        </article>
-      </section>
-
-      {/* 3. Search and Filter Toolbar */}
-      <section className="categories-toolbar">
-        <div className="cat-search-box">
-          <Search size={16} color="#64748b" />
-          <input
-            type="text"
-            placeholder="Tìm theo tên, slug, mô tả..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-          {searchQuery && (
-            <button
-              type="button"
-              onClick={() => setSearchQuery("")}
-              style={{ background: "transparent", border: 0, color: "#64748b", cursor: "pointer" }}
-              aria-label="Xóa tìm kiếm"
-            >
-              <X size={14} />
-            </button>
-          )}
-        </div>
-
-        <div className="cat-toolbar-controls">
-          {/* Status Tabs */}
-          <div className="cat-tabs" role="tablist">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={statusFilter === "all"}
-              className={`cat-tab-btn ${statusFilter === "all" ? "active" : ""}`}
-              onClick={() => setStatusFilter("all")}
-            >
-              Tất cả ({metrics.total})
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={statusFilter === "active"}
-              className={`cat-tab-btn ${statusFilter === "active" ? "active" : ""}`}
-              onClick={() => setStatusFilter("active")}
-            >
-              Hoạt động ({metrics.active})
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={statusFilter === "inactive"}
-              className={`cat-tab-btn ${statusFilter === "inactive" ? "active" : ""}`}
-              onClick={() => setStatusFilter("inactive")}
-            >
-              Vô hiệu ({metrics.inactive})
-            </button>
-          </div>
-
-          {/* Sort Dropdown */}
-          <div className="cat-sort-select">
-            <ArrowUpDown size={14} color="#64748b" />
-            <select
-              value={sortOption}
-              onChange={(e) => setSortOption(e.target.value as SortOption)}
-              aria-label="Sắp xếp danh mục"
-            >
-              <option value="order">Thứ tự hiển thị</option>
-              <option value="name">Tên danh mục (A-Z)</option>
-              <option value="events">Nhiều sự kiện nhất</option>
-            </select>
-          </div>
-        </div>
-      </section>
-
-      {/* 4. Categories Grid */}
-      {loading ? (
-        <div className="categories-grid" aria-busy="true">
-          {[1, 2, 3, 4, 5, 6].map((idx) => (
-            <div key={idx} className="cat-skeleton-card" />
-          ))}
-        </div>
-      ) : displayItems.length === 0 ? (
-        <div className="categories-empty">
-          <FolderTree size={40} color="#475569" />
-          <h4>Không tìm thấy danh mục phù hợp</h4>
-          <h4>
-            {searchQuery
-              ? "Không tìm thấy danh mục phù hợp"
-              : statusFilter === "inactive"
-                ? "Không có danh mục đã vô hiệu hóa"
-                : statusFilter === "active"
-                  ? "Không có danh mục đang hoạt động"
-                  : "Chưa có danh mục nào"}
-          </h4>
-          <p>
-            {searchQuery || statusFilter !== "all"
-              ? "Hãy thử điều chỉnh lại từ khóa tìm kiếm hoặc bộ lọc trạng thái."
-              : "Hệ thống chưa có danh mục nào. Hãy bấm 'Tạo danh mục' để bắt đầu."}
-            {searchQuery
-              ? `Không tìm thấy danh mục phù hợp với từ khóa "${searchQuery}"${statusFilter !== "all" ? ` trong nhóm ${statusFilter === "active" ? "đang hoạt động" : "đã vô hiệu hóa"}` : ""}.`
-              : statusFilter === "inactive"
-                ? "Tất cả các danh mục trong hệ thống hiện đều đang hoạt động bình thường."
-                : statusFilter === "active"
-                  ? "Hiện tại tất cả danh mục đã bị vô hiệu hóa hoặc chưa được tạo."
-                  : "Hệ thống chưa có danh mục nào. Hãy bấm 'Tạo danh mục' để bắt đầu."}
-          </p>
-          {(searchQuery || statusFilter !== "all") && (
-            <button
-              type="button"
-              className="events-secondary-button"
-              onClick={() => {
-                setSearchQuery("");
-                setStatusFilter("all");
-              }}
-            >
-              Đặt lại bộ lọc
-            </button>
-          )}
-        </div>
+      {error && items.length === 0 ? (
+        <ErrorState title="Không tải được danh mục" description={error} onRetry={() => { setLoading(true); void load(true); }} retrying={loading} />
+      ) : loading ? (
+        <SkeletonBlock lines={6} label="Đang tải danh mục" />
       ) : (
-        <div className="categories-grid">
-          {displayItems.map((item) => {
-            const isSlugInUse = item.eventCount > 0;
-            const isToggling = togglingId === item.id;
-
-            return (
-              <article
-                className={`category-admin-card ${item.isActive ? "" : "is-inactive"}`}
-                key={item.id}
-              >
-                <div>
-                  <div className="cat-card-header">
-                    <div className="cat-card-title-group">
-                      <span className={`cat-badge ${item.isActive ? "active" : "inactive"}`}>
-                        <span className={`cat-dot ${item.isActive ? "active" : "inactive"}`} />
-                        {item.isActive ? "Đang hoạt động" : "Đã vô hiệu hóa"}
-                      </span>
-                      <br />
-                      <span className="cat-slug" title={`Đường dẫn slug: /${item.slug}`}>
-                        /{item.slug}
-                      </span>
-                    </div>
-                  </div>
-
-                  <h3>{item.name}</h3>
-                  <p className="cat-desc">{item.description || "Chưa có mô tả bổ sung cho danh mục này."}</p>
-
-                  <div className="cat-meta-grid">
-                    <div className="cat-meta-item">
-                      <span className="cat-meta-label">Sự kiện liên kết</span>
-                      <strong className="cat-meta-val">{item.eventCount} sự kiện</strong>
-                    </div>
-                    <div className="cat-meta-item">
-                      <span className="cat-meta-label">Thứ tự hiển thị</span>
-                      <strong className="cat-meta-val">#{item.sortOrder}</strong>
-                    </div>
-                  </div>
-                </div>
-
-                <footer>
-                  {item.eventCount > 0 && (
-                    <button
-                      type="button"
-                      className="cat-event-btn"
-                      onClick={() => navigate(`/admin/events?category=${item.slug}`)}
-                      title={`Xem ${item.eventCount} sự kiện thuộc danh mục này`}
-                    >
-                      <CalendarDays size={14} /> Sự kiện ({item.eventCount})
-                    </button>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={() => handleOpenEdit(item)}
-                    title="Chỉnh sửa thông tin danh mục"
-                  >
-                    <Edit3 size={14} /> Sửa
+        <BentoGrid>
+          <BentoCard span={8} title="Thể loại" subtitle={reorderable ? "Kéo ⋮⋮ để đổi thứ tự hiển thị · lưu ngay, có hoàn tác" : "Bỏ lọc để đổi thứ tự hiển thị"}>
+            <div className="cat-chips" role="group" aria-label="Lọc theo trạng thái">
+              {STATUS.map((option) => {
+                const count = option.value === "all" ? summary.total : option.value === "active" ? summary.active : summary.inactive;
+                return (
+                  <button key={option.value} type="button" className={cn("cat-chip", status === option.value && "is-active")} aria-pressed={status === option.value}
+                    aria-label={option.value === "all" ? `Xem tất cả ${count} danh mục` : `Lọc ${count} danh mục ${option.label.toLowerCase()}`} onClick={() => selectStatus(option.value)}>
+                    {option.label}<span className="cat-chip-count tb-num">{count}</span>
                   </button>
+                );
+              })}
+            </div>
+            <FilterBar label="Tìm danh mục" search={{ value: query, onChange: setQuery, placeholder: "Tìm theo tên, đường dẫn hoặc mô tả" }} chips={chips} onClearAll={() => selectStatus("all")}
+              resultText={<span className="tb-num">{formatNumber(visible.length)} / {formatNumber(items.length)}</span>} />
+            {visible.length === 0 ? (
+              <EmptyState icon={FolderTree} title={query.trim() ? "Không có danh mục khớp từ khóa" : STATUS.find((s) => s.value === status)!.empty}
+                description={items.length === 0 ? "Thêm thể loại âm nhạc đầu tiên để dùng khi tạo sự kiện." : undefined}
+                action={chips.length ? <Button onClick={() => selectStatus("all")}>Xem tất cả ({items.length})</Button> : <Button variant="primary" icon={Plus} onClick={() => setForm((c) => ({ open: true, id: null, key: c.key + 1 }))}>Thêm danh mục</Button>} />
+            ) : (
+              <CategoryList items={visible} reorderable={reorderable} busy={busy} handlers={handlers} />
+            )}
+          </BentoCard>
 
-                  <button
-                    type="button"
-                    disabled={isToggling}
-                    onClick={() => void handleToggleActive(item)}
-                    title={item.isActive ? "Vô hiệu hóa danh mục này" : "Kích hoạt lại danh mục này"}
-                  >
-                    {isToggling ? (
-                      <RefreshCw size={14} className="animate-spin" />
-                    ) : (
-                      <Power size={14} />
-                    )}
-                    {item.isActive ? "Vô hiệu" : "Kích hoạt"}
-                  </button>
-
-                  <button
-                    type="button"
-                    className="danger"
-                    disabled={isSlugInUse}
-                    onClick={() => setDeleteTarget(item)}
-                    title={
-                      isSlugInUse
-                        ? `Không thể xóa vì danh mục đang có ${item.eventCount} sự kiện liên kết`
-                        : "Xóa vĩnh viễn danh mục"
-                    }
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </footer>
-              </article>
-            );
-          })}
-        </div>
+          <BentoCard span={4} title="Tổng quan" subtitle="Trên toàn bộ danh mục">
+            <dl className="cat-figures">
+              <div><dt>Thể loại âm nhạc</dt><dd className="tb-num">{music}<small> / {summary.total}</small></dd></div>
+              <div><dt>Chọn được cho sự kiện mới</dt><dd className="tb-num">{selectable}</dd></div>
+              <div><dt>Sự kiện đang dùng danh mục</dt><dd className="tb-num">{formatNumber(summary.totalEvents)}</dd></div>
+              <div><dt>Đã vô hiệu hóa</dt><dd className="tb-num">{summary.inactive}</dd></div>
+            </dl>
+            <div className="cat-scope">
+              <span className="cat-scope-label">Phạm vi khi tạo sự kiện mới</span>
+              <strong>{platform ? (platform.categoryScope === "all" ? "Mọi danh mục đang hoạt động" : "Chỉ thể loại âm nhạc") : "Chưa tải được cài đặt"}</strong>
+              <ButtonLink to="/admin/settings" size="sm" variant="ghost" iconRight={ArrowRight}>Đổi tại Cài đặt</ButtonLink>
+            </div>
+            <ul className="cat-rules">
+              <li>Thứ tự ở đây là thứ tự bộ lọc thể loại trên trang khách.</li>
+              <li>Danh mục đã có sự kiện: đường dẫn bị khóa và không xóa được, chỉ vô hiệu hóa.</li>
+              <li>Vô hiệu hóa không làm mất danh mục của sự kiện đã có.</li>
+            </ul>
+          </BentoCard>
+        </BentoGrid>
       )}
 
-      {/* 5. Create / Edit Dialog */}
-      {open &&
-        createPortal(
-          <div className="events-dialog-backdrop">
-            <div
-              className="categories-dialog"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="category-dialog-title"
-            >
-              <header>
-                <div>
-                  <small>QUẢN LÝ DANH MỤC</small>
-                  <h3 id="category-dialog-title">
-                    {editingItem ? `Chỉnh sửa: ${editingItem.name}` : "Tạo danh mục mới"}
-                  </h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setOpen(false)}
-                  aria-label="Đóng cửa sổ"
-                >
-                  <X size={18} />
-                </button>
-              </header>
+      {form.open && (
+        <CategoryFormPanel
+          key={form.key}
+          open={form.open}
+          onOpenChange={(open) => setForm((current) => ({ ...current, open }))}
+          editing={editing}
+          items={items}
+          onSaved={(saved, created) => {
+            setItems((list) => (created ? [...list, saved] : list.map((item) => (item.id === saved.id ? saved : item))));
+            setForm((current) => ({ ...current, open: false }));
+            notify.success(created ? "Đã tạo danh mục" : "Đã lưu danh mục", { description: saved.name });
+            void load(false); // refresh server-derived fields (selectableForNewEvent)
+          }}
+        />
+      )}
 
-              <form onSubmit={handleSubmit}>
-                <label>
-                  Tên danh mục *
-                  <input
-                    required
-                    minLength={2}
-                    maxLength={100}
-                    value={form.name}
-                    onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    placeholder="VD: Hội thảo Công nghệ"
-                  />
-                </label>
-
-                <label>
-                  Đường dẫn (slug) *
-                  <input
-                    required
-                    pattern="[a-z0-9]+(-[a-z0-9]+)*"
-                    value={form.slug}
-                    disabled={Boolean(editingItem && editingItem.eventCount > 0)}
-                    onChange={(e) => setForm({ ...form, slug: e.target.value })}
-                    placeholder="VD: hoi-thao-cong-nghe"
-                  />
-                </label>
-
-                {editingItem && editingItem.eventCount > 0 && (
-                  <div className="cat-slug-warning wide">
-                    <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: "2px" }} />
-                    <span>
-                      Đường dẫn (slug) đã bị khóa vì có <strong>{editingItem.eventCount}</strong> sự kiện đang liên kết.
-                      Không thể thay đổi slug để bảo đảm tính toàn vẹn của liên kết công khai.
-                    </span>
-                  </div>
-                )}
-
-                <label className="wide">
-                  Mô tả
-                  <textarea
-                    maxLength={500}
-                    rows={3}
-                    value={form.description}
-                    onChange={(e) => setForm({ ...form, description: e.target.value })}
-                    placeholder="Tóm tắt ngắn gọn về thể loại sự kiện này..."
-                  />
-                </label>
-
-                <label>
-                  Mã biểu tượng (Lucide icon)
-                  <input
-                    maxLength={50}
-                    value={form.icon}
-                    onChange={(e) => setForm({ ...form, icon: e.target.value })}
-                    placeholder="music, monitor, utensils, ..."
-                  />
-                </label>
-
-                <label>
-                  Thứ tự hiển thị
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    maxLength={5}
-                    value={form.sortOrder}
-                    onChange={(e) => setForm({ ...form, sortOrder: digitsOnly(e.target.value, 5) })}
-                  />
-                </label>
-
-                <label className="category-active wide">
-                  <input
-                    type="checkbox"
-                    checked={form.isActive}
-                    onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
-                  />
-                  <span>Cho phép chọn danh mục này khi tạo sự kiện mới</span>
-                </label>
-
-                {formError && (
-                  <p className="categories-error wide" role="alert">
-                    {formError}
-                  </p>
-                )}
-
-                <footer className="wide">
-                  <button type="button" onClick={() => setOpen(false)} disabled={busy}>
-                    Hủy bỏ
-                  </button>
-                  <button className="primary" type="submit" disabled={busy}>
-                    {busy ? "Đang lưu..." : editingItem ? "Cập nhật danh mục" : "Tạo danh mục"}
-                  </button>
-                </footer>
-              </form>
-            </div>
-          </div>,
-          document.body,
-        )}
-
-      {/* 6. Delete Confirmation Modal (Staff-confirm design) */}
-      {deleteTarget &&
-        createPortal(
-          <div
-            className="staff-confirm-backdrop"
-            role="presentation"
-            onMouseDown={() => setDeleteTarget(null)}
-          >
-            <div
-              className="staff-confirm-dialog"
-              role="dialog"
-              aria-modal="true"
-              onMouseDown={(e) => e.stopPropagation()}
-            >
-              <header className="staff-confirm-header">
-                <div>
-                  <span>XÓA DANH MỤC HỆ THỐNG</span>
-                  <h3>Xác nhận xóa danh mục</h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setDeleteTarget(null)}
-                  aria-label="Đóng"
-                >
-                  <X size={18} />
-                </button>
-              </header>
-
-              <div className="staff-confirm-body">
-                <p>
-                  Bạn có chắc chắn muốn xóa vĩnh viễn danh mục{" "}
-                  <strong>"{deleteTarget.name}"</strong> (<code>/{deleteTarget.slug}</code>)?
-                </p>
-                <div className="staff-confirm-warning danger">
-                  <strong>Hành động không thể hoàn tác:</strong>
-                  <ul>
-                    <li>Danh mục chưa có sự kiện nào liên kết mới có thể xóa an toàn.</li>
-                    <li>Sau khi xóa, tên đường dẫn này có thể được dùng lại cho danh mục mới.</li>
-                  </ul>
-                </div>
-              </div>
-
-              <footer className="staff-confirm-footer">
-                <button
-                  type="button"
-                  className="staff-dialog-btn secondary"
-                  onClick={() => setDeleteTarget(null)}
-                  disabled={busy}
-                >
-                  Hủy bỏ
-                </button>
-                <button
-                  type="button"
-                  className="staff-dialog-btn danger"
-                  disabled={busy}
-                  onClick={() => void handleConfirmDelete()}
-                >
-                  {busy ? "Đang xóa..." : "Xác nhận xóa"}
-                </button>
-              </footer>
-            </div>
-          </div>,
-          document.body,
-        )}
-    </section>
+      <ConfirmDialog
+        open={Boolean(removeTarget)}
+        onOpenChange={(open) => { if (!open) setRemoveTarget(null); }}
+        title="Xóa danh mục?"
+        description={removeTarget ? `${removeTarget.name} (/${removeTarget.slug})` : undefined}
+        consequences={["Xóa vĩnh viễn, không khôi phục được.", "Chỉ xóa được danh mục chưa có sự kiện; máy chủ kiểm tra lại."]}
+        confirmLabel="Xóa danh mục"
+        pending={busy && Boolean(removeTarget)}
+        error={removeError}
+        onConfirm={confirmRemove}
+      />
+    </PageLayout>
   );
 }

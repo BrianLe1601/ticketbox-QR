@@ -1,70 +1,76 @@
-import { CheckCircle2, Eye, EyeOff, KeyRound, Save, Settings, ShieldCheck, UserRound } from "lucide-react";
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Clock3, RefreshCw } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useOutletContext, useSearchParams } from "react-router-dom";
 
-import { useAuth } from "@/context/AuthContext";
-import { changeAdminPassword, updateAdminProfile } from "@/services/admin-settings.service";
+import { AccountSettings } from "@/components/admin/settings/AccountSettings";
+import { AppearanceSettings } from "@/components/admin/settings/AppearanceSettings";
+import { SystemSettings } from "@/components/admin/settings/SystemSettings";
+import { BentoGrid, Button, Notice, PageHeader, PageLayout, SkeletonBlock, TabPanel, Tabs } from "@/components/admin/ui";
+import { formatDateTime } from "@/lib/admin-format";
+import { SETTINGS_TABS, tabFromParam, venueDirty, venueFormOf, type VenueForm } from "@/lib/admin-settings";
+import type { AdminOutletContext } from "@/layouts/AdminLayout";
+import { listAdminCategories, type AdminCategory } from "@/services/admin-categories.service";
+import { getPlatformSettings, type PlatformSettings } from "@/services/admin-platform-settings.service";
+import "@/styles/admin/settings.css";
 
-const messageOf = (error: unknown) => error instanceof Error ? error.message : "Không thể kết nối máy chủ.";
+const message = (cause: unknown) => (cause instanceof Error && cause.message ? cause.message : "Không thể kết nối máy chủ.");
 
 export function AdminSettingsPage() {
-  const { user, token, updateUser, logout } = useAuth();
-  const navigate = useNavigate();
-  const [fullName, setFullName] = useState(user?.fullName ?? "");
-  const [profileLoading, setProfileLoading] = useState(false);
-  const [profileError, setProfileError] = useState("");
-  const [profileSuccess, setProfileSuccess] = useState("");
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [showPasswords, setShowPasswords] = useState(false);
-  const [passwordLoading, setPasswordLoading] = useState(false);
-  const [passwordError, setPasswordError] = useState("");
+  const { appearance, updateAppearance, themePreference, setThemePreference } = useOutletContext<AdminOutletContext>();
+  const [params, setParams] = useSearchParams();
+  const tab = tabFromParam(params.get("tab"));
 
-  async function saveProfile(event: React.FormEvent) {
-    event.preventDefault(); setProfileError(""); setProfileSuccess("");
-    if (fullName.trim().length < 2) { setProfileError("Họ tên phải có ít nhất 2 ký tự."); return; }
-    setProfileLoading(true);
-    try {
-      const { data } = await updateAdminProfile(fullName.trim(), token);
-      updateUser(data.user); setFullName(data.user.fullName); setProfileSuccess("Đã cập nhật tên hiển thị.");
-    } catch (error) { setProfileError(messageOf(error)); } finally { setProfileLoading(false); }
-  }
+  const [settings, setSettings] = useState<PlatformSettings | null>(null);
+  const [categories, setCategories] = useState<AdminCategory[]>([]);
+  const [venueForm, setVenueForm] = useState<VenueForm>(venueFormOf(null));
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [reload, setReload] = useState(0);
 
-  async function savePassword(event: React.FormEvent) {
-    event.preventDefault(); setPasswordError("");
-    if (newPassword.length < 8 || !/[a-z]/.test(newPassword) || !/[0-9]/.test(newPassword) || !/[^\p{L}\p{N}\s]/u.test(newPassword)) {
-      setPasswordError("Mật khẩu mới phải có ít nhất 8 ký tự, gồm chữ thường, chữ số và ký tự đặc biệt."); return;
-    }
-    if (newPassword !== confirmPassword) { setPasswordError("Xác nhận mật khẩu mới chưa khớp."); return; }
-    setPasswordLoading(true);
-    try {
-      await changeAdminPassword(currentPassword, newPassword, token);
-      logout();
-      navigate("/login", { replace: true, state: { notice: "Đổi mật khẩu thành công. Vui lòng đăng nhập lại bằng mật khẩu mới." } });
-    } catch (error) { setPasswordError(messageOf(error)); setPasswordLoading(false); }
-  }
+  useEffect(() => {
+    let active = true;
+    Promise.all([getPlatformSettings(), listAdminCategories(true)])
+      .then(([platform, list]) => {
+        if (!active) return;
+        setSettings(platform); setCategories(list); setVenueForm(venueFormOf(platform.venue)); setError("");
+      })
+      .catch((cause: unknown) => { if (active) setError(message(cause)); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [reload]);
 
-  return <section className="admin-settings-page">
-    <header className="factory-module-hero"><div><div className="admin-live-label"><Settings size={13}/> ACCOUNT CONTROL</div><h2>Cài đặt tài khoản</h2><p>Cập nhật tên hiển thị hoặc đổi mật khẩu của tài khoản Admin đang đăng nhập.</p></div><div className="factory-module-core"><Settings size={28}/></div></header>
-    <div className="settings-account-summary"><div className="settings-avatar">{user?.fullName.charAt(0).toUpperCase()}</div><div><span>Tài khoản quản trị</span><strong>{user?.fullName}</strong><small>{user?.email}</small></div><span className="settings-role"><ShieldCheck size={14}/> Admin</span></div>
-    <div className="settings-grid">
-      <form className="settings-panel" onSubmit={saveProfile}><header><UserRound size={20}/><div><h3>Thông tin hiển thị</h3><p>Tên này xuất hiện trên thanh quản trị và nhật ký thao tác.</p></div></header>
-        <label><span>Họ và tên Admin</span><input value={fullName} minLength={2} maxLength={100} onChange={(event) => setFullName(event.target.value)} autoComplete="name"/></label>
-        <label><span>Email đăng nhập</span><input value={user?.email ?? ""} disabled/><small>Email được khóa để tránh làm sai định danh tài khoản.</small></label>
-        {profileError && <p className="settings-message error" role="alert">{profileError}</p>}
-        {profileSuccess && <p className="settings-message success" role="status"><CheckCircle2 size={15}/>{profileSuccess}</p>}
-        <button className="settings-submit" disabled={profileLoading || fullName.trim() === user?.fullName}><Save size={15}/>{profileLoading ? "Đang lưu…" : "Lưu tên hiển thị"}</button>
-      </form>
-      <form className="settings-panel" onSubmit={savePassword}><header><KeyRound size={20}/><div><h3>Đổi mật khẩu</h3><p>Xác minh mật khẩu hiện tại trước khi thiết lập mật khẩu mới.</p></div></header>
-        <label><span>Mật khẩu hiện tại</span><input type={showPasswords ? "text" : "password"} value={currentPassword} minLength={8} maxLength={100} onChange={(event) => setCurrentPassword(event.target.value)} autoComplete="current-password" required/></label>
-        <label><span>Mật khẩu mới</span><input type={showPasswords ? "text" : "password"} value={newPassword} minLength={8} maxLength={100} onChange={(event) => setNewPassword(event.target.value)} autoComplete="new-password" required/><small>Tối thiểu 8 ký tự, gồm chữ thường, chữ số và ký tự đặc biệt (@, *, ...). Chỉ đổi tối đa 1 lần trong 15 phút.</small></label>
-        <label><span>Xác nhận mật khẩu mới</span><input type={showPasswords ? "text" : "password"} value={confirmPassword} minLength={8} maxLength={100} onChange={(event) => setConfirmPassword(event.target.value)} autoComplete="new-password" required/></label>
-        <button className="settings-password-toggle" type="button" onClick={() => setShowPasswords((value) => !value)}>{showPasswords ? <EyeOff size={15}/> : <Eye size={15}/>} {showPasswords ? "Ẩn mật khẩu" : "Hiện mật khẩu"}</button>
-        {passwordError && <p className="settings-message error" role="alert">{passwordError}</p>}
-        <button className="settings-submit danger" disabled={passwordLoading}><KeyRound size={15}/>{passwordLoading ? "Đang cập nhật…" : "Đổi mật khẩu"}</button>
-        <p className="settings-security-note"><ShieldCheck size={15}/> Sau khi đổi, tất cả phiên đăng nhập sẽ bị thu hồi và bạn cần đăng nhập lại.</p>
-      </form>
-    </div>
-  </section>;
+  const unsaved = Boolean(settings?.venue) && settings !== null && venueDirty(settings.venue, venueForm);
+  const items = SETTINGS_TABS.map((item) => (item.value === "system" && unsaved ? { ...item, label: `${item.label} (chưa lưu)` } : item));
+
+  return (
+    <PageLayout className="stp">
+      <PageHeader
+        title="Cài đặt"
+        description="Địa điểm và danh mục dùng chung cho cả hệ thống; giao diện và tài khoản là của riêng bạn."
+        meta={settings?.updatedAt ? <span className="tb-num"><Clock3 size={13} aria-hidden="true" /> Cấu hình hệ thống cập nhật {formatDateTime(settings.updatedAt)}{settings.updatedBy?.fullName ? ` bởi ${settings.updatedBy.fullName}` : ""}</span> : null}
+        actions={tab === "system" ? <Button icon={RefreshCw} loading={loading && Boolean(settings)} disabled={unsaved} disabledReason="Lưu hoặc hoàn tác địa điểm trước" onClick={() => { setLoading(true); setReload((n) => n + 1); }}>Tải lại</Button> : undefined}
+      />
+
+      <Tabs ariaLabel="Nhóm cài đặt" items={items} value={tab} onValueChange={(next) => { const p = new URLSearchParams(params); if (next === "system") p.delete("tab"); else p.set("tab", next); setParams(p, { replace: true }); }}>
+        <TabPanel value="system">
+          {error && <Notice tone="danger" title="Không tải được cấu hình hệ thống" action={<Button size="sm" icon={RefreshCw} onClick={() => { setLoading(true); setReload((n) => n + 1); }}>Thử lại</Button>}>{error}</Notice>}
+          {!settings ? (!error && <BentoGrid><div className="st-skel"><SkeletonBlock lines={6} /></div><div className="st-skel"><SkeletonBlock lines={6} /></div></BentoGrid>) : (
+            <BentoGrid>
+              <SystemSettings settings={settings} categories={categories} form={venueForm} onForm={setVenueForm} onSettings={setSettings} onCategories={setCategories} />
+            </BentoGrid>
+          )}
+        </TabPanel>
+        <TabPanel value="appearance">
+          <BentoGrid>
+            <AppearanceSettings appearance={appearance} onAppearance={updateAppearance} theme={themePreference} onTheme={setThemePreference} />
+          </BentoGrid>
+        </TabPanel>
+        <TabPanel value="account">
+          <BentoGrid>
+            <AccountSettings />
+          </BentoGrid>
+        </TabPanel>
+      </Tabs>
+    </PageLayout>
+  );
 }

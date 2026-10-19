@@ -1,0 +1,218 @@
+/* Admin palette — Mint/Teal Bento (Bửu, 18/10/2026), adjusted so every text pair is >= 4.5:1
+   (AGENTS.md). Overrides the shared --tb-* tokens inside the Admin scope, on /login and in the Staff portal (the
+   whole internal side shares one Mint/Teal look since 19/10/2026). Public pages never read them.
+
+   Deviations from the reference template (measured):
+   - Sidebar #23705B instead of #43A68B (white text 2.97 -> 5.93:1); inactive items are light mint
+     (#DDF1EA, 5.04:1) instead of moss #1D5243 (3.02:1); active item/summary box #1B5E4C.
+   - Teal buttons #287A64 (white 5.17:1); secondary text #5F6B78 (spec #8C98A4 is 2.94:1);
+     status green = heading teal #286A58 (spec #43A68B 2.97:1); red text #C2343A (spec 3.56:1).
+   - Chart colours that carry data are >= 3:1 on white: revenue bars #E05A70 (spec #F9B8B8 1.67:1),
+     cyan ring #0891B2 (spec #2CC3FF 2.03:1). Gauge zone colours stay decorative; values are text. */
+
+:is(.admin-room, .login-page, .staff-portal-room, body[data-admin-appearance], body[data-staff-appearance]) {
+  /* surfaces */
+  --tb-bg: #eef2f1;            /* mint-grey canvas */
+  --tb-surface: #ffffff;
+  --tb-surface-2: #e8eceb;     /* pills, table header, hover */
+  --tb-subtle: #e8eceb;
+  --tb-border: #e1e7e5;
+  --tb-border-strong: #c9d3d0;
+  --tb-grid: #e8eceb;          /* chart grid lines (dashed) */
+
+  /* text */
+  --tb-text: #1e293b;
+  --tb-heading: #286a58;       /* card titles (6.38:1) */
+  --tb-muted: #475569;         /* on pills/table header (6.36:1 on #E8ECEB) */
+  --tb-secondary: #5f6b78;     /* subtitles: 5.44 white, 4.82 canvas */
+  --tb-faint: #5f6b78;
+
+  /* brand teal */
+  --tb-accent: #287a64;        /* pills, buttons: white 5.17:1 */
+  --tb-accent-hover: #23705b;
+  --tb-accent-text: #286a58;
+  --tb-accent-soft: #e6f4f0;
+  --tb-accent-border: #b9dfd3;
+  --tb-on-accent: #ffffff;
+
+  --tb-control-border: #7f918b; /* input boundary: 3.4:1 on white (WCAG 1.4.11) */
+
+  --tb-success: #286a58;
+  --tb-success-solid: #287a64;
+  --tb-success-soft: #e6f4f0;
+  --tb-success-border: #b9dfd3;
+  --tb-warning: #b45309;       /* amber-700: 4.84 on amber-50 */
+  --tb-warning-solid: #d97706;
+  --tb-on-warning: #1e293b;
+  --tb-warning-soft: #fffbeb;
+  --tb-warning-border: #fde68a;
+  --tb-warning-badge: #fef3c7;
+  --tb-danger: #c2343a;        /* 5.46:1 */
+  --tb-danger-solid: #c2343a;
+  --tb-danger-soft: #fdecec;
+  --tb-danger-border: #f5c2c3;
+  --tb-info: #0369a1;
+  --tb-info-solid: #0369a1;
+  --tb-info-soft: #f0f9ff;
+  --tb-info-border: #bae6fd;
+  --tb-info-badge: #e0f2fe;
+  --tb-on-solid: #ffffff;
+
+  /* live (Đang diễn ra / mở cổng) */
+  --tb-live: #be123c;
+  --tb-live-soft: #ffe4e6;
+  --tb-live-tile: #fff1f2;
+  --tb-live-border: #fecdd3;
+
+  /* data visualisation (>= 3:1 on white where they carry data) */
+  --tb-chart-1: #4e7cfe;       /* tickets */
+  --tb-chart-2: #e05a70;       /* revenue */
+  --tb-ring-1: #4b49ac;
+  --tb-ring-2: #0891b2;
+  --tb-ring-3: #f94144;
+  --tb-ring-4: #d63384;
+  --tb-ring-track: #e8eceb;
+  --tb-gauge-good: #90ee6e;    /* decorative zones */
+  --tb-gauge-mid: #f9c74f;
+  --tb-gauge-bad: #ea5455;
+  --tb-gauge-needle: #1e293b;
+  --tb-spark-1: #6fcf4f;       /* decorative mini bars (values are shown as text) */
+  --tb-spark-2: #c9a24a;
+
+  /* decorative KPI/insight icons */
+  --tb-icon-primary: #287a64;
+  --tb-icon-success: #10b981;
+  --tb-icon-revenue: #059669;
+  --tb-icon-info: #0284c7;
+  --tb-icon-warning: #d97706;
+  --tb-icon-neutral: #475569;
+  --tb-icon-alert: #ea580c;
+  --tb-icon-alert-soft: #fff7ed;
+  --tb-icon-muted: #94a3b8;
+  --tb-insight-staff: #c5a880;
+  --tb-insight-stock: #1e3a5f;
+
+  /* effects */
+  --tb-shadow-sm: 0 10px 25px -5px rgb(29 82 67 / 8%), 0 4px 10px -2px rgb(0 0 0 / 4%);
+  --tb-shadow-lg: 0 16px 40px rgb(29 82 67 / 18%), 0 4px 12px rgb(0 0 0 / 8%);
+  --tb-overlay: rgb(15 40 34 / 45%);
+  --tb-focus: #287a64;
+
+  /* floating teal sidebar */
+  --tb-nav-bg: #23705b;
+  --tb-nav-text: #ddf1ea;      /* inactive: 5.04:1 */
+  --tb-nav-muted: #ddf1ea;
+  --tb-nav-hover: rgb(0 0 0 / 14%);
+  --tb-nav-hover-text: #ffffff;
+  --tb-nav-active: #1b5e4c;    /* white 7.63:1 */
+  --tb-nav-on-active: #ffffff;
+  --tb-nav-surface: #1b5e4c;   /* summary box */
+  --tb-nav-border: rgb(255 255 255 / 12%);
+  --tb-nav-focus: #ffffff;
+  --tb-nav-badge: #ffffff;
+  --tb-nav-badge-text: #1b5e4c;
+  --tb-nav-live: #ffe4e6;
+  --tb-nav-strong: #ffffff;
+  --tb-nav-danger: #ffffff;
+  --tb-nav-danger-strong: #ffffff;
+  --tb-nav-danger-bg: rgb(0 0 0 / 14%);
+  --tb-nav-live-dot-active: #ffe4e6;
+  --tb-nav-active-ink: #1b5e4c;
+  --tb-nav-count-dot: #fde68a;
+  --tb-nav-shadow: 0 12px 30px rgb(35 112 91 / 28%);
+
+  --tb-live-label: #ffe4e6;
+  --tb-live-fill: #ec4899;
+  --tb-live-track: #e8eceb;
+
+  /* geometry */
+  --tb-radius-card: 18px;
+  --tb-radius: 18px;
+  --tb-radius-sm: 10px;
+  --tb-radius-badge: 999px;
+  --tb-radius-sidebar: 24px;
+}
+
+:is(.admin-room[data-theme="dark"], .login-page[data-theme="dark"], .staff-portal-room[data-theme="dark"], body[data-admin-appearance="dark"], body[data-staff-appearance="dark"]) {
+  --tb-bg: #0b1412;
+  --tb-surface: #101a18;
+  --tb-surface-2: #16221f;
+  --tb-subtle: #16221f;
+  --tb-border: #22312d;
+  --tb-border-strong: #33463f;
+  --tb-grid: #22312d;
+
+  --tb-text: #e6eeec;
+  --tb-heading: #7fd8bb;
+  --tb-muted: #9db0aa;         /* 7.19:1 on #16221F */
+  --tb-secondary: #9db0aa;
+  --tb-faint: #9db0aa;
+  --tb-control-border: #5b706a;
+
+  --tb-accent: #5cc9a7;        /* filled controls use dark text (9.23:1) */
+  --tb-accent-hover: #7fd8bb;
+  --tb-accent-text: #7fd8bb;
+  --tb-accent-soft: #12302a;
+  --tb-accent-border: #1f5a4b;
+  --tb-on-accent: #0b1412;
+
+  --tb-success: #7fd8bb;
+  --tb-success-solid: #5cc9a7;
+  --tb-success-soft: #12302a;
+  --tb-success-border: #1f5a4b;
+  --tb-warning: #fbbf24;
+  --tb-warning-solid: #fbbf24;
+  --tb-on-warning: #0b1412;
+  --tb-warning-soft: #2d1d04;
+  --tb-warning-border: #78350f;
+  --tb-warning-badge: #2d1d04;
+  --tb-danger: #ff8a8f;
+  --tb-danger-solid: #ff8a8f;
+  --tb-danger-soft: #3a1416;
+  --tb-danger-border: #7a2a2e;
+  --tb-info: #38bdf8;
+  --tb-info-solid: #38bdf8;
+  --tb-info-soft: #082f49;
+  --tb-info-border: #075985;
+  --tb-info-badge: #082f49;
+  --tb-on-solid: #0b1412;
+
+  --tb-live: #fda4af;
+  --tb-live-soft: #4c0519;
+  --tb-live-tile: #4c0519;
+  --tb-live-border: #881337;
+
+  --tb-chart-1: #7c9dff;
+  --tb-chart-2: #f17b8f;
+  --tb-ring-1: #8f8df0;
+  --tb-ring-2: #22d3ee;
+  --tb-ring-3: #ff6b6e;
+  --tb-ring-4: #f06aab;
+  --tb-ring-track: #22312d;
+  --tb-gauge-needle: #e6eeec;
+
+  --tb-icon-primary: #7fd8bb;
+  --tb-icon-success: #34d399;
+  --tb-icon-revenue: #34d399;
+  --tb-icon-info: #38bdf8;
+  --tb-icon-warning: #fbbf24;
+  --tb-icon-neutral: #9db0aa;
+  --tb-icon-alert: #fb923c;
+  --tb-icon-alert-soft: #431407;
+  --tb-icon-muted: #5b706a;
+
+  --tb-shadow-sm: 0 10px 25px -5px rgb(0 0 0 / 45%);
+  --tb-shadow-lg: 0 16px 40px rgb(0 0 0 / 60%);
+  --tb-overlay: rgb(0 0 0 / 65%);
+  --tb-focus: #7fd8bb;
+
+  --tb-nav-bg: #17594a;        /* white 8.19:1, mint 6.56:1 */
+  --tb-nav-text: #cdede3;
+  --tb-nav-muted: #cdede3;
+  --tb-nav-active: #0f3d32;
+  --tb-nav-surface: #0f3d32;
+  --tb-nav-badge-text: #0f3d32;
+  --tb-nav-active-ink: #0f3d32;
+  --tb-nav-shadow: 0 12px 30px rgb(0 0 0 / 45%);
+  --tb-live-track: #22312d;
+}

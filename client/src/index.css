@@ -1,7 +1,35 @@
 @import "./styles/index.css"; 
-@import "./styles/admin-tech.css";
+@import "./styles/ticketbox-tokens.css";
+@import "./styles/admin/tokens.css";
+@import "./styles/admin/legacy.css";
+@import "./styles/admin/theme.css";
+@import "./styles/admin/ui.css";
+@import "./styles/admin/shell.css";
 
 @import "tailwindcss";
+
+/* Admin token utilities (bg-tb-surface, text-tb-muted, border-tb-line…). Prefixed with tb-
+   because Public's theme already owns primary/muted/border. Values exist only inside the
+   Admin/Staff/Login scopes, so these classes are meaningless on Public pages. */
+@theme inline {
+  --color-tb-canvas: var(--tb-bg);
+  --color-tb-surface: var(--tb-surface);
+  --color-tb-surface-2: var(--tb-surface-2);
+  --color-tb-line: var(--tb-border);
+  --color-tb-line-strong: var(--tb-border-strong);
+  --color-tb-ink: var(--tb-text);
+  --color-tb-muted: var(--tb-muted);
+  --color-tb-primary: var(--tb-accent);
+  --color-tb-primary-soft: var(--tb-accent-soft);
+  --color-tb-success: var(--tb-success);
+  --color-tb-success-soft: var(--tb-success-soft);
+  --color-tb-warning: var(--tb-warning);
+  --color-tb-warning-soft: var(--tb-warning-soft);
+  --color-tb-danger: var(--tb-danger);
+  --color-tb-danger-soft: var(--tb-danger-soft);
+  --color-tb-info: var(--tb-info);
+  --color-tb-info-soft: var(--tb-info-soft);
+}
 
 :root {
   font-family:

@@ -1,0 +1,82 @@
+/* Admin Danh mục — Bento reference: sortable genre list (8/12) + overview (4/12). Tokens only;
+   imported by AdminCategoriesPage. The form panel is portaled (body[data-admin-appearance]). */
+
+.admin-room .catp {
+  .cat-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .cat-chip {
+    display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 6px 0 12px; border: 1px solid var(--tb-border); border-radius: 999px;
+    background: var(--tb-surface); color: var(--tb-text); font: inherit; font-size: max(12px, .88em); font-weight: 600; cursor: pointer;
+  }
+  .cat-chip:hover { border-color: var(--tb-accent); }
+  .cat-chip:focus-visible { outline: 3px solid var(--tb-focus); outline-offset: 2px; }
+  .cat-chip.is-active { border-color: var(--tb-accent); background: var(--tb-accent); color: var(--tb-on-accent); }
+  .cat-chip-count { min-width: 22px; padding: 1px 7px; border-radius: 999px; background: var(--tb-surface-2); color: var(--tb-text); font-size: 12px; text-align: center; }
+  .cat-chip.is-active .cat-chip-count { background: var(--tb-surface); color: var(--tb-heading); }
+  .bento-card > .adm-filterbar { margin: 0; }
+
+  /* sortable list */
+  .cat-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .cat-row {
+    position: relative; display: grid; grid-template-columns: auto 28px minmax(0, 1fr) auto auto; align-items: center; gap: 10px;
+    padding: 10px 12px 10px 6px; border-radius: 14px; background: var(--tb-surface-2); border: 1px solid transparent;
+  }
+  .cat-row.is-off { background: transparent; border-color: var(--tb-border); }
+  .cat-row.is-dragging { z-index: 2; border-color: var(--tb-accent); background: var(--tb-surface); box-shadow: var(--tb-shadow-lg); }
+  .cat-grip {
+    display: grid; place-items: center; width: 26px; height: 40px; padding: 0; border: 0; border-radius: 8px;
+    background: none; color: var(--tb-muted); cursor: grab; touch-action: none;
+  }
+  .cat-grip:hover:not(:disabled) { background: var(--tb-surface); color: var(--tb-text); }
+  .cat-grip:focus-visible { outline: 3px solid var(--tb-focus); outline-offset: 1px; }
+  .cat-grip:disabled { cursor: progress; opacity: .5; }
+  .cat-grip.is-off { cursor: default; width: 6px; }
+  .cat-pos { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--tb-surface); color: var(--tb-heading); font-size: 12px; font-weight: 800; }
+  .cat-main { display: grid; gap: 4px; min-width: 0; }
+  .cat-name { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; min-width: 0; }
+  .cat-name strong { color: var(--tb-text); font-size: 1.02em; overflow-wrap: anywhere; }
+  .cat-slug { display: inline-flex; align-items: center; gap: 4px; color: var(--tb-secondary); font-size: max(12px, .85em); font-family: var(--tb-font-mono); overflow-wrap: anywhere; }
+  .cat-desc { color: var(--tb-secondary); font-size: max(12px, .88em); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden; }
+  .cat-badges { display: flex; align-items: center; gap: 6px 8px; flex-wrap: wrap; }
+  .cat-select { font-size: 12px; font-weight: 600; }
+  .cat-select.is-yes { color: var(--tb-success); }
+  .cat-select.is-no { color: var(--tb-secondary); }
+  .cat-events { justify-self: end; white-space: nowrap; }
+  .cat-none { color: var(--tb-secondary); font-size: max(12px, .85em); }
+  .cat-actions { display: inline-flex; align-items: center; gap: 4px; }
+
+  /* overview */
+  .cat-figures { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; }
+  .cat-figures div { display: grid; gap: 2px; padding: 12px; border-radius: 12px; background: var(--tb-surface-2); min-width: 0; }
+  .cat-figures dt { color: var(--tb-secondary); font-size: 12px; }
+  .cat-figures dd { margin: 0; color: var(--tb-heading); font-size: 1.4em; font-weight: 800; }
+  .cat-figures dd small { color: var(--tb-secondary); font-size: .6em; font-weight: 600; }
+  .cat-scope { display: grid; justify-items: start; gap: 4px; padding: 12px; border-radius: 12px; background: var(--tb-accent-soft); }
+  .cat-scope-label { color: var(--tb-text); font-size: 12px; font-weight: 600; }
+  .cat-scope strong { color: var(--tb-heading); }
+  .cat-scope .adm-btn { margin-left: -10px; }
+  .cat-rules { display: grid; gap: 6px; margin: 0; padding-left: 18px; color: var(--tb-secondary); font-size: max(12px, .88em); }
+}
+
+/* form panel */
+:is(.admin-room, body[data-admin-appearance]) {
+  .cat-form-fields { display: grid; gap: 16px; }
+  .cat-slug-input { position: relative; display: block; }
+  .cat-slug-input input { width: 100%; font-family: var(--tb-font-mono); }
+  .cat-slug-input input:disabled { padding-right: 34px; }
+  .cat-slug-input svg { position: absolute; right: 12px; top: 50%; translate: 0 -50%; color: var(--tb-muted); }
+}
+
+@media (max-width: 760px) {
+  .admin-room .catp {
+    .cat-row { grid-template-columns: auto 28px minmax(0, 1fr) auto; grid-template-areas: "grip pos main actions" "grip pos events events"; row-gap: 4px; }
+    .cat-grip { grid-area: grip; }
+    .cat-pos { grid-area: pos; }
+    .cat-main { grid-area: main; }
+    .cat-actions { grid-area: actions; align-self: start; }
+    .cat-events { grid-area: events; justify-self: start; }
+    .cat-figures { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .admin-room .catp .cat-row { transition: none !important; }
+}
