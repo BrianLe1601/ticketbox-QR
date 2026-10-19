@@ -255,5 +255,85 @@ body[data-admin-appearance] .adm-tasks {
   body[data-admin-appearance] .adm-tasks .adm-tasks-live.is-live { animation: none; }
 }
 
+/* ---------- setup guide: topbar button + checklist dialog (components/admin/shell/SetupGuide.tsx) ---------- */
+.adm-guide-trigger {
+  display: inline-flex; align-items: center; gap: 6px; height: 40px; min-width: 40px; padding: 0 10px; justify-content: center;
+  border: 1px solid transparent; border-radius: 10px; background: transparent; color: var(--tb-text); font: inherit; cursor: pointer;
+}
+.adm-guide-trigger:hover { background: var(--tb-surface-2); }
+.adm-guide-trigger:focus-visible { outline: 3px solid var(--tb-focus); outline-offset: 2px; }
+.adm-guide-trigger.is-pending { background: var(--tb-accent-soft); color: var(--tb-accent-text); border-color: var(--tb-accent-border); }
+.adm-guide-trigger[data-state="open"] { background: var(--tb-accent-soft); color: var(--tb-accent-text); }
+.adm-guide-trigger-count { font-size: 12px; font-weight: 800; }
+
+body[data-admin-appearance] .adm-dialog.adm-guide {
+  /* Three rows: fixed top (title + progress), scrolling step list, fixed footer. */
+  width: min(700px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: 0; padding: 0; overflow: hidden;
+  .adm-guide-top { flex: none; display: grid; gap: 14px; padding: 22px 22px 16px; border-bottom: 1px solid var(--tb-border); }
+  /* position: relative keeps sr-only labels (absolute) inside the scroller, so the dialog itself never scrolls. */
+  .adm-guide-body { position: relative; flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: grid; gap: 12px; align-content: start; padding: 16px 22px; }
+  .adm-guide-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .adm-guide-titles { min-width: 0; }
+  .adm-dialog-title { font-size: 1.3em; color: var(--tb-heading); }
+  .adm-guide-desc { margin: 4px 0 0; color: var(--tb-secondary); }
+
+  .adm-guide-progress { display: grid; gap: 8px; }
+  .adm-guide-progress-text { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: .92em; color: var(--tb-secondary); }
+  .adm-guide-progress-text strong { color: var(--tb-text); }
+  .adm-guide-bar { height: 8px; border-radius: 999px; background: var(--tb-surface-2); overflow: hidden; }
+  .adm-guide-bar span { display: block; height: 100%; border-radius: inherit; background: var(--tb-accent); transition: width .3s ease; }
+
+  .adm-guide-done {
+    display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 12px;
+    background: var(--tb-success-soft); border: 1px solid var(--tb-success-border); color: var(--tb-success);
+    p { margin: 0; color: var(--tb-text); }
+    a { color: var(--tb-accent-text); font-weight: 650; }
+    a:focus-visible { outline: 3px solid var(--tb-focus); outline-offset: 2px; border-radius: 4px; }
+  }
+
+  .adm-guide-steps { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .adm-guide-step {
+    display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px;
+    padding: 12px 14px; border: 1px solid var(--tb-border); border-radius: 12px; background: var(--tb-surface);
+  }
+  .adm-guide-step.is-current { border-color: var(--tb-accent); background: var(--tb-accent-soft); }
+  .adm-guide-marker {
+    display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; align-self: start;
+    border: 2px solid var(--tb-border-strong); color: var(--tb-secondary); font-weight: 750; font-size: .9em;
+  }
+  .is-done .adm-guide-marker { border-color: var(--tb-success-border); background: var(--tb-success-soft); color: var(--tb-success); }
+  .is-current .adm-guide-marker { border-color: var(--tb-accent); background: var(--tb-accent); color: var(--tb-on-accent); }
+  .is-locked .adm-guide-marker { color: var(--tb-muted); }
+  .adm-guide-step-text { display: grid; gap: 2px; min-width: 0; }
+  .adm-guide-step-text p { margin: 0; }
+  .adm-guide-step-title { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-weight: 650; color: var(--tb-text); }
+  .adm-guide-tag { padding: 1px 8px; border-radius: 999px; background: var(--tb-accent); color: var(--tb-on-accent); font-size: 12px; font-weight: 700; }
+  .adm-guide-tag.is-done { background: var(--tb-success-soft); color: var(--tb-success); }
+  .adm-guide-step-why { color: var(--tb-secondary); font-size: max(12px, .88em); }
+  .adm-guide-step-status { color: var(--tb-text); font-size: max(12px, .85em); font-weight: 600; }
+  .is-locked .adm-guide-step-status { color: var(--tb-muted); font-weight: 500; }
+  .adm-guide-step-action { justify-self: end; }
+
+  .adm-guide-foot { flex: none; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; padding: 14px 22px; border-top: 1px solid var(--tb-border); background: var(--tb-surface); }
+  .adm-guide-foot > :last-child { margin-left: auto; }
+  .adm-guide-optout { display: inline-flex; align-items: center; gap: 8px; color: var(--tb-text); cursor: pointer; font-size: .92em; }
+  .adm-guide-optout input { width: 18px; height: 18px; margin: 0; accent-color: var(--tb-accent); cursor: pointer; }
+  .adm-guide-optout input:focus-visible { outline: 3px solid var(--tb-focus); outline-offset: 2px; }
+  .adm-guide-hint { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; color: var(--tb-muted); font-size: 12px; }
+}
+@media (max-width: 560px) {
+  body[data-admin-appearance] .adm-dialog.adm-guide {
+    .adm-guide-top { padding: 18px 16px 14px; }
+    .adm-guide-body { padding: 14px 16px; }
+    .adm-guide-foot { padding: 12px 16px; }
+    .adm-guide-step { grid-template-columns: auto minmax(0, 1fr); padding: 12px; }
+    .adm-guide-step-action { grid-column: 2; justify-self: start; }
+    .adm-guide-hint { display: none; }
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  body[data-admin-appearance] .adm-guide-bar span { transition: none; }
+}
+
 /* lazy-page placeholder: same header frame as a loaded page (see RouteSkeleton in AdminLayout) */
 .adm-route-loading-body { min-height: 60vh; border-radius: var(--tb-radius-card); background: var(--tb-surface); box-shadow: var(--tb-shadow-sm); }

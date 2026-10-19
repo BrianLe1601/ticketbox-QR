@@ -5,6 +5,7 @@ import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { CommandPalette } from "@/components/admin/shell/CommandPalette";
 import { RouteProgress } from "@/components/shared/RouteProgress";
 import { NavItemLink, type NavBadgeView } from "@/components/admin/shell/NavItemLink";
+import { SetupGuide } from "@/components/admin/shell/SetupGuide";
 import { SidebarSummary } from "@/components/admin/shell/SidebarSummary";
 import { TaskBell } from "@/components/admin/shell/TaskBell";
 import { ADMIN_NAVIGATION, ADMIN_SETTINGS_NAV, sectionLabel, type NavBadge, type NavItem } from "@/components/admin/shell/navigation";
@@ -233,6 +234,7 @@ export function AdminLayout() {
                 <span className="adm-shell-search-text">Tìm nhanh…</span>
                 <kbd aria-hidden="true">Ctrl K</kbd>
               </button>
+              <SetupGuide signals={signals} accountId={accountId} />
               <TaskBell signals={signals} accountId={accountId} />
               <ThemeMenu preference={preference} theme={theme} onChange={setPreference} />
             </div>

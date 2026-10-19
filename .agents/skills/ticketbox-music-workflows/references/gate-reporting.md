@@ -9,14 +9,18 @@ First verified unknown Google subject creates pending/inactive Staff without app
 
 Tests in server/tests: `google-staff-auth.test.ts`, `google-identity.test.ts`, `admin-staff.service.test.ts`, `admin-staff.routes.test.ts`. Real Google/DB acceptance remains separate.
 
+Admin password reset (local Admin passwords only, Staff use Google): `POST /api/auth/password-reset/request` (same 202 for every email, mail after the response) and `/confirm` (stateless HMAC token, 30 min, single use, only in `/reset-password#token=` and JSON bodies). Code `server/src/modules/auth/password-reset-token.ts`, `auth.service.ts`; tests `password-reset.test.ts`, `password-reset-mail.test.ts`.
+
 ## Khôi: assigned concert → scan/manual → log
 UI: `client/src/pages/staff/StaffEventsPage.tsx`, `StaffCheckinPage.tsx`, `StaffHistoryPage.tsx`, `client/src/components/checkin`; client `checkin.service.ts`.
 
-Backend: `server/src/modules/checkins/checkin.*.ts`; GET `/api/staff/events`, POST/GET `/api/staff/events/:eventId/checkins`. Derive identity from auth; active assignment/window, correct Event, confirmed Order and issued Ticket are required. Atomic Ticket update + SUCCESS log; business rejection commits log. Pre-service auth/validation/rate-limit failures are not persisted business scans.
+Backend: `server/src/modules/checkins/checkin.*.ts`; GET `/api/staff/events`, POST/GET `/api/staff/events/:eventId/checkins`, read-only GET `/api/staff/events/:eventId/attendance` (`admitted`/`validTickets`/`remaining`, same access rule as scan choices, `admitted` uses the Reports admission predicate). Scan results may carry `ticket.ticketTypeName` (purchase snapshot, unlocked read, never for WRONG_EVENT). Derive identity from auth; active assignment/window, correct Event, confirmed Order and issued Ticket are required. Atomic Ticket update + SUCCESS log; business rejection commits log. Pre-service auth/validation/rate-limit failures are not persisted business scans.
 
 Preserve ticketbox token/hash contract. No invented shared accounts or scan-method column. Result enums in `checkin.types.ts` unchanged. Hidden concert may serve existing buyers; terminal/ended concerts may not check in.
 
-Tests: `server/tests/checkin.service.test.ts`, `checkin.repository.test.ts`, `checkin.routes.test.ts`, `staff-operations.test.ts`. Camera and real concurrency require separate UAT.
+No offline admission: while the browser is offline the scanner disables camera and manual entry ("TẠM DỪNG SOÁT VÉ"); never cache ticket credentials on a device.
+
+Tests: `server/tests/checkin.service.test.ts`, `checkin.repository.test.ts`, `checkin.routes.test.ts`, `staff-operations.test.ts`, `checkin.attendance.test.ts`; client `staff-portal.test.cjs`, `staff-scan.test.cjs`. Camera, Wake Lock and real concurrency require separate UAT on devices.
 
 ## Khôi: logs → metrics → Excel
 UI `client/src/pages/admin/AdminCheckinLogsPage.tsx` (+ `components/admin/checkins/*`, `lib/admin-checkin-logs.ts`) and `client/src/pages/admin/AdminReportsPage.tsx` (+ `lib/admin-reports.ts`), shared `components/admin/EventScopeSelect.tsx` and `lib/admin-date-range.ts`, `client/src/services/report.service.ts`; Backend `server/src/modules/reports/report.*.ts` (routes/schema/controller/service/repository/export/metrics/snapshot). Admin `/api/admin/reports`, `/api/admin/checkins`, their `/export` endpoints. Staff history stays restricted (Admin-only router; Staff gets 403).

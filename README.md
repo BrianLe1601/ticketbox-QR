@@ -86,7 +86,7 @@ Khôi xây dựng Scanner, Check-in Logs và Reporting
 
 ## 4. Trạng thái hiện tại
 
-Phần trạng thái/checklist tuần bên dưới ghi lại lần đối chiếu 25/09/2026 (base `1146eca`), không chứng minh các nhánh hiện vẫn đồng bộ. Cập nhật giao diện concert ngày 06/10/2026 đang ở working tree `buu-events`, chưa commit/merge; xem mục “Giao diện concert” ngay dưới đây. Không tự đánh dấu các mục UAT là hoàn tất chỉ vì code đã có.
+Phần trạng thái/checklist tuần bên dưới ghi lại lần đối chiếu 25/09/2026 (base `1146eca`), không chứng minh các nhánh hiện vẫn đồng bộ. Các thay đổi giao diện và nền tảng từ 06/10 đến 19/10/2026 đã commit trên `buu-events` (đã gộp `develop`), đang chờ PR vào `develop`; xem mục “Địa điểm duy nhất…” ngay dưới đây. Không tự đánh dấu các mục UAT là hoàn tất chỉ vì code đã có.
 
 Quy ước:
 
@@ -114,7 +114,7 @@ Còn thiếu hoặc cần hoàn thiện:
 
 - [ ] Nghiệm thu Google Staff với Google Client ID thật và clean-install schema trên database thử nghiệm — Bửu.
 - [~] Worker email hủy Event đã claim bằng `FOR UPDATE SKIP LOCKED`, có lease, stale recovery và attempt fencing; chờ review/merge và UAT SMTP — Bửu.
-- [ ] Thông báo realtime cho Admin qua WebSocket `/ws/admin` (đã có trong working tree, chưa review/merge — Bửu): xác thực bằng tin nhắn đầu tiên + kiểm tra Admin còn hoạt động trong DB, đẩy tên chủ đề thay đổi để client gọi lại REST, chuông "Việc cần xử lý" hiện toast việc mới. Chưa có lịch sử/trạng thái đã đọc phía server và chỉ chạy một instance.
+- [~] Thông báo realtime cho Admin qua WebSocket `/ws/admin` (đã commit trên `buu-events`, chờ review/merge — Bửu): xác thực bằng tin nhắn đầu tiên + kiểm tra Admin còn hoạt động trong DB, đẩy tên chủ đề thay đổi để client gọi lại REST, chuông "Việc cần xử lý" hiện toast việc mới. Chưa có lịch sử/trạng thái đã đọc phía server và chỉ chạy một instance.
 - [~] Lần nhập OTP sai thứ 5 trả `EMAIL_CODE_ATTEMPTS_EXCEEDED`; nội dung dùng thuật ngữ email chung; chờ review/merge và UAT reCAPTCHA/SMTP thật — Tài.
 - [~] Admin cancel Order chỉ nhận `pending_payment`; Refund mô phỏng có API/UI `pending -> processing -> completed|failed`, retry từ `failed` và test state transition — Tài triển khai, Bửu review contract.
 - [~] Order lookup đã chuyển từ query string sang POST body; access log chỉ ghi path, không ghi query; chờ review/merge — Tài.
@@ -126,13 +126,13 @@ Khách mua vé bằng email và không tạo tài khoản. Nhóm đã thống nh
 
 ### Địa điểm duy nhất, Nhật ký/Báo cáo toàn hệ thống và giao diện — cập nhật 17/10/2026
 
-Chi tiết, bảng quy tắc, mã lỗi, ma trận quyền và kết quả kiểm thử nằm ở **[07 — Địa điểm, Báo cáo, giao diện](docs/project-guide/07-venue-reports-theme.md)**; mục này chỉ tóm tắt. Các số liệu ở [05](docs/project-guide/05-concert-ui-review.md) và [06](docs/project-guide/06-redesign-review.md) là lịch sử. Mọi thay đổi còn ở working tree `buu-events`, chưa commit/merge.
+Chi tiết, bảng quy tắc, mã lỗi, ma trận quyền và kết quả kiểm thử nằm ở **[07 — Địa điểm, Báo cáo, giao diện](docs/project-guide/07-venue-reports-theme.md)**; mục này chỉ tóm tắt. Các số liệu ở [05](docs/project-guide/05-concert-ui-review.md) và [06](docs/project-guide/06-redesign-review.md) là lịch sử. Tiến độ từng trang Admin/Staff/Login: [kế hoạch redesign](docs/admin-redesign-plan.md). Mọi thay đổi đã commit trên `buu-events`, chờ review/merge (phần Public/Orders cần Tài, Check-in/Staff/Nhật ký/Báo cáo cần Khôi).
 
 - **Một địa điểm cố định.** Admin nhập tên, địa chỉ, thành phố và sức chứa tại **Cài đặt → Địa điểm tổ chức** (bảng một dòng `platform_settings`); Event mới sao chép thông tin này, không nhập lại. Backend chặn hai Event trùng khung `[checkin_start_at, end_time]` (chạm biên cũng trùng, Event hủy giải phóng địa điểm), an toàn khi nhiều Admin thao tác cùng lúc (khóa dòng cài đặt + trigger). Event đã bán vé không đổi được địa điểm.
 - **Thể loại âm nhạc.** `categories.kind` (`music`/`other`) và chế độ toàn hệ thống **Chỉ thể loại âm nhạc** (mặc định) / **Mở rộng tất cả danh mục** do backend kiểm tra khi tạo hoặc đổi danh mục Event. Danh mục và Event cũ được giữ nguyên.
 - **Nhật ký và Báo cáo mặc định "Tất cả sự kiện"**: `eventId` tùy chọn; chọn Event có phân trang phía server; tỷ lệ tính từ tổng tử/mẫu số; bản chụp (snapshot) 15 phút gắn Admin làm màn hình và file Excel khớp nhau. Không đổi quyền của Staff.
-- **Theme sáng/tối** (sáng mặc định) cho Admin, Staff và Login dùng chung token `client/src/styles/ticketbox-tokens.css`; nút Sáng/Tối lưu theo tài khoản trên trình duyệt. Public không bị ảnh hưởng. Font/cỡ chữ Admin vẫn ở **Cài đặt → Giao diện** (14/15/17px, `localStorage` theo tài khoản, không đồng bộ thiết bị).
-- Dashboard viết lại; Staff đọc được ngoài trời (khung Event + giờ mở cổng, phán quyết quét bằng chữ); Login hai lối vào rõ. Trang Nhân viên và Hạng vé chỉ được chuyển token/theme và sửa chữ/tương phản, chưa tách component.
+- **Theme sáng/tối** (sáng mặc định) cho Admin, Staff và Login dùng chung token `client/src/styles/ticketbox-tokens.css`; nút Sáng/Tối lưu theo tài khoản trên trình duyệt (Admin có thêm **Tự động** theo giờ Việt Nam). Public có nút Sáng/Tối riêng (Tài: `layouts/PublicLayout.tsx`, `styles/public-theme.css`, mặc định Tối) và không dùng các token này. Font/cỡ chữ Admin vẫn ở **Cài đặt → Giao diện** (14/15/17px, `localStorage` theo tài khoản, không đồng bộ thiết bị).
+- Mọi trang Admin dựng lại theo mẫu Bento của Tổng quan (Sự kiện có 4 chế độ xem, Hạng vé, Danh mục, Nhân viên, Đơn hàng, Nhật ký check-in, Báo cáo, Cài đặt), shell có tìm nhanh Ctrl/⌘+K, chuông "Việc cần xử lý" và hướng dẫn "Bắt đầu với TicketBox". Cổng Nhân viên `/staff/*` làm lại (phán quyết quét bằng chữ, số vé toàn cổng, giữ màn hình sáng, tạm dừng soát vé khi mất mạng). Login dạng cuống vé với hai vai trò, nhớ vai trò lần trước, quên/đặt lại mật khẩu Admin. Routing là data router có thanh tiến trình khi đổi trang; đo bố cục bằng `npm run audit:layout`.
 - **Chưa làm / cần lưu ý:** database đang dùng cần clean-install để có bảng mới (đến khi đó API mới trả `503 PLATFORM_SCHEMA_UPGRADE_REQUIRED`); chưa nghiệm thu Google, SMTP, camera/QR trên thiết bị thật, MySQL 8.0.x và macOS; snapshot nằm trong bộ nhớ một tiến trình. Hai seed (`seed:admin-demo`, `seed:workflows`) không chạy chung một database vì mỗi bộ có một Event "đang diễn ra" mà địa điểm chỉ chứa một. 10 concert demo nay xếp mỗi ngày một concert từ ngày mai (giờ Việt Nam: Event 15:00–17:00, check-in 13:00–16:30).
 
 ## 5. Cấu trúc repository hiện có
@@ -155,13 +155,14 @@ Seed thực tế nằm ở `server/src/database`; repository không có `databas
 ## 6. Cấu trúc frontend hiện có
 
 - `client/src/pages/public`: Home, Event List/Detail, Checkout và Order Payment/Result.
-- `client/src/pages/auth`: Login Admin/Staff bằng mật khẩu hiện có và Google Staff sign-in.
+- `client/src/pages/auth`: Login Admin/Staff bằng mật khẩu hiện có và Google Staff sign-in; `ResetPasswordPage` cho đặt lại mật khẩu Admin (token chỉ nằm sau `#`).
 - `client/src/pages/admin`: Dashboard, Categories, Events, Ticket Types, Staff, Orders, Check-in Logs và Reports.
 - `client/src/pages/staff` và `client/src/components/checkin`: Assigned Events, camera/manual Scanner, Result (phán quyết bằng chữ, `scan-verdict.ts`) và Recent Logs.
-- `client/src/components/admin`: thành phần Admin dùng lại (`EventScopeSelect`, `EventCoverUploader`), `ui/` (hệ thống thiết kế Admin: PageHeader, KpiCard, DataTable, FilterBar, SlideOver…), `shell/` (khung Admin), `checkins/` (Nhật ký) và `settings/` (Cài đặt); `components/shared/ThemeToggle.tsx` và `lib/ticketbox-theme.ts` cho theme sáng/tối.
-- `client/src/styles`: `ticketbox-tokens.css` (token dùng chung), `admin/` (`theme.css` ghi đè sáng/tối, `legacy.css` bố cục cũ, từng trang), `staff/` (`theme.css`, `portal.css`), `auth/login.css`; Public giữ `theme.css`, `fonts.css`, `tailwind.css`.
+- `client/src/components/admin`: thành phần Admin dùng lại (`EventScopeSelect`, `EventCoverUploader`), `ui/` (hệ thống thiết kế Admin: PageHeader, KpiCard, DataTable, FilterBar, SlideOver…), `shell/` (khung Admin: điều hướng, Ctrl/⌘+K, chuông việc cần xử lý, hướng dẫn thiết lập `SetupGuide`), và một thư mục cho từng trang: `events/`, `ticket-types/`, `categories/`, `staff/`, `orders/`, `checkins/` (Nhật ký), `settings/` (Cài đặt); `components/shared/ThemeToggle.tsx` và `lib/ticketbox-theme.ts` cho theme sáng/tối.
+- `client/src/styles`: `ticketbox-tokens.css` (token dùng chung), `admin/` (`theme.css` ghi đè sáng/tối, `legacy.css` bố cục cũ, từng trang), `staff/` (`theme.css`, `portal.css`), `auth/login.css`; Public giữ `theme.css`, `fonts.css`, `tailwind.css` và `public-theme.css` (sáng/tối của Public).
 - `client/src/components/layout/Header.tsx`: Public Header; không có nút Login/Register sau thay đổi hiện tại.
-- `client/src/layouts`, `routes`, `services`, `context`, `types`, `styles`: layout, route protection, giao tiếp API, auth state, kiểu dữ liệu và giao diện. `event-realtime.service.ts` giữ một WebSocket dùng chung, tự reconnect và yêu cầu trang gọi lại REST khi trạng thái Event đổi.
+- `client/src/routes`: data router `router.tsx` (`createBrowserRouter`, `lazy` theo route, guard theo vai trò), `page-loaders.ts` (chunk trang Admin/Staff được tải sẵn) và `RouteFallbacks.tsx` (màn tải đầu, trang 404, lỗi tải trang).
+- `client/src/layouts`, `services`, `context`, `types`, `styles`: layout, route protection, giao tiếp API, auth state, kiểu dữ liệu và giao diện. `event-realtime.service.ts` giữ một WebSocket dùng chung, tự reconnect và yêu cầu trang gọi lại REST khi trạng thái Event đổi.
 
 Client hiện dùng `fetch` trong `client/src/services/api.ts`; không mô tả là Axios. Trang khách không có tài khoản, nên không có route đăng ký/đăng nhập khách. Route `/login` được giữ cho Admin/Staff.
 
@@ -234,6 +235,8 @@ Ticket
 5. Admin công khai Event.
 6. Admin phân công Staff.
 7. Admin theo dõi đơn hàng, Nhật ký check-in và Báo cáo (mặc định tất cả sự kiện).
+
+Các bước 2–6 có hướng dẫn **Bắt đầu với TicketBox** (nút danh sách kiểm tra trên thanh trên cùng của Admin): mỗi bước tự đánh dấu xong theo dữ liệu đang có, bước chưa làm được bị khóa kèm lý do, nút đưa tới đúng chỗ (ví dụ `/admin/events?create=1` mở form tạo sự kiện). Dialog tự mở tối đa một lần mỗi phiên khi còn bước chưa xong và có thể tắt tự mở theo tài khoản.
 
 ### Luồng hoàn tiền mô phỏng
 

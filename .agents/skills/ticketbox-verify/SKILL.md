@@ -9,7 +9,7 @@ Run `scripts/verify.ps1` from PowerShell. Use `-Scope client`, `-Scope server`, 
 
 Also run by hand when the change touches them:
 - Client logic/theme/services: `node --test tests/*.test.cjs` in `client`.
-- Server unit tests (`npm test`) skip MySQL-backed suites. For the full suite create a **disposable** database named `ticketboxqr_test_*` and run `node scripts/verify-ticket-email.mjs` in `server` (two Vitest passes: without, then with the ticket-credential and report integration suites). A refused/skipped suite is not a pass.
+- Server unit tests (`npm test`) refuse the MySQL-backed suites on the normal database (checkout, report, ticket-credential, venue-schedule integration files fail with "requires a disposable ticketboxqr_test_* database"); that is expected, but it is not a pass. For the full suite run `node scripts/verify-ticket-email.mjs` in `server` with `DB_*` pointing at a MySQL user allowed to create `ticketboxqr_test_*` (or a throwaway instance): it creates a fresh `ticketboxqr_test_<time>` database, runs two Vitest passes (own-Event suites, then `seed:workflows` + fixture suites), `db:verify`, and drops the database.
 - Schema change: clean-install `database/migrations/001_initial_schema.sql` only on a disposable database, then `npm run seed`, `npm run seed:workflows`, `npm run db:verify`. Never run these against the user's `ticketboxqr`.
 - UI change: browser check per `ticketbox-admin-ui` (both themes; 1440/768/390px), plus `npm run audit:layout -- --width=<1440|768|390>` in `client` against the disposable stack (credentials via `AUDIT_*` env only) when the change touches a shell, a page frame, loading states or images.
 

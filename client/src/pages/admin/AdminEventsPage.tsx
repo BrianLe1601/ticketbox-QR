@@ -86,6 +86,13 @@ export function AdminEventsPage() {
   const [cursor, setCursor] = useState<MonthCursor>(() => monthOf(new Date()));
 
   const [form, setForm] = useState<{ open: boolean; editingId: number | null; key: number }>({ open: false, editingId: null, key: 0 });
+  // "?create=1" (setup guide) opens the create form once; the effect below then cleans the address.
+  const createRequested = searchParams.get("create") === "1";
+  const [createHandled, setCreateHandled] = useState(false);
+  if (createRequested !== createHandled) {
+    setCreateHandled(createRequested);
+    if (createRequested) setForm((current) => ({ open: true, editingId: null, key: current.key + 1 }));
+  }
   const [dialog, setDialog] = useState<Dialog>(null);
   const [reason, setReason] = useState("");
   const [pending, setPending] = useState(false);
@@ -113,6 +120,13 @@ export function AdminEventsPage() {
   useEffect(() => {
     try { window.localStorage.setItem(VIEW_KEY, view); } catch { /* view still works without storage */ }
   }, [view]);
+
+  useEffect(() => {
+    if (!createRequested) return;
+    const params = new URLSearchParams(searchParams);
+    params.delete("create");
+    setSearchParams(params, { replace: true });
+  }, [createRequested, searchParams, setSearchParams]);
 
   const counts = useMemo(() => eventCounts(events), [events]);
   const filtered = useMemo(() => filterEvents(events, { status, category, query }), [events, status, category, query]);

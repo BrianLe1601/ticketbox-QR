@@ -9,6 +9,8 @@ Single venue: `server/src/modules/platform-settings/*` (`/api/admin/platform-set
 
 Categories carry `kind` (`music`/`other`); scope `music_only` (default) or `all` is stored in `platform_settings`. New Event or category change must pick a selectable category (`CATEGORY_NOT_MUSIC` otherwise); legacy Events keep their category. Seeds: 4 music genres (Pop/Rock/EDM/Acoustic) + 5 legacy `other`, never deleted. Public `getCategories` shape is unchanged. Details: `docs/project-guide/07-venue-reports-theme.md`.
 
+First run: the Admin setup guide (`components/admin/shell/SetupGuide.tsx`, `lib/admin-setup-guide.ts`) walks venue → genre → Event (`/admin/events?create=1`) → tiers (`/admin/ticket-types?eventId=…&setup=1`) → publish → Staff, derived from these same APIs; it never replaces a server check.
+
 Input: configured active genre, schedule/capacity/cover and tiers. Publication still requires readiness. Preserve referenced slug/history, capacity/price rules and last-active-tier. Event lifecycle is not tier state. Check-in same Vietnam day and two-hour lead remain canonical; assignment uses check-in interval.
 
 Fixtures: `server/src/database/seed-venue.ts` (platform venue; seeds use it, placeholder only if empty), `seed-admin-demo.ts` + `admin-demo-presentation-fixtures.ts` (10 concerts, one per day from tomorrow, UTC+7), `seed-workflows.ts` (+23 days on-sale). The demo and workflow seeds are mutually exclusive for the single venue (a venue conflict reports a friendly error). Never execute destructive cleanup to restyle UI. Legacy SQL default categories are not silently migrated.
@@ -16,7 +18,7 @@ Fixtures: `server/src/database/seed-venue.ts` (platform venue; seeds use it, pla
 Tests: `server/tests/admin-events.time-validation.test.ts`, `admin-demo-presentation-fixtures.test.ts`, `event-sales.test.ts`, `platform-settings.routes.test.ts`, `admin-categories.schema.test.ts`, and (disposable MySQL only) `venue-schedule.integration.test.ts` for concurrency/triggers. Manually check missing-cover/tier publication, inactive genre, capacity, last tier and mixed statuses. Single schema `database/migrations/001_initial_schema.sql` is destructive clean install, not a safe upgrade.
 
 ## Tài: verified email → held Order → original QR/email
-UI: `client/src/pages/public/CheckoutPlaceholder.tsx`, `OrderPaymentPage.tsx`, Home/Event List/Detail; services `order.service.ts`, `event.service.ts` under client/src/services.
+UI: `client/src/pages/public/CheckoutPlaceholder.tsx`, `OrderPaymentPage.tsx`, Home/Event List/Detail; services `order.service.ts`, `event.service.ts` under client/src/services. Public list filters (keyword/category in the URL, `GET /api/events?time=all|week|month` applied before pagination), Public Sáng/Tối (`layouts/PublicLayout.tsx`, `styles/public-theme.css`, default Tối, separate from the internal tokens). reCAPTCHA loads on demand through `client/src/hooks/useRecaptcha.ts` (OTP and Retrieval only). Client test `public-workflows.test.cjs`, `recaptcha.test.cjs`.
 
 Backend: `server/src/modules/checkout/checkout.*.ts`; `server/src/services/email-verification.service.ts`, `public-email-security.service.ts`. Creation at `/api/checkout/orders` requires session-bound verified email and Idempotency-Key. Reserve after valid phone + OTP on “Tiếp tục mua vé”, not first at payment. Concurrent loser receives SOLD_OUT; ten-minute hold remains.
 
