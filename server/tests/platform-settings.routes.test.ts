@@ -22,7 +22,6 @@ vi.mock("../src/middlewares/authenticate.js", () => ({
 const service = vi.hoisted(() => ({
   getPlatformSettings: vi.fn(),
   saveVenue: vi.fn(),
-  saveCategoryScope: vi.fn(),
 }));
 vi.mock("../src/modules/platform-settings/platform-settings.service.js", () => service);
 
@@ -36,32 +35,34 @@ app.use((err: { statusCode?: number; code?: string }, _req: express.Request, res
 });
 
 const venue = { name: "Hall", address: "1 Street", city: "City", capacity: 500 };
-const settings = { venue, categoryScope: "music_only", outOfSyncEventCount: 0, updatedAt: null, updatedBy: null };
+const settings = { venue, outOfSyncEventCount: 0, updatedAt: null, updatedBy: null };
 
 beforeEach(() => {
   vi.resetAllMocks();
   service.getPlatformSettings.mockResolvedValue(settings);
   service.saveVenue.mockResolvedValue(settings);
-  service.saveCategoryScope.mockResolvedValue(settings);
 });
 
 describe("Admin platform settings access control", () => {
   it.each([
     ["get", "/admin/platform-settings"],
     ["put", "/admin/platform-settings/venue"],
-    ["put", "/admin/platform-settings/category-scope"],
   ] as const)("rejects an anonymous %s %s with 401 and a Staff caller with 403", async (method, path) => {
     expect((await request(app)[method](path).send({})).status).toBe(401);
     expect((await request(app)[method](path).set("Authorization", "staff").send({})).status).toBe(403);
     expect(service.getPlatformSettings).not.toHaveBeenCalled();
     expect(service.saveVenue).not.toHaveBeenCalled();
-    expect(service.saveCategoryScope).not.toHaveBeenCalled();
   });
 
   it("lets an Admin read the settings", async () => {
     const response = await request(app).get("/admin/platform-settings").set("Authorization", "admin");
     expect(response.status).toBe(200);
-    expect(response.body.data.categoryScope).toBe("music_only");
+    expect(response.body.data.venue).toEqual(venue);
+  });
+
+  it("no longer offers a Category scope switch (the genre catalogue is fixed)", async () => {
+    const response = await request(app).put("/admin/platform-settings/category-scope").set("Authorization", "admin").send({ scope: "all" });
+    expect(response.status).toBe(404);
   });
 });
 
@@ -85,21 +86,5 @@ describe("Admin venue validation", () => {
       .set("Authorization", "admin").send(body);
     expect(response.status).toBe(400);
     expect(service.saveVenue).not.toHaveBeenCalled();
-  });
-});
-
-describe("Admin category scope validation", () => {
-  it.each(["music_only", "all"])("accepts %s", async (scope) => {
-    const response = await request(app).put("/admin/platform-settings/category-scope")
-      .set("Authorization", "admin").send({ scope });
-    expect(response.status).toBe(200);
-    expect(service.saveCategoryScope).toHaveBeenCalledWith(7, { scope });
-  });
-
-  it.each([{ scope: "everything" }, {}, { scope: "all", extra: true }])("rejects %j with 400", async (body) => {
-    const response = await request(app).put("/admin/platform-settings/category-scope")
-      .set("Authorization", "admin").send(body);
-    expect(response.status).toBe(400);
-    expect(service.saveCategoryScope).not.toHaveBeenCalled();
   });
 });

@@ -98,7 +98,7 @@ Quy ước:
 Các chức năng ghi nhận trong lần đối chiếu trước:
 
 - [x] Repository React 19 + Vite + TypeScript và Node.js + Express + TypeScript.
-- [x] Schema MySQL hợp nhất gồm 14 bảng (thêm `platform_settings` cho địa điểm duy nhất và phạm vi danh mục), constraints, indexes và triggers, bao gồm Google identity/approval cho Staff và ciphertext QR phục vụ gửi lại vé.
+- [x] Schema MySQL hợp nhất gồm 14 bảng (thêm `platform_settings` cho địa điểm duy nhất), constraints, indexes và triggers, bao gồm Google identity/approval cho Staff và ciphertext QR phục vụ gửi lại vé.
 - [x] Kết nối MySQL, seed tài khoản và `/api/health`.
 - [x] Authentication, refresh-session rotation/revoke và RBAC Admin/Staff.
 - [x] Admin CRUD Categories, Events và Ticket Types.
@@ -129,7 +129,7 @@ Khách mua vé bằng email và không tạo tài khoản. Nhóm đã thống nh
 Chi tiết, bảng quy tắc, mã lỗi, ma trận quyền và kết quả kiểm thử nằm ở **[07 — Địa điểm, Báo cáo, giao diện](docs/project-guide/07-venue-reports-theme.md)**; mục này chỉ tóm tắt. Các số liệu ở [05](docs/project-guide/05-concert-ui-review.md) và [06](docs/project-guide/06-redesign-review.md) là lịch sử. Tiến độ từng trang Admin/Staff/Login: [kế hoạch redesign](docs/admin-redesign-plan.md). Mọi thay đổi đã commit trên `buu-events`, chờ review/merge (phần Public/Orders cần Tài, Check-in/Staff/Nhật ký/Báo cáo cần Khôi).
 
 - **Một địa điểm cố định.** Admin nhập tên, địa chỉ, thành phố và sức chứa tại **Cài đặt → Địa điểm tổ chức** (bảng một dòng `platform_settings`); Event mới sao chép thông tin này, không nhập lại. Backend chặn hai Event trùng khung `[checkin_start_at, end_time]` (chạm biên cũng trùng, Event hủy giải phóng địa điểm), an toàn khi nhiều Admin thao tác cùng lúc (khóa dòng cài đặt + trigger). Event đã bán vé không đổi được địa điểm.
-- **Thể loại âm nhạc.** `categories.kind` (`music`/`other`) và chế độ toàn hệ thống **Chỉ thể loại âm nhạc** (mặc định) / **Mở rộng tất cả danh mục** do backend kiểm tra khi tạo hoặc đổi danh mục Event. Danh mục và Event cũ được giữ nguyên.
+- **Thể loại nhạc cố định (20/10/2026).** 19 thể loại do schema cài, gồm "Thể loại nhạc khác"; Admin chỉ bật/tắt và sắp xếp, backend từ chối tạo/xóa/đổi tên và chỉ cho Event mới dùng thể loại đang bật. Danh mục và Event cũ được giữ nguyên (xem mục "Admin Categories API").
 - **Nhật ký và Báo cáo mặc định "Tất cả sự kiện"**: `eventId` tùy chọn; chọn Event có phân trang phía server; tỷ lệ tính từ tổng tử/mẫu số; bản chụp (snapshot) 15 phút gắn Admin làm màn hình và file Excel khớp nhau. Không đổi quyền của Staff.
 - **Theme sáng/tối** (sáng mặc định) cho Admin, Staff và Login dùng chung token `client/src/styles/ticketbox-tokens.css`; nút Sáng/Tối lưu theo tài khoản trên trình duyệt (Admin có thêm **Tự động** theo giờ Việt Nam). Public có nút Sáng/Tối riêng (Tài: `layouts/PublicLayout.tsx`, `styles/public-theme.css`, mặc định Tối) và không dùng các token này. Font/cỡ chữ Admin vẫn ở **Cài đặt → Giao diện** (14/15/17px, `localStorage` theo tài khoản, không đồng bộ thiết bị).
 - Mọi trang Admin dựng lại theo mẫu Bento của Tổng quan (Sự kiện có 4 chế độ xem, Hạng vé, Danh mục, Nhân viên, Đơn hàng, Nhật ký check-in, Báo cáo, Cài đặt), shell có tìm nhanh Ctrl/⌘+K, chuông "Việc cần xử lý" và hướng dẫn "Bắt đầu với TicketBox". Cổng Nhân viên `/staff/*` làm lại (phán quyết quét bằng chữ, số vé toàn cổng, giữ màn hình sáng, tạm dừng soát vé khi mất mạng). Login dạng cuống vé với hai vai trò, nhớ vai trò lần trước, quên/đặt lại mật khẩu Admin. Routing là data router có thanh tiến trình khi đổi trang; đo bố cục bằng `npm run audit:layout`.
@@ -175,7 +175,7 @@ Client hiện dùng `fetch` trong `client/src/services/api.ts`; không mô tả 
 - `server/src/modules/checkout`: xác minh email, giữ chỗ, Order, simulated Payment, phát hành Ticket/QR và email đầu tiên.
 - `server/src/modules/checkins`: Staff Assigned Events, check-in và Recent Logs.
 - `server/src/modules/reports`: Admin Check-in Logs, Reports (mặc định tất cả sự kiện), snapshot gắn Admin và export Excel; `report.metrics.ts` giữ phép tính tỷ lệ từ tổng.
-- `server/src/modules/platform-settings`: địa điểm duy nhất và phạm vi danh mục (`/api/admin/platform-settings`).
+- `server/src/modules/platform-settings`: địa điểm duy nhất (`/api/admin/platform-settings`); `server/src/modules/categories`: danh sách thể loại nhạc cố định (chỉ bật/tắt, sắp xếp).
 - `server/src/services`: OTP email, gửi mail và sinh QR.
 - `server/src/jobs`: Order expiry, auth-session cleanup, email thông báo hủy Event, scheduled publish và Event lifecycle mỗi giây.
 - `server/src/realtime/event-status.gateway.ts`: WebSocket `/ws/events`, heartbeat `ping/pong` và broadcast trạng thái Event sau commit; không truyền dữ liệu vé/đơn hàng hoặc secret.
@@ -192,7 +192,7 @@ Database `ticketboxqr` có các bảng nghiệp vụ cốt lõi sau:
 | `users` | Tài khoản Admin và Staff |
 | `auth_sessions` | Refresh session đã hash, rotation và thu hồi phiên đăng nhập |
 | `categories` | Danh mục Event do Admin quản lý (`kind` = thể loại âm nhạc hoặc khác); Event tham chiếu bằng khóa ngoại |
-| `platform_settings` | Một dòng: địa điểm duy nhất (tên, địa chỉ, thành phố, sức chứa), phạm vi danh mục cho Event mới, người sửa; cũng là điểm khóa chống trùng lịch |
+| `platform_settings` | Một dòng: địa điểm duy nhất (tên, địa chỉ, thành phố, sức chứa), người sửa; cũng là điểm khóa chống trùng lịch |
 | `events` | Thông tin và trạng thái sự kiện |
 | `event_staff` | Phân công Staff vào Event |
 | `ticket_types` | Loại vé, giá, sức chứa và thời gian bán |
@@ -229,8 +229,8 @@ Ticket
 ### Luồng quản trị
 
 1. Admin đăng nhập.
-2. Admin nhập địa điểm tổ chức một lần tại Cài đặt (và chọn phạm vi danh mục nếu cần).
-3. Admin tạo Event: chọn thể loại âm nhạc và lịch; địa điểm lấy từ Cài đặt; lịch không được trùng Event khác.
+2. Admin nhập địa điểm tổ chức một lần tại Cài đặt và bật những thể loại nhạc địa điểm tổ chức (trang Thể loại nhạc).
+3. Admin tạo Event: chọn một thể loại nhạc đang bật và lịch; địa điểm lấy từ Cài đặt; lịch không được trùng Event khác.
 4. Admin tạo Ticket Type cho Event (tổng vé không vượt sức chứa địa điểm).
 5. Admin công khai Event.
 6. Admin phân công Staff.
@@ -590,26 +590,24 @@ Event -> Orders theo id tăng dần -> Ticket Types theo id tăng dần -> Ticke
 
 ## Admin Categories API
 
-Admin Categories là nhiệm vụ của Bửu và là nguồn dữ liệu động cho form Events:
+Admin Categories là nhiệm vụ của Bửu. Từ 20/10/2026 danh mục là **danh sách 19 thể loại nhạc cố định** do schema cài (`kind='music'`): Pop, Ballad, Rock, Metal, Indie, Rap / Hip-hop, R&B / Soul, EDM / Điện tử, Acoustic, Jazz, Blues, Folk / Đồng quê, Bolero / Nhạc vàng, Nhạc dân tộc / Truyền thống, Cổ điển, K-Pop / J-Pop, Latin / Reggae, Nhạc kịch / Nhạc phim và **Thể loại nhạc khác** (cho thể loại chưa có trong danh sách). Admin chỉ bật/tắt và sắp xếp (trang **Thể loại nhạc**), không tạo, đổi tên hay xóa. Thể loại mới được bổ sung vào schema ở bản phát hành sau.
 
 | Method | Endpoint | Ý nghĩa |
 |---|---|---|
-| `GET` | `/api/admin/categories?includeInactive=true` | Danh sách kèm số Event đang tham chiếu |
-| `POST` | `/api/admin/categories` | Tạo danh mục |
-| `PATCH` | `/api/admin/categories/:id` | Sửa nội dung, thứ tự hoặc active/inactive |
-| `DELETE` | `/api/admin/categories/:id` | Chỉ xóa khi chưa có Event tham chiếu |
+| `GET` | `/api/admin/categories?includeInactive=true` | Danh sách kèm số Event, `catalog` (thuộc danh sách thể loại) và `selectableForNewEvent` |
+| `PATCH` | `/api/admin/categories/:id` | Chỉ `{ isActive?, sortOrder? }`; trường khác → 400; bật lại danh mục cũ → `409 CATEGORY_LEGACY_READ_ONLY` |
+| `POST`, `DELETE` | `/api/admin/categories[/:id]` | Luôn `409 CATEGORY_CATALOG_FIXED` |
 
-Slug danh mục đã được Event sử dụng không được đổi. Danh mục inactive không xuất hiện trong form tạo Event mới nhưng Event cũ vẫn giữ quan hệ và lịch sử.
-
-Từ 17/10/2026 mỗi danh mục có `kind` (`music` hoặc `other`, mặc định `other`); `GET` trả thêm `kind` và `selectableForNewEvent`. `PATCH` chỉ đổi các trường được gửi (trước đây Zod 4 đặt lại `isActive`/`sortOrder` ngầm).
+Event mới (hoặc Event đổi thể loại) chỉ dùng được thể loại đang bật trong danh sách (`409 CATEGORY_NOT_MUSIC`). Tắt một thể loại không ảnh hưởng Event đã có. Bản cài mới không còn 5 danh mục tổng quát cũ (Hội nghị, Ẩm thực…); bảng `categories`, giá trị `kind='other'` và nhóm "Danh mục cũ" trên trang Admin vẫn giữ để mở rộng sau này. Hiện chỉ danh mục kiểm thử `qa-workflow` của `seed:workflows` dùng giá trị này. API công khai `/api/categories` chỉ thêm trường `genre` (bốn đường dẫn `pop`, `rock`, `edm`, `acoustic` giữ nguyên); sự kiện công khai thêm `categoryName`. Trang chủ Public hiện một hàng cho mỗi thể loại đang bật, lấy từ `/api/categories` theo thứ tự Admin sắp xếp (kể cả thể loại chưa có sự kiện); mỗi hàng chỉ tải sự kiện khi người dùng cuộn tới.
 
 ### Cài đặt nền tảng (Admin)
 
 | Method | Endpoint | Ý nghĩa |
 |---|---|---|
-| `GET` | `/api/admin/platform-settings` | Địa điểm, phạm vi danh mục, số Event nháp/đã công bố còn địa điểm cũ, người/thời điểm sửa |
+| `GET` | `/api/admin/platform-settings` | Địa điểm, số Event nháp/đã công bố còn địa điểm cũ, người/thời điểm sửa |
 | `PUT` | `/api/admin/platform-settings/venue` | `{ name, address, city, capacity }` |
-| `PUT` | `/api/admin/platform-settings/category-scope` | `{ scope: "music_only" hoặc "all" }`; backend kiểm tra khi tạo/đổi danh mục Event |
+
+Không còn "phạm vi danh mục" (`category-scope` đã bỏ cùng cột `platform_settings.category_scope`): sự kiện luôn dùng danh sách thể loại nhạc.
 
 Tạo Event không còn nhận `venue/address/city/venueCapacity`. Mã lỗi, quy tắc chống trùng lịch và sửa địa điểm của Event cũ: xem [07](docs/project-guide/07-venue-reports-theme.md). Cập nhật database có sẵn **không** có migration tăng dần; cần chạy lại schema trên database có thể xóa.
 

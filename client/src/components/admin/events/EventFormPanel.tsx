@@ -110,7 +110,7 @@ export function EventFormPanel({ open, onOpenChange, editing, categories, platfo
         <Button
           variant="primary" type="submit" form="ev-form" icon={Save} loading={saving}
           disabled={venueMissing || cannotCreate}
-          disabledReason={venueMissing ? "Chưa cấu hình địa điểm tại Cài đặt" : cannotCreate ? "Chưa có thể loại nào chọn được" : undefined}
+          disabledReason={venueMissing ? "Chưa cấu hình địa điểm tại Cài đặt" : cannotCreate ? "Chưa bật thể loại nhạc nào" : undefined}
         >
           {editing ? "Lưu thay đổi" : "Lưu bản nháp và thêm vé"}
         </Button>
@@ -140,15 +140,17 @@ export function EventFormPanel({ open, onOpenChange, editing, categories, platfo
             </Field>
             <Field
               label="Thể loại âm nhạc" required error={fieldError.category}
-              hint={`${platform?.categoryScope === "all" ? "Đang mở rộng cho mọi danh mục (Cài đặt)." : "Chỉ thể loại âm nhạc. Danh mục cũ vẫn được giữ cho sự kiện đã có."}${selectable.length === 0 ? " Chưa có thể loại nào chọn được; thêm tại trang Danh mục." : ""}`}
+              hint={selectable.length === 0
+                ? "Chưa bật thể loại nào; bật tại trang Thể loại nhạc."
+                : "Thể loại chưa có trong danh sách hãy chọn “Thể loại nhạc khác”."}
             >
               {({ id, describedBy, invalid }) => (
                 <Select id={id} aria-describedby={describedBy} invalid={invalid} value={form.category} onChange={(e) => set("category", e.target.value)}>
                   {!form.category && <option value="" disabled>Chọn thể loại</option>}
                   {editing && !selectable.some((c) => c.slug === editing.category) && (
-                    <option value={editing.category}>{categories.find((c) => c.slug === editing.category)?.name ?? editing.category} (giữ danh mục hiện tại)</option>
+                    <option value={editing.category}>{categories.find((c) => c.slug === editing.category)?.name ?? editing.category} (giữ thể loại hiện tại)</option>
                   )}
-                  {selectable.map((item) => <option key={item.id} value={item.slug}>{item.name}{item.kind === "other" ? " (không phải thể loại nhạc)" : ""}</option>)}
+                  {selectable.map((item) => <option key={item.id} value={item.slug}>{item.name}</option>)}
                 </Select>
               )}
             </Field>

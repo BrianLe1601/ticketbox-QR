@@ -70,6 +70,15 @@ async function verify() {
           AND CONSTRAINT_NAME='fk_events_category'
           AND DELETE_RULE='RESTRICT'`,
     ) === 1);
+    // The genre catalogue is fixed (schema only): 19 genres, including the catch-all "Thể loại nhạc khác".
+    const genres = await count(connection, "SELECT COUNT(*) total FROM categories WHERE kind='music'");
+    check("Genre catalogue has the 19 schema genres", genres === 19, `found ${genres}`);
+    check("Catalogue includes 'the-loai-khac'", await count(
+      connection, "SELECT COUNT(*) total FROM categories WHERE slug='the-loai-khac' AND kind='music'",
+    ) === 1);
+    // Only the catalogue is installed; kind='other' rows may come from fixtures (qa-workflow) only.
+    const others = await count(connection, "SELECT COUNT(*) total FROM categories WHERE kind='other' AND slug<>'qa-workflow'");
+    check("Schema installs no non-catalogue Categories", others === 0, `found ${others}`);
 
     const [events] = await connection.query<EventRow[]>(
       `SELECT e.id,e.slug,e.status,e.visibility

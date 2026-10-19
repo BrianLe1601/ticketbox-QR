@@ -24,7 +24,7 @@ export function EventHeader({ event }: { event: Event }) {
                     <StatusBadge status={event.saleStatus} />
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-black/30 backdrop-blur-sm text-white border border-white/10">
                         <CategoryIcon category={event.category} size={11} />
-                        {getCategoryLabel(event.category)}
+                        {getCategoryLabel(event.category, event.categoryName)}
                     </span>
                 </div>
                 <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-foreground leading-tight max-w-2xl" style={{ fontFamily: "Manrope, sans-serif" }}>{event.name}</h1>

@@ -5,11 +5,10 @@ import {
   readSettings,
   transaction,
   lockSettings,
-  writeCategoryScope,
   writeVenue,
   type PlatformSettingsRow,
 } from "./platform-settings.repository.js";
-import type { CategoryScopeInput, VenueInput } from "./platform-settings.schema.js";
+import type { VenueInput } from "./platform-settings.schema.js";
 
 export interface VenueSnapshot {
   name: string;
@@ -46,7 +45,6 @@ export async function getPlatformSettings() {
   const [row, outOfSyncEventCount] = await Promise.all([readSettings(), countOutOfSyncEvents()]);
   return {
     venue: venueOf(row),
-    categoryScope: row.category_scope,
     outOfSyncEventCount,
     updatedAt: row.updated_at,
     updatedBy: row.updated_by === null ? null : { id: row.updated_by, fullName: row.updated_by_name },
@@ -58,15 +56,6 @@ export async function saveVenue(adminId: number, input: VenueInput) {
   await transaction(async (conn) => {
     await lockSettings(conn);
     await writeVenue(conn, adminId, input);
-  });
-  return getPlatformSettings();
-}
-
-export async function saveCategoryScope(adminId: number, input: CategoryScopeInput) {
-  await assertPlatformSchema();
-  await transaction(async (conn) => {
-    await lockSettings(conn);
-    await writeCategoryScope(conn, adminId, input.scope);
   });
   return getPlatformSettings();
 }

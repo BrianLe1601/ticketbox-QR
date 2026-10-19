@@ -1,38 +1,32 @@
-import { CheckCircle2, ListTree, Music2, RotateCcw, Save } from "lucide-react";
+import { CheckCircle2, ListMusic, Music2, RotateCcw, Save } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
-import { BentoCard, Button, ButtonLink, ConfirmDialog, Field, Input, Notice, SegmentedControl } from "@/components/admin/ui";
+import { BentoCard, Button, ButtonLink, Field, Input, Notice } from "@/components/admin/ui";
 import { formatNumber } from "@/lib/admin-format";
 import {
-  SCOPE_OPTIONS, scopeCounts, validateVenue, venueDirty, venueFormOf, venueImpact, venuePayload, type VenueField, type VenueForm,
+  genreCounts, validateVenue, venueDirty, venueFormOf, venueImpact, venuePayload, type VenueField, type VenueForm,
 } from "@/lib/admin-settings";
 import { digitsOnly } from "@/lib/utils";
 import type { AdminCategory } from "@/services/admin-categories.service";
-import { listAdminCategories } from "@/services/admin-categories.service";
-import { saveCategoryScope, saveVenueSettings, type CategoryScope, type PlatformSettings } from "@/services/admin-platform-settings.service";
+import { saveVenueSettings, type PlatformSettings } from "@/services/admin-platform-settings.service";
 
 const message = (cause: unknown) => (cause instanceof Error && cause.message ? cause.message : "Không thể kết nối máy chủ.");
 
 /**
- * The single concert venue and the Category scope for new Events. Both are platform-wide and
- * re-validated by the server; the form state lives in the page so switching tabs keeps edits.
+ * The single concert venue (platform-wide, re-validated by the server) and a summary of the fixed
+ * genre catalogue; the form state lives in the page so switching tabs keeps edits.
  */
-export function SystemSettings({ settings, categories, form, onForm, onSettings, onCategories }: {
+export function SystemSettings({ settings, categories, form, onForm, onSettings }: {
   settings: PlatformSettings; categories: AdminCategory[]; form: VenueForm;
-  onForm: (next: VenueForm) => void; onSettings: (next: PlatformSettings) => void; onCategories: (next: AdminCategory[]) => void;
+  onForm: (next: VenueForm) => void; onSettings: (next: PlatformSettings) => void;
 }) {
   const [errors, setErrors] = useState<Partial<Record<VenueField, string>>>({});
   const [saving, setSaving] = useState(false);
   const [venueError, setVenueError] = useState("");
   const [venueNotice, setVenueNotice] = useState("");
-  const [scopeAsk, setScopeAsk] = useState(false);
-  const [scopeSaving, setScopeSaving] = useState(false);
-  const [scopeError, setScopeError] = useState("");
-  const [scopeNotice, setScopeNotice] = useState("");
 
   const dirty = venueDirty(settings.venue, form);
-  const counts = scopeCounts(categories);
-  const scope = settings.categoryScope;
+  const genres = genreCounts(categories);
   const set = (field: VenueField, value: string) => { onForm({ ...form, [field]: value }); setVenueNotice(""); if (errors[field]) setErrors({ ...errors, [field]: undefined }); };
 
   async function submit(event: FormEvent) {
@@ -49,17 +43,6 @@ export function SystemSettings({ settings, categories, form, onForm, onSettings,
         ? `Đã lưu. ${saved.outOfSyncEventCount} sự kiện nháp/đã công bố vẫn dùng địa điểm cũ; mở từng sự kiện để áp dụng địa điểm mới (chỉ khi chưa có đơn hoặc vé).`
         : "Đã lưu địa điểm tổ chức.");
     } catch (cause) { setVenueError(message(cause)); } finally { setSaving(false); }
-  }
-
-  async function applyScope(next: CategoryScope) {
-    if (scopeSaving || next === scope) return;
-    setScopeSaving(true); setScopeError(""); setScopeNotice("");
-    try {
-      onSettings(await saveCategoryScope(next));
-      onCategories(await listAdminCategories(true));
-      setScopeAsk(false);
-      setScopeNotice(next === "music_only" ? "Sự kiện mới chỉ chọn được thể loại âm nhạc." : "Sự kiện mới chọn được mọi danh mục đang hoạt động.");
-    } catch (cause) { setScopeError(message(cause)); } finally { setScopeSaving(false); }
   }
 
   const field = (key: VenueField, label: string, props: { maxLength: number; hint?: string; numeric?: boolean; wide?: boolean }) => (
@@ -101,34 +84,19 @@ export function SystemSettings({ settings, categories, form, onForm, onSettings,
         </form>
       </BentoCard>
 
-      <BentoCard span={5} title="Phạm vi danh mục" subtitle="Những danh mục được chọn khi tạo sự kiện mới; máy chủ kiểm tra lại khi lưu"
-        actions={<ButtonLink to="/admin/categories" size="sm" icon={ListTree}>Danh mục</ButtonLink>}>
-        <SegmentedControl<CategoryScope> ariaLabel="Phạm vi danh mục cho sự kiện mới" value={scope} options={SCOPE_OPTIONS}
-          onChange={(next) => { if (next === "all") { setScopeError(""); setScopeAsk(true); } else void applyScope(next); }} />
+      <BentoCard span={5} title="Thể loại nhạc" subtitle="Dùng khi tạo sự kiện và để khách lọc trên trang mua vé"
+        actions={<ButtonLink to="/admin/categories" size="sm" icon={ListMusic}>Quản lý thể loại</ButtonLink>}>
         <dl className="st-stats">
-          <div><dt><Music2 size={14} aria-hidden="true" /> Thể loại âm nhạc đang hoạt động</dt><dd className="tb-num">{formatNumber(counts.music)}</dd></div>
-          <div><dt>Danh mục khác đang hoạt động</dt><dd className="tb-num">{formatNumber(counts.otherActive)}</dd></div>
-          <div><dt>Chọn được cho sự kiện mới</dt><dd className="tb-num"><strong>{formatNumber(scope === "all" ? counts.music + counts.otherActive : counts.music)}</strong></dd></div>
+          <div><dt><Music2 size={14} aria-hidden="true" /> Đang bật</dt><dd className="tb-num"><strong>{formatNumber(genres.active)}</strong> / {formatNumber(genres.total)}</dd></div>
+          <div><dt>Đã tắt</dt><dd className="tb-num">{formatNumber(genres.off)}</dd></div>
         </dl>
-        {scope === "all" && <Notice tone="warning" title="Đang mở rộng ngoài phạm vi concert">Chỉ dùng khi thật sự cần, rồi chuyển lại “Chỉ thể loại âm nhạc”.</Notice>}
-        {scopeError && <Notice tone="danger" title="Chưa đổi được phạm vi">{scopeError}</Notice>}
-        {scopeNotice && <Notice tone="success">{scopeNotice}</Notice>}
+        {genres.total > 0 && genres.active === 0 && (
+          <Notice tone="warning" title="Chưa bật thể loại nào">Bật ít nhất một thể loại để tạo sự kiện mới.</Notice>
+        )}
         <p className="st-note">
-          Danh mục cũ không bị xóa hay tự đổi loại; sự kiện đã có giữ danh mục của mình. Đặt loại “Âm nhạc” hoặc “Khác” tại trang Danh mục.
+          Danh sách thể loại do TicketBox cung cấp: bạn bật những thể loại địa điểm tổ chức và sắp xếp thứ tự. Thể loại chưa có trong danh sách hãy chọn “Thể loại nhạc khác”.
         </p>
       </BentoCard>
-
-      <ConfirmDialog
-        open={scopeAsk} onOpenChange={(open) => { if (!open && !scopeSaving) setScopeAsk(false); }}
-        tone="primary" title="Mở rộng cho mọi danh mục?"
-        consequences={[
-          `Sự kiện mới chọn được cả ${formatNumber(counts.otherActive)} danh mục không phải thể loại âm nhạc.`,
-          "Sự kiện đã có không thay đổi.",
-          "Nằm ngoài phạm vi concert của đồ án; nên chuyển lại sau khi dùng xong.",
-        ]}
-        confirmLabel="Mở rộng" pending={scopeSaving} error={scopeError || undefined}
-        onConfirm={() => applyScope("all")}
-      />
     </>
   );
 }

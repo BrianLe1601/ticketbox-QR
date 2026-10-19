@@ -61,41 +61,20 @@ export function revertChanges(changes: readonly OrderChange[]): OrderChange[] {
   return changes.map((change) => ({ id: change.id, from: change.to, to: change.from }));
 }
 
-/** sortOrder for a new Category: after the current last one. */
-export function nextSortOrder(items: ReadonlyArray<Pick<AdminCategory, "sortOrder">>): number {
-  return Math.min(10000, items.reduce((max, item) => Math.max(max, item.sortOrder), 0) + 10);
-}
+/* ---------- fixed catalogue ---------- */
 
-/* ---------- form ---------- */
-
-/** "Nhạc Trữ Tình & Bolero" -> "nhac-tru-tinh-bolero" (server: ^[a-z0-9]+(-[a-z0-9]+)*$). */
-export function slugify(text: string): string {
-  return text.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "d")
-    .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 100).replace(/-+$/g, "");
-}
-
-export interface CategoryFormValues { name: string; slug: string; description: string; icon: string; kind: "music" | "other"; isActive: boolean }
-export type CategoryFormField = keyof CategoryFormValues;
-
-export function validateCategoryForm(form: CategoryFormValues, others: ReadonlyArray<Pick<AdminCategory, "name" | "slug">>): Partial<Record<CategoryFormField, string>> {
-  const errors: Partial<Record<CategoryFormField, string>> = {};
-  const name = form.name.trim();
-  const slug = form.slug.trim();
-  const same = (a: string, b: string) => a.localeCompare(b, "vi", { sensitivity: "base" }) === 0;
-  if (name.length < 2 || name.length > 100) errors.name = "Tên cần 2–100 ký tự.";
-  else if (others.some((item) => same(item.name, name))) errors.name = "Đã có danh mục cùng tên.";
-  if (slug.length < 2 || slug.length > 100 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) errors.slug = "Chỉ chữ thường không dấu, số và dấu gạch nối (ví dụ: nhac-acoustic), 2–100 ký tự.";
-  else if (others.some((item) => item.slug === slug)) errors.slug = "Đường dẫn này đã được dùng.";
-  if (form.description.trim().length > 500) errors.description = "Mô tả tối đa 500 ký tự.";
-  if (form.icon.trim().length > 50) errors.icon = "Mã biểu tượng tối đa 50 ký tự.";
-  return errors;
+/**
+ * The genre catalogue (reorderable, switchable) and legacy Categories kept only for the Events
+ * that already use them. Legacy rows are shown apart and never mixed into the public order.
+ */
+export function splitCatalog<T extends Pick<AdminCategory, "catalog">>(items: readonly T[]): { genres: T[]; legacy: T[] } {
+  return { genres: items.filter((item) => item.catalog), legacy: items.filter((item) => !item.catalog) };
 }
 
 const ERROR_TEXT: Record<string, string> = {
-  CATEGORY_CONFLICT: "Tên hoặc đường dẫn đã tồn tại.",
-  CATEGORY_SLUG_IN_USE: "Đường dẫn đã có sự kiện dùng nên không đổi được.",
-  CATEGORY_IN_USE: "Danh mục đang có sự kiện, không xóa được; hãy vô hiệu hóa.",
-  CATEGORY_NOT_FOUND: "Danh mục không còn tồn tại; hãy tải lại.",
+  CATEGORY_CATALOG_FIXED: "Danh sách thể loại là cố định; chỉ bật/tắt và sắp xếp được.",
+  CATEGORY_LEGACY_READ_ONLY: "Danh mục cũ không bật lại được; hãy dùng một thể loại nhạc.",
+  CATEGORY_NOT_FOUND: "Thể loại không còn tồn tại; hãy tải lại.",
 };
 
 /** Vietnamese message for a Category API error (codes are the contract, not the English text). */

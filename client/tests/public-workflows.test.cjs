@@ -261,3 +261,41 @@ test('lookup error reporting distinguishes missing orders from network/service f
     failure = new Error('Network offline');
     await assert.rejects(service.fetchOrder('1', 'token', true), error => error === failure);
 });
+
+function findAll(tree, predicate, found = []) {
+    if (!tree || typeof tree !== 'object') return found;
+    if (predicate(tree)) found.push(tree);
+    for (const child of [tree.props?.children].flat(Infinity)) findAll(child, predicate, found);
+    return found;
+}
+
+test('Home lists one row per active music genre from the API, in API order, including empty genres', async () => {
+    const f = pageFixture('pages/public/HomePage.tsx', 'HomePage', {
+        'react-router-dom': { Link: 'Link', useNavigate: () => () => {} },
+        '@/services/event.service': { fetchEventList: async () => ({ events: [], total: 0 }), getPublicStats: async () => null },
+        '@/services/category.service': { fetchCategories: async () => [
+            { slug: 'pop', name: 'Pop', genre: true },
+            { slug: 'bolero-nhac-vang', name: 'Bolero / Nhạc vàng', genre: true },
+            { slug: 'qa-workflow', name: 'QA Workflow Scenarios', genre: false },
+            { slug: 'the-loai-khac', name: 'Thể loại nhạc khác', genre: true },
+        ] },
+        '@/constants/eventconstants': { CITY_LABELS: {}, getCategoryLabel: (slug, name) => name ?? slug, EVENT_LIFECYCLE_FALLBACK_REFRESH_MS: 60000 },
+        '@/services/event-realtime.service': { subscribeToEventLifecycleUpdates: () => () => {} },
+        '@/components/event/EventCard': { EventCard: 'EventCard' },
+        '@/components/event/EventCardSkeleton': { EventCardSkeleton: 'EventCardSkeleton' },
+        '@/components/event/CategorySection': { CategorySection: 'CategorySection' },
+        '@/components/event/TicketRetrievalForm': { TicketRetrievalForm: 'TicketRetrievalForm' },
+    });
+    f.render();
+    const tree = await f.settle();
+    const rows = findAll(tree, node => node.type === 'CategorySection').map(node => [node.props.category, node.props.label]);
+    assert.deepEqual(rows, [['pop', 'Pop'], ['bolero-nhac-vang', 'Bolero / Nhạc vàng'], ['the-loai-khac', 'Thể loại nhạc khác']]);
+    assert.equal(findAll(tree, node => ['conference', 'food', 'music'].includes(node.props?.category)).length, 0, 'no hard-coded legacy rows');
+});
+
+test('genre labels use the API name, never a hard-coded legacy map', () => {
+    const { getCategoryLabel } = load('constants/eventconstants.ts', {});
+    assert.equal(getCategoryLabel('bolero-nhac-vang', 'Bolero / Nhạc vàng'), 'Bolero / Nhạc vàng');
+    assert.equal(getCategoryLabel('rap-hip-hop'), 'Rap Hip Hop', 'slug fallback only when the name is missing');
+    assert.equal(getCategoryLabel('conference', ''), 'Conference');
+});

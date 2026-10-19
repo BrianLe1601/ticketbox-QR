@@ -1,5 +1,5 @@
-/* Admin Danh mục — Bento reference: sortable genre list (8/12) + overview (4/12). Tokens only;
-   imported by AdminCategoriesPage. The form panel is portaled (body[data-admin-appearance]). */
+/* Admin Thể loại nhạc — Bento reference: sortable fixed genre catalogue (8/12) + overview (4/12),
+   legacy Categories below (12/12). Tokens only; imported by AdminCategoriesPage. */
 
 .admin-room .catp {
   .cat-chips { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -43,6 +43,15 @@
   .cat-events { justify-self: end; white-space: nowrap; }
   .cat-none { color: var(--tb-secondary); font-size: max(12px, .85em); }
   .cat-actions { display: inline-flex; align-items: center; gap: 4px; }
+  .cat-switch { gap: 8px; }
+  .cat-switch .adm-switch-label { gap: 0; }
+  .cat-switch .adm-switch-state { min-width: 6.2em; font-size: max(12px, .85em); font-weight: 600; color: var(--tb-text); }
+  .cat-row.is-off .cat-switch .adm-switch-state { color: var(--tb-secondary); }
+
+  /* legacy Categories: no grip/position, read-only */
+  .cat-row.is-legacy { grid-template-columns: minmax(0, 1fr) auto auto; padding-left: 14px; }
+  .cat-legacy-icon { color: var(--tb-secondary); }
+  .cat-warn { margin: 0; padding: 10px 12px; border-radius: 12px; background: var(--tb-warning-soft); color: var(--tb-text); font-size: max(12px, .88em); font-weight: 600; }
 
   /* overview */
   .cat-figures { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; }
@@ -50,30 +59,21 @@
   .cat-figures dt { color: var(--tb-secondary); font-size: 12px; }
   .cat-figures dd { margin: 0; color: var(--tb-heading); font-size: 1.4em; font-weight: 800; }
   .cat-figures dd small { color: var(--tb-secondary); font-size: .6em; font-weight: 600; }
-  .cat-scope { display: grid; justify-items: start; gap: 4px; padding: 12px; border-radius: 12px; background: var(--tb-accent-soft); }
-  .cat-scope-label { color: var(--tb-text); font-size: 12px; font-weight: 600; }
-  .cat-scope strong { color: var(--tb-heading); }
-  .cat-scope .adm-btn { margin-left: -10px; }
   .cat-rules { display: grid; gap: 6px; margin: 0; padding-left: 18px; color: var(--tb-secondary); font-size: max(12px, .88em); }
-}
-
-/* form panel */
-:is(.admin-room, body[data-admin-appearance]) {
-  .cat-form-fields { display: grid; gap: 16px; }
-  .cat-slug-input { position: relative; display: block; }
-  .cat-slug-input input { width: 100%; font-family: var(--tb-font-mono); }
-  .cat-slug-input input:disabled { padding-right: 34px; }
-  .cat-slug-input svg { position: absolute; right: 12px; top: 50%; translate: 0 -50%; color: var(--tb-muted); }
 }
 
 @media (max-width: 760px) {
   .admin-room .catp {
-    .cat-row { grid-template-columns: auto 28px minmax(0, 1fr) auto; grid-template-areas: "grip pos main actions" "grip pos events events"; row-gap: 4px; }
+    /* Name and description get the full width; the switch, menu and Events link go to a second line. */
+    .cat-row { grid-template-columns: auto 28px minmax(0, 1fr) auto; grid-template-areas: "grip pos main main" "grip pos events actions"; row-gap: 6px; }
     .cat-grip { grid-area: grip; }
     .cat-pos { grid-area: pos; }
     .cat-main { grid-area: main; }
-    .cat-actions { grid-area: actions; align-self: start; }
-    .cat-events { grid-area: events; justify-self: start; }
+    .cat-desc { -webkit-line-clamp: 2; line-clamp: 2; }
+    .cat-actions { grid-area: actions; justify-self: end; }
+    .cat-events { grid-area: events; justify-self: start; align-self: center; min-width: 0; white-space: normal; }
+    .cat-switch .adm-switch-state { min-width: 0; }
+    .cat-row.is-legacy { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "main actions" "events events"; }
     .cat-figures { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   }
 }

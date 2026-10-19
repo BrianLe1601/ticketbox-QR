@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import { AppError } from "../../utils/app-error.js";
 import { findCategoryBySlug } from "../categories/admin-categories.repository.js";
 import { isSelectableForNewEvent } from "../categories/admin-categories.service.js";
-import { assertPlatformSchema, findVenueConflict, lockSettings, transaction, type CategoryScope, type VenueConflictRow } from "../platform-settings/platform-settings.repository.js";
+import { assertPlatformSchema, findVenueConflict, lockSettings, transaction, type VenueConflictRow } from "../platform-settings/platform-settings.repository.js";
 import { requireVenue } from "../platform-settings/platform-settings.service.js";
 import type { AdminEventListInput, CreateAdminEventInput, UpdateAdminEventInput } from "./admin-events.schema.js";
 import { allocatedCapacity, countSalesActivity, latestTicketSalesEnd, deleteDraftEvent, findAdminEvent, findDueScheduledEvents, insertAdminEvent, listAdminEvents, setEventCancelled, setEventPublished, setEventVisibility, setPublishAttemptFailure, setPublishSchedule, toDatabaseDate, lockEventStatus, updateAdminEventRecord } from "./admin-events.repository.js";
@@ -76,10 +76,11 @@ function getReadiness(row:NonNullable<Awaited<ReturnType<typeof findAdminEvent>>
 
 export async function getAdminEventList(input:AdminEventListInput){const {rows,total}=await listAdminEvents(input);return {items:rows.map(map),meta:{total,page:input.page,limit:input.limit}};}
 export async function getAdminEventById(id:number){const row=await findAdminEvent(id);if(!row)throw AppError.notFound("Event not found","EVENT_NOT_FOUND");return map(row);}
-async function selectableCategoryId(slug:string,scope:CategoryScope){
+async function selectableCategoryId(slug:string){
   const category=await findCategoryBySlug(slug);
   if(!category||!category.is_active)throw AppError.badRequest("Select an active Category","CATEGORY_NOT_ACTIVE");
-  if(!isSelectableForNewEvent(category,scope))throw new AppError(409,"Chế độ hiện tại chỉ cho phép chọn thể loại âm nhạc cho sự kiện mới","CATEGORY_NOT_MUSIC");
+  // Only genres of the fixed catalogue; legacy Categories stay on the Events that already use them.
+  if(!isSelectableForNewEvent(category))throw new AppError(409,"Chỉ chọn được thể loại nhạc trong danh sách thể loại","CATEGORY_NOT_MUSIC");
   return category.id;
 }
 
@@ -95,7 +96,7 @@ export async function createAdminEvent(input:CreateAdminEventInput,adminId:numbe
   const id=await transaction(async(conn)=>{
     const settings=await lockSettings(conn);
     const venue=requireVenue(settings);
-    const categoryId=await selectableCategoryId(input.category,settings.category_scope);
+    const categoryId=await selectableCategoryId(input.category);
     const conflict=await findVenueConflict(conn,venueWindow(input.checkinStartAt,input.endTime),null);
     if(conflict)throw venueConflictError(conflict);
     return insertAdminEvent(input,categoryId,slug,adminId,venue,conn);
@@ -124,7 +125,7 @@ export async function updateAdminEvent(id:number,input:UpdateAdminEventInput){
     const settings=await lockSettings(conn);
     const status=await lockEventStatus(conn,id);
     if(!status||["completed","cancelled"].includes(status))throw new AppError(409,"Completed or cancelled Events are read-only","EVENT_NOT_EDITABLE");
-    const categoryId=categoryChanged?await selectableCategoryId(fields.category!,settings.category_scope):undefined;
+    const categoryId=categoryChanged?await selectableCategoryId(fields.category!):undefined;
     if(intervalChanged){
       const conflict=await findVenueConflict(conn,venueWindow(merged.checkinStartAt,merged.endTime),id);
       if(conflict)throw venueConflictError(conflict);

@@ -117,7 +117,7 @@ Không phải module nào cũng có đủ tất cả hậu tố. Các ngoại l�
 | Thư mục `src/modules/` | Các nhóm file hiện có | Công dụng và owner |
 |---|---|---|
 | `auth/` | `auth.routes/schema/controller/service/repository.ts`; `auth-session.repository.ts`; `refresh-token.ts`; `google-identity.service.ts` | Bửu: login local/Google, user hiện tại, refresh rotation, logout, xác minh Google, session hash |
-| `categories/` | `admin-categories.routes/schema/controller/service/repository.ts`; `categories.routes.ts` | Bửu: quản trị danh mục và endpoint Public đọc danh mục active |
+| `categories/` | `admin-categories.routes/schema/controller/service/repository.ts`; `categories.routes.ts` | Bửu: danh sách thể loại nhạc cố định (Admin chỉ bật/tắt, sắp xếp) và endpoint Public đọc danh mục active |
 | `events/` | `admin-events.routes/schema/controller/service/repository.ts` | Bửu: tạo/sửa, readiness, publish, lịch publish, hide/show, cancel, delete draft |
 | `events/` | `events.routes/schema/controller/service/repository.ts` | Tài: Public Event list/detail, filter/sort/page và khả năng bán |
 | `events/` | `event-lifecycle.repository/service.ts`, `event-status.publisher.ts` | Bửu: chuyển trạng thái theo thời gian, điều phối tín hiệu sau commit |
@@ -219,14 +219,14 @@ client/
 | `public/CheckoutPlaceholder.tsx` | `/checkout/:id` | Đã có checkout thật: thông tin buyer, OTP, chọn mua và tạo Order; tên Placeholder là tên file cũ |
 | `public/OrderPaymentPage.tsx` | `/orders/:id` | Đọc đơn bằng token, đếm hạn giữ vé, Payment mô phỏng và hiển thị QR sau xác nhận |
 | `admin/AdminDashboardPage.tsx` | `/admin` | Tổng quan vận hành, số liệu và lối vào module |
-| `admin/AdminCategoriesPage.tsx` | `/admin/categories` | Danh mục |
+| `admin/AdminCategoriesPage.tsx` | `/admin/categories` | Thể loại nhạc: bật/tắt, kéo thả thứ tự; danh mục cũ chỉ đọc |
 | `admin/AdminEventsPage.tsx` | `/admin/events` | Event, form và lifecycle; dạng thẻ/danh sách |
 | `admin/AdminTicketTypesPage.tsx` | `/admin/ticket-types` | Chọn Event, quản lý hạng vé |
 | `admin/AdminStaffPage.tsx` | `/admin/staff` | Duyệt/quản lý Staff, phân công |
 | `admin/AdminOrdersPage.tsx` | `/admin/orders` | Danh sách/chi tiết Order, hủy pending, Refund, email |
 | `admin/AdminCheckinLogsPage.tsx` | `/admin/checkins` | Nhật ký quét + Excel; mặc định tất cả sự kiện; thành phần ở `components/admin/checkins/` |
 | `admin/AdminReportsPage.tsx` | `/admin/reports` | Báo cáo + Excel; mặc định tất cả sự kiện; ô chọn sự kiện dùng chung `components/admin/EventScopeSelect.tsx` |
-| `admin/AdminSettingsPage.tsx` | `/admin/settings` | Địa điểm, phạm vi danh mục, hồ sơ/mật khẩu Admin, font và theme |
+| `admin/AdminSettingsPage.tsx` | `/admin/settings` | Địa điểm, tóm tắt thể loại nhạc, hồ sơ/mật khẩu Admin, font và theme |
 | `staff/StaffOverviewPage.tsx` | `/staff` | Tổng quan ca trực và phân công của Staff |
 | `staff/StaffCheckinPage.tsx` | `/staff/check-in` | Chọn Event đang mở cổng, Scanner/nhập tay, kết quả bằng chữ và recent logs |
 | `staff/StaffEventsPage.tsx` | `/staff/events` | Phân công sắp tới/đang chuẩn bị/lịch sử |
@@ -266,7 +266,7 @@ Ngày 17/10/2026 đã gỡ các mẫu shadcn không trang nào import (accordion
 | `category.service.ts` | Danh mục Public |
 | `event.service.ts` | Event Public và ánh xạ response sang dữ liệu UI |
 | `order.service.ts` | Request/confirm OTP, create Order, POST lookup, pay |
-| `admin-categories.service.ts` | CRUD/status danh mục Admin |
+| `admin-categories.service.ts` | Đọc danh sách thể loại, bật/tắt và sắp xếp (không tạo/xóa) |
 | `admin-events.service.ts` | Event Admin và các action lifecycle/visibility/schedule; tự đọc đủ các trang 50 bản ghi để các count/filter/bộ chọn dùng toàn bộ Event |
 | `admin-ticket-types.service.ts` | List/create/update/pause/resume/delete hạng vé |
 | `admin-staff.service.ts` | Staff approval/profile/status/assignments |
@@ -316,8 +316,8 @@ Nguồn duy nhất: [001_initial_schema.sql](../../database/migrations/001_initi
 |---|---|---|
 | `users` | Admin/Staff, password hash nullable, Google sub, approval/active | Cha của sessions; Staff trong assignments/logs |
 | `auth_sessions` | Refresh session hash, expiry/revocation, metadata | Nhiều session của một user |
-| `categories` | Danh mục, slug, icon, `kind` (thể loại âm nhạc/khác), active, sort order | Một danh mục có nhiều Events |
-| `platform_settings` | Một dòng: địa điểm duy nhất, phạm vi danh mục cho Event mới, người sửa; khóa chống trùng lịch | Event sao chép địa điểm từ đây khi tạo; không có khóa ngoại tới `events` |
+| `categories` | Danh sách 19 thể loại nhạc cố định do schema cài (`kind='music'`); `kind='other'` dành cho mở rộng sau (hiện chỉ fixture `qa-workflow`); slug, icon, active, sort order | Một danh mục có nhiều Events |
+| `platform_settings` | Một dòng: địa điểm duy nhất, người sửa; khóa chống trùng lịch | Event sao chép địa điểm từ đây khi tạo; không có khóa ngoại tới `events` |
 | `events` | Nội dung/lịch/địa điểm/capacity/lifecycle/visibility/publish/hủy | Thuộc category; có tiers, orders, staff assignments |
 | `event_staff` | Ai được gán Event, ai gán, lúc gán/thu hồi | Nối users và events, lưu lịch sử phân công |
 | `ticket_types` | Hạng, giá, capacity/reserved/sold/max-per-order/lịch bán | Thuộc Event; được Order Items tham chiếu |
@@ -346,7 +346,7 @@ Tất cả đường dẫn dưới đây có tiền tố `/api` trừ WebSocket.
 | Hệ thống | `GET /health`: tình trạng API/DB; `GET /admin/test`: thử RBAC Admin |
 | Auth | `POST /auth/login`, `/auth/google`, `/auth/refresh`, `/auth/logout`, `/auth/password-reset/request`, `/auth/password-reset/confirm`; `GET /auth/me` |
 | Danh mục Public | `GET /categories` |
-| Danh mục Admin | `GET/POST /admin/categories`; `PATCH/DELETE /admin/categories/:id` |
+| Danh mục Admin | `GET /admin/categories`; `PATCH /admin/categories/:id` (chỉ `isActive`/`sortOrder`); `POST`/`DELETE` → `409 CATEGORY_CATALOG_FIXED` |
 | Event Public | `GET /events` (query `time=all\|week\|month` tùy chọn; lọc 7/30 ngày từ thời điểm hiện tại trước phân trang, `meta.total` cùng bộ lọc), `GET /events/:id` |
 | Event Admin | `GET/POST /admin/events`; `GET/PATCH/DELETE /admin/events/:id`; `GET /:id/publish-readiness`; `POST /:id/publish`; `PATCH /:id/publish-schedule`; `POST /:id/cancel`; `PATCH /:id/visibility` dưới `/admin/events` |
 | Hạng vé Admin | `GET/POST /admin/ticket-types`; `PATCH/DELETE /admin/ticket-types/:id`; `PATCH /:id/sales-status` |
@@ -359,7 +359,7 @@ Tất cả đường dẫn dưới đây có tiền tố `/api` trừ WebSocket.
 | Vận hành Staff | `GET /staff/events`; `GET/POST /staff/events/:eventId/checkins` |
 | Reports Admin | `GET /admin/reports/events` (phân trang), `GET /admin/reports`, `GET /admin/reports/export`; `eventId` và `snapshotId` tùy chọn |
 | Logs Admin | `GET /admin/checkins`, `GET /admin/checkins/export`; `eventId` và `snapshotId` tùy chọn |
-| Cài đặt nền tảng Admin | `GET /admin/platform-settings`; `PUT /admin/platform-settings/venue`; `PUT /admin/platform-settings/category-scope` |
+| Cài đặt nền tảng Admin | `GET /admin/platform-settings`; `PUT /admin/platform-settings/venue` |
 | Realtime | WebSocket `/ws/events` |
 
 Checkout router hiện được mount cả tại `/api/checkout` và `/api`; vì vậy có thêm đường alias như `/api/orders`. Đó là hai đường vào cùng implementation, không phải hai module Order độc lập. Lookup GET chứa token đã được thay bằng POST trong working tree.
