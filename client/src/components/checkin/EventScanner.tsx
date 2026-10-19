@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Camera, CameraOff, CheckCircle2, AlertTriangle, ArrowRight } from 'lucide-react';
+import { ArrowRight, AlertTriangle, Camera, CheckCircle2, Clock3, Keyboard, Maximize2, MapPin, Minimize2, ScanLine, Smartphone, Sun, Volume2, VolumeX, WifiOff, XCircle } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
 import { CameraScanner } from '@/components/checkin/CameraScanner';
 import { RecentCheckins } from '@/components/checkin/RecentCheckins';
+import { gateWindow, scanVerdict } from '@/components/checkin/scan-verdict';
+import { GateAttendanceBar } from '@/components/staff/GateAttendanceBar';
+import { useNow } from '@/hooks/useNow';
+import { useStaffShell } from '@/hooks/useStaffShell';
+import { useWakeLock } from '@/hooks/useWakeLock';
+import { useScanFeedback } from '@/hooks/useScanFeedback';
+import { clockText, countdownText, sessionTally } from '@/lib/staff-portal';
 import { getRecentCheckins, submitCheckin } from '@/services/checkin.service';
 import type { AssignedEvent, CheckinLog, CheckinResult } from '@/services/checkin.service';
 
@@ -10,7 +18,15 @@ interface EventScannerProps {
   token: string | null;
 }
 
+const VERDICT_ICON = { success: CheckCircle2, warning: AlertTriangle, failed: XCircle } as const;
+
 export function EventScanner({ event, token }: EventScannerProps) {
+  const { user } = useAuth();
+  const feedback = useScanFeedback(user?.id ?? 0);
+  const now = useNow(15_000);
+  // Offline: every scan needs the server, so scanning is paused rather than guessed (never let in blind).
+  const { online } = useStaffShell();
+  const wake = useWakeLock(feedback.prefs.keepAwake);
   const [code, setCode] = useState('');
   const [pending, setPending] = useState(false);
   const [paused, setPaused] = useState(false);
@@ -21,9 +37,16 @@ export function EventScanner({ event, token }: EventScannerProps) {
   const [logError, setLogError] = useState('');
   const [logsLoading, setLogsLoading] = useState(true);
   const [refresh, setRefresh] = useState(0);
+  const [autoCamera, setAutoCamera] = useState(true);
+  const [session, setSession] = useState<Array<{ at: number; allowed: boolean }>>([]);
+  const [fullscreen, setFullscreen] = useState(false);
+  const cameraWasActiveRef = useRef(false);
   const requestLock = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const resultRef = useRef<HTMLElement>(null);
   const mounted = useRef(true);
+  const canFullscreen = typeof document !== 'undefined' && typeof document.documentElement.requestFullscreen === 'function';
 
   useEffect(() => {
     mounted.current = true;
@@ -50,10 +73,38 @@ export function EventScanner({ event, token }: EventScannerProps) {
     return () => controller.abort();
   }, [event.id, token, refresh]);
 
-  const closeCamera = useCallback(() => setCamera(false), []);
+  useEffect(() => {
+    const root = rootRef.current;
+    const onChange = () => setFullscreen(Boolean(root) && document.fullscreenElement === root);
+    document.addEventListener('fullscreenchange', onChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', onChange);
+      if (root && document.fullscreenElement === root) void document.exitFullscreen().catch(() => {});
+    };
+  }, []);
 
+  const toggleFullscreen = useCallback(() => {
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
+    else void rootRef.current?.requestFullscreen().catch(() => {});
+  }, []);
+
+  const closeCamera = useCallback(() => {
+    cameraWasActiveRef.current = false;
+    setCamera(false);
+  }, []);
+
+  const toggleCamera = useCallback(() => {
+    feedback.unlock();
+    setCamera((prev) => {
+      const next = !prev;
+      cameraWasActiveRef.current = next;
+      return next;
+    });
+  }, [feedback]);
+
+  const { play } = feedback;
   const scan = useCallback(async (value: string) => {
-    if (requestLock.current || !value.trim()) return;
+    if (requestLock.current || !value.trim() || !navigator.onLine) return;
     requestLock.current = true;
     setCamera(false);
     setPending(true);
@@ -62,10 +113,16 @@ export function EventScanner({ event, token }: EventScannerProps) {
     setError('');
     try {
       const { data } = await submitCheckin(event.id, value.trim(), token);
-      if (mounted.current) setResult(data);
+      if (mounted.current) {
+        setResult(data);
+        const verdict = scanVerdict(data.code);
+        play(verdict.tone);
+        setSession((list) => [...list, { at: Date.now(), allowed: verdict.allow }]);
+      }
     } catch (cause) {
       if (mounted.current) {
         setError(cause instanceof Error ? cause.message : 'Lỗi kết nối máy chủ. Kiểm tra lại lịch sử.');
+        play('failed');
       }
     } finally {
       if (mounted.current) {
@@ -73,7 +130,7 @@ export function EventScanner({ event, token }: EventScannerProps) {
         setRefresh((v) => v + 1);
       }
     }
-  }, [event.id, token]);
+  }, [event.id, token, play]);
 
   const resetForNext = useCallback(() => {
     requestLock.current = false;
@@ -81,121 +138,211 @@ export function EventScanner({ event, token }: EventScannerProps) {
     setResult(null);
     setError('');
     setCode('');
+    if (autoCamera && cameraWasActiveRef.current) {
+      setCamera(true);
+    } else {
+      window.requestAnimationFrame(() => inputRef.current?.focus());
+    }
+  }, [autoCamera]);
+
+  const focusManual = useCallback(() => {
+    cameraWasActiveRef.current = false;
+    setCamera(false);
     window.requestAnimationFrame(() => inputRef.current?.focus());
   }, []);
 
+  useEffect(() => {
+    if (!paused || pending) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        resetForNext();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [paused, pending, resetForNext]);
+
+  const verdict = scanVerdict(result?.code);
+  const VerdictIcon = VERDICT_ICON[verdict.tone];
+  const tally = sessionTally(session, now.getTime());
+  const closesIn = countdownText(event.checkinEndAt, now);
+  const resultTone = !paused ? 'idle' : pending ? 'pending' : verdict.tone;
+
+  // Single-column layouts put the verdict above the input once a scan starts; bring it into view.
+  useEffect(() => {
+    if (!paused || !resultRef.current || !window.matchMedia('(max-width: 1100px)').matches) return;
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    resultRef.current.scrollIntoView({ block: 'start', behavior: reduce ? 'auto' : 'smooth' });
+  }, [paused]);
+
   return (
-    <div className="space-y-6">
-      {/* Scanner Control Deck */}
-      <section className="space-y-4 rounded-2xl border border-cyan-500/30 bg-slate-900/80 p-5 shadow-lg">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
-          <div>
-            <span className="text-[11px] font-bold uppercase tracking-wider text-cyan-400">Cổng soát vé đang hoạt động</span>
-            <h2 className="text-xl font-bold text-slate-100">{event.name}</h2>
-            <p className="text-xs text-slate-400">{event.venue}</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setCamera((v) => !v)}
-            disabled={pending || paused}
-            aria-pressed={camera}
-            className="flex min-h-[44px] items-center gap-2 rounded-xl border border-cyan-400/40 bg-cyan-950/40 px-4 text-sm font-bold text-cyan-300 hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {camera ? <CameraOff size={18} /> : <Camera size={18} />}
-            <span>{camera ? 'Tắt camera' : 'Bật camera quét QR'}</span>
-          </button>
+    <div ref={rootRef} className={`sp-terminal${fullscreen ? ' is-fullscreen' : ''}${paused ? ' is-paused' : ''}`}>
+      {/* The Event being worked and its gate window stay visible above every scan. */}
+      <header className="sp-term-context" aria-label={`Cổng soát vé ${event.name}`}>
+        <div className="sp-term-event">
+          <span className="sp-pill is-live"><span className="sp-dot" aria-hidden="true" />Cổng đang mở</span>
+          <h2>{event.name}</h2>
+          <p className="sp-term-meta">
+            <span><MapPin size={16} aria-hidden="true" />{event.venue}</span>
+            <span><Clock3 size={16} aria-hidden="true" />Cổng {gateWindow(event.checkinStartAt, event.checkinEndAt)}{closesIn ? ` · đóng sau ${closesIn}` : ''}</span>
+          </p>
+          <GateAttendanceBar eventId={event.id} token={token} refreshKey={refresh} />
         </div>
-
-        {camera && (
-          <div className="overflow-hidden rounded-xl border border-cyan-500/40 bg-black p-2">
-            <CameraScanner onDetected={(v: string) => void scan(v)} onClose={closeCamera} />
-          </div>
-        )}
-
-        {/* Manual Code Input Form */}
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (code.trim()) void scan(code);
-          }}
-          className="flex flex-wrap gap-2 sm:flex-nowrap"
-        >
-          <input
-            ref={inputRef}
-            type="text"
-            aria-label="Mã vé hoặc nội dung QR"
-            value={code}
-            disabled={pending || paused}
-            onChange={(e) => setCode(e.target.value)}
-            maxLength={512}
-            autoComplete="off"
-            placeholder="Nhập mã vé hoặc quét mã vạch/QR..."
-            className="min-h-[44px] flex-1 rounded-xl border border-white/10 bg-slate-950 px-4 text-sm text-slate-100 placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none disabled:opacity-50"
-          />
-          <button
-            type="submit"
-            disabled={pending || paused || !code.trim()}
-            className="flex min-h-[44px] items-center justify-center rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 px-6 text-sm font-bold text-white hover:from-cyan-500 hover:to-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {pending ? 'Đang kiểm tra...' : 'Xác nhận vé'}
+        <div className="sp-term-tools" role="group" aria-label="Tiện ích tại cổng">
+          <button type="button" className={`sp-toggle${feedback.prefs.sound ? ' is-on' : ''}`} aria-pressed={feedback.prefs.sound}
+            onClick={() => { feedback.update({ sound: !feedback.prefs.sound }); }}>
+            {feedback.prefs.sound ? <Volume2 size={18} aria-hidden="true" /> : <VolumeX size={18} aria-hidden="true" />}
+            Âm báo: {feedback.prefs.sound ? 'Bật' : 'Tắt'}
           </button>
-        </form>
+          {feedback.canVibrate && (
+            <button type="button" className={`sp-toggle${feedback.prefs.vibrate ? ' is-on' : ''}`} aria-pressed={feedback.prefs.vibrate}
+              onClick={() => feedback.update({ vibrate: !feedback.prefs.vibrate })}>
+              <Smartphone size={18} aria-hidden="true" />Rung: {feedback.prefs.vibrate ? 'Bật' : 'Tắt'}
+            </button>
+          )}
+          <button type="button" className={`sp-toggle${wake.active ? ' is-on' : ''}`} aria-pressed={feedback.prefs.keepAwake}
+            disabled={!wake.supported}
+            title={wake.supported ? 'Giữ màn hình không tự tắt khi đang ở cổng (tốn pin hơn)' : 'Trình duyệt này không hỗ trợ giữ màn hình sáng; hãy chỉnh thời gian tắt màn hình trong cài đặt máy'}
+            onClick={() => feedback.update({ keepAwake: !feedback.prefs.keepAwake })}>
+            <Sun size={18} aria-hidden="true" />Giữ màn hình sáng: {!wake.supported ? 'Không hỗ trợ' : feedback.prefs.keepAwake ? 'Bật' : 'Tắt'}
+          </button>
+          <button type="button" className="sp-toggle" onClick={focusManual} disabled={pending || paused || !online}>
+            <Keyboard size={18} aria-hidden="true" />Nhập mã tay
+          </button>
+          {canFullscreen && (
+            <button type="button" className="sp-toggle" onClick={toggleFullscreen} aria-pressed={fullscreen}>
+              {fullscreen ? <Minimize2 size={18} aria-hidden="true" /> : <Maximize2 size={18} aria-hidden="true" />}
+              {fullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'}
+            </button>
+          )}
+        </div>
+      </header>
 
-        {/* Result & Explicit Next Ticket Step */}
-        {paused && (
-          <div
-            role="status"
-            aria-live="polite"
-            className={`rounded-xl border p-4 transition-all ${
-              result?.code === 'SUCCESS'
-                ? 'border-emerald-500/40 bg-emerald-950/30 text-emerald-300'
-                : 'border-amber-500/40 bg-amber-950/30 text-amber-300'
-            }`}
+      {wake.error && <p className="sp-alert is-warning" role="status">{wake.error}</p>}
+      {!online && (
+        <p className="sp-alert is-danger sp-offline" role="alert">
+          <WifiOff size={20} aria-hidden="true" />
+          <span><strong>Mất kết nối — tạm dừng soát vé.</strong> Mỗi vé phải được máy chủ xác nhận; chờ có mạng rồi quét lại và không cho khách vào khi chưa có kết quả.</span>
+        </p>
+      )}
+
+      <div className="sp-term-grid">
+        <section className="sp-card sp-term-input" aria-label="Quét hoặc nhập mã vé">
+          {camera && online ? (
+            <CameraScanner onDetected={(v: string) => { cameraWasActiveRef.current = true; void scan(v); }} onClose={closeCamera} />
+          ) : (
+            <button type="button" onClick={toggleCamera} disabled={pending || paused || !online} className="sp-cam-start">
+              <span className="sp-cam-start-icon" aria-hidden="true"><Camera size={30} /></span>
+              <strong>Bật camera quét QR</strong>
+              <span>Đưa mã QR trên vé điện tử vào khung hình; kết quả hiện ngay bên cạnh.</span>
+            </button>
+          )}
+
+          {/* Manual code entry is always available as the fallback for a QR that will not scan. */}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              feedback.unlock();
+              if (code.trim()) {
+                cameraWasActiveRef.current = false;
+                void scan(code);
+              }
+            }}
+            className="sp-manual"
           >
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                {result?.code === 'SUCCESS' ? (
-                  <CheckCircle2 size={24} className="text-emerald-400 flex-shrink-0" />
-                ) : (
-                  <AlertTriangle size={24} className="text-amber-400 flex-shrink-0" />
-                )}
-                <div>
-                  <strong className="block text-base font-bold">
-                    {pending ? 'Đang xác thực vé, vui lòng chờ…' : result?.message ?? error}
-                  </strong>
-                  {result?.ticket && (
-                    <span className="text-xs text-slate-300">
-                      Mã: <b>{result.ticket.code}</b> {result.ticket.holderName ? `· Người sở hữu: ${result.ticket.holderName}` : ''}
-                    </span>
-                  )}
-                </div>
-              </div>
-              {!pending && (
-                <button
-                  type="button"
-                  onClick={resetForNext}
-                  autoFocus
-                  className="flex min-h-[44px] items-center gap-2 rounded-xl bg-white px-5 text-sm font-bold text-slate-950 shadow-md hover:bg-slate-200"
-                >
-                  <span>Vé tiếp theo</span>
-                  <ArrowRight size={16} />
-                </button>
-              )}
+            <label htmlFor="sp-manual-code">Nhập mã vé dự phòng</label>
+            <div className="sp-manual-row">
+              <input
+                id="sp-manual-code"
+                ref={inputRef}
+                type="text"
+                value={code}
+                disabled={pending || paused || !online}
+                onChange={(e) => setCode(e.target.value)}
+                maxLength={512}
+                autoComplete="off"
+                autoCapitalize="characters"
+                spellCheck={false}
+                placeholder="Mã vé (TKT-…) hoặc nội dung QR"
+              />
+              <button type="submit" disabled={pending || paused || !code.trim() || !online} className="sp-btn sp-btn--primary">
+                {pending ? 'Đang kiểm tra…' : !online ? 'Chờ có mạng để quét' : 'Xác thực vé'}
+              </button>
             </div>
-          </div>
-        )}
-      </section>
+            <p className="sp-manual-hint">Dùng khi màn hình điện thoại của khách bị nứt, mờ hoặc camera không đọc được QR.</p>
+          </form>
 
-      {/* Recent Check-in Logs Component */}
-      <RecentCheckins
-        logs={logs}
-        loading={logsLoading}
-        error={logError}
-        onRefresh={() => {
-          setLogsLoading(true);
-          setRefresh((v) => v + 1);
-        }}
-      />
+          <label className="sp-check">
+            <input type="checkbox" checked={autoCamera} onChange={(e) => setAutoCamera(e.target.checked)} />
+            <span>Tự động mở lại camera khi quét vé tiếp theo</span>
+          </label>
+        </section>
+
+        <div className="sp-term-side">
+          {/* Verdict in words first; colour, icon, sound and vibration only reinforce it. */}
+          <section ref={resultRef} className={`sp-result is-${resultTone}`} role="status" aria-live="assertive" aria-label="Kết quả soát vé">
+            {resultTone === 'idle' ? (
+              online ? (
+                <div className="sp-result-idle">
+                  <ScanLine size={40} aria-hidden="true" />
+                  <strong>SẴN SÀNG SOÁT VÉ</strong>
+                  <span>Quét mã QR hoặc nhập mã vé. Chỉ cho khách vào khi màn hình ghi <b>CHO VÀO</b>.</span>
+                </div>
+              ) : (
+                <div className="sp-result-idle is-offline">
+                  <WifiOff size={40} aria-hidden="true" />
+                  <strong>TẠM DỪNG SOÁT VÉ</strong>
+                  <span>Mất kết nối tới máy chủ. Chưa cho khách vào; quét lại khi có mạng.</span>
+                </div>
+              )
+            ) : (
+              <>
+                <div className="sp-result-verdict">
+                  {pending ? <Clock3 size={52} aria-hidden="true" /> : <VerdictIcon size={52} aria-hidden="true" />}
+                  <span className="sp-result-label">{pending ? 'ĐANG KIỂM TRA VÉ…' : verdict.label}</span>
+                </div>
+                <p className="sp-result-message">{pending ? 'Vui lòng chờ, chưa cho khách vào.' : result?.message ?? error}</p>
+                {!pending && result?.ticket && (
+                  <dl className="sp-result-facts">
+                    <div><dt>Mã vé</dt><dd className="tb-mono">{result.ticket.code}</dd></div>
+                    {result.ticket.ticketTypeName && <div className="is-tier"><dt>Hạng vé</dt><dd>{result.ticket.ticketTypeName}</dd></div>}
+                    {result.ticket.holderName && <div><dt>Khách</dt><dd>{result.ticket.holderName}</dd></div>}
+                    {result.ticket.checkedInAt && (
+                      <div><dt>{result.code === 'SUCCESS' ? 'Vào lúc' : 'Đã vào lúc'}</dt><dd className="tb-num">{clockText(new Date(result.ticket.checkedInAt))}</dd></div>
+                    )}
+                  </dl>
+                )}
+                {!pending && !result && (
+                  <p className="sp-result-message">Không nhận được kết quả. Đừng cho khách vào; kiểm tra lượt quét gần nhất rồi quét lại.</p>
+                )}
+                {!pending && (
+                  <button type="button" onClick={resetForNext} autoFocus className="sp-btn sp-btn--next">
+                    Vé tiếp theo (Enter)<ArrowRight size={20} aria-hidden="true" />
+                  </button>
+                )}
+              </>
+            )}
+          </section>
+
+          <section className="sp-card sp-tally" aria-label="Phiên quét trên thiết bị này">
+            <div><span>Phiên này</span><strong className="tb-num">{tally.total}</strong></div>
+            <div className="is-ok"><span>Cho vào</span><strong className="tb-num">{tally.allowed}</strong></div>
+            <div className="is-bad"><span>Từ chối</span><strong className="tb-num">{tally.refused}</strong></div>
+            <div title="Trung bình 5 phút gần nhất trên thiết bị này"><span>Lượt/phút</span><strong className="tb-num">{tally.perMinute}</strong></div>
+          </section>
+
+          <RecentCheckins
+            logs={logs}
+            loading={logsLoading}
+            error={logError}
+            onRefresh={() => {
+              setLogsLoading(true);
+              setRefresh((v) => v + 1);
+            }}
+          />
+        </div>
+      </div>
     </div>
   );
 }

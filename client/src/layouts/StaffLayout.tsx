@@ -1,13 +1,42 @@
-import { Link, Outlet, useNavigate } from 'react-router-dom';
+import { Suspense, useEffect, useLayoutEffect } from 'react';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { LogOut } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { RouteProgress } from '@/components/shared/RouteProgress';
+import { ConnectionPill } from '@/components/staff/ConnectionPill';
 import { StaffNavigation } from '@/components/staff/StaffNavigation';
+import { ThemeToggle } from '@/components/shared/ThemeToggle';
+import { usePreloadPages } from '@/hooks/usePreloadPages';
+import { useStaffShellData } from '@/hooks/useStaffShell';
+import { initialsOf } from '@/lib/staff-portal';
+import { useTheme } from '@/lib/ticketbox-theme';
+import { staffPageLoaders } from '@/routes/page-loaders';
+import ticketboxLogoLight from '@/assets/brand/ticketbox-logo-light.svg';
 import ticketboxLogoDark from '@/assets/brand/ticketbox-logo-dark.svg';
 import ticketboxMascot from '@/assets/brand/ticketbox-mascot.svg';
+import '@/styles/staff/theme.css';
+import '@/styles/staff/portal.css';
 
 export function StaffLayout() {
-  const { user, logout } = useAuth();
+  const { user, token, logout } = useAuth();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const { theme, toggle } = useTheme('staff', user?.id ?? 0);
+  const shell = useStaffShellData(token);
+  const openGates = shell.overview?.counts.open ?? 0;
+  // Section switches must not leave the previous page on screen while a chunk downloads.
+  usePreloadPages(staffPageLoaders);
+
+  // Dialogs render into <body>; mark it so they inherit the Staff tokens, and clean up on exit.
+  useEffect(() => {
+    document.body.dataset.staffAppearance = theme;
+    // index.html painted an early dark background (no light flash); the portal owns it now.
+    delete document.documentElement.dataset.tbBoot;
+    return () => { delete document.body.dataset.staffAppearance; };
+  }, [theme]);
+
+  // Each section opens at its top; query-string changes (filters, selected Event) keep the position.
+  useLayoutEffect(() => { window.scrollTo(0, 0); }, [pathname]);
 
   const handleLogout = async () => {
     await logout();
@@ -15,53 +44,41 @@ export function StaffLayout() {
   };
 
   return (
-    <div className="staff-tech-room min-h-screen bg-[#07111f] text-slate-100">
-      <div className="staff-tech-grid" aria-hidden="true" />
-      <div className="tech-circuit-layer tech-circuit-staff" aria-hidden="true">
-        <i className="circuit-node node-one" />
-        <i className="circuit-node node-two" />
-        <i className="circuit-node node-three" />
-        <i className="circuit-pulse pulse-one" />
-        <i className="circuit-pulse pulse-two" />
-      </div>
-      <header className="relative z-[5] border-b border-cyan-500/20 bg-slate-900/80 px-4 py-3 backdrop-blur-md">
-        <div className="mx-auto flex max-w-7xl items-center justify-between">
-          <div className="flex items-center gap-3.5">
-            <Link
-              to="/staff"
-              className="flex items-center shrink-0 transition-transform duration-200 hover:scale-[1.03] active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-cyan-400 rounded-lg"
-              aria-label="Trang chủ nhân viên TicketBox"
-            >
-              <img className="h-11 w-11 object-contain drop-shadow-[0_2px_10px_rgba(34,211,238,0.35)] sm:hidden" src={ticketboxMascot} alt="TicketBox" />
-              <img className="hidden h-11 sm:h-12 w-auto max-w-[195px] object-contain object-left drop-shadow-[0_2px_14px_rgba(34,211,238,0.3)] sm:block" src={ticketboxLogoDark} alt="TicketBox" />
-            </Link>
-            <span className="hidden h-6 w-px bg-white/15 sm:block" aria-hidden="true" />
-            <span className="inline-flex items-center rounded-lg border border-cyan-500/30 bg-cyan-950/40 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-cyan-300">
-              Khu vực Nhân viên
+    <div className="staff-portal-room" data-theme={theme}>
+      <RouteProgress />
+      <header className="sp-header">
+        <div className="sp-header-brand">
+          <Link to="/staff" className="sp-brand" aria-label="Trang chủ nhân viên TicketBox">
+            <img className="sp-brand-mascot" src={ticketboxMascot} alt="TicketBox" />
+            <img className="sp-brand-logo" src={theme === 'dark' ? ticketboxLogoDark : ticketboxLogoLight} alt="TicketBox" />
+          </Link>
+          <span className="sp-divider" aria-hidden="true" />
+          <span className="sp-badge"><span className="sp-dot" aria-hidden="true" />Soát vé / Cổng</span>
+          <ConnectionPill online={shell.online} lastSyncAt={shell.lastSyncAt} failing={Boolean(shell.error)} />
+        </div>
+
+        <div className="sp-header-actions">
+          <ThemeToggle theme={theme} onToggle={toggle} />
+          <div className="sp-profile" title={user?.email}>
+            <span className="sp-avatar" aria-hidden="true">{initialsOf(user?.fullName)}</span>
+            <span className="sp-profile-text">
+              <strong>{user?.fullName}</strong>
+              <span>Nhân viên soát vé</span>
             </span>
           </div>
-
-          <div className="flex items-center gap-4">
-            <div className="hidden text-right sm:block">
-              <span className="block text-xs font-bold text-slate-200">{user?.fullName}</span>
-              <span className="block text-[11px] text-cyan-400 uppercase tracking-wider">Nhân viên soát vé</span>
-            </div>
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="flex min-h-[36px] items-center gap-1.5 rounded-lg border border-rose-500/30 px-3 text-xs font-semibold text-rose-300 hover:bg-rose-500/10"
-              aria-label="Đăng xuất"
-            >
-              <LogOut size={14} />
-              <span>Đăng xuất</span>
-            </button>
-          </div>
+          <button type="button" onClick={handleLogout} className="sp-logout" aria-label="Đăng xuất khỏi hệ thống">
+            <LogOut size={16} aria-hidden="true" />
+            <span>Đăng xuất</span>
+          </button>
         </div>
       </header>
 
-      <main className="relative z-[2] mx-auto max-w-7xl p-4 sm:p-6 lg:p-8">
-        <StaffNavigation />
-        <Outlet />
+      <main className="sp-main">
+        <StaffNavigation openGates={openGates} />
+        {/* Page chunks load inside the shell, so the header and section bar never disappear. */}
+        <Suspense fallback={<div className="sp-page sp-route-loading" role="status"><span className="sr-only">Đang tải trang</span><div className="sp-route-loading-block" aria-hidden="true" /></div>}>
+          <Outlet context={shell} />
+        </Suspense>
       </main>
     </div>
   );

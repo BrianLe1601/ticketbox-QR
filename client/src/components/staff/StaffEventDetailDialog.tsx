@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Calendar, Clock, MapPin, X, ShieldCheck, UserCheck } from 'lucide-react';
+import { ASSIGNMENT_STATE } from '@/lib/staff-portal';
 import type { StaffAssignment } from '@/services/checkin.service';
 
 interface StaffEventDetailDialogProps { assignment: StaffAssignment | null; onClose: () => void; }
@@ -35,14 +36,36 @@ export function StaffEventDetailDialog({ assignment, onClose }: StaffEventDetail
   }, [assignment, onClose]);
 
   if (!assignment) return null;
-  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}>
-    <div ref={dialogRef} className="max-h-[90dvh] w-full max-w-xl overflow-y-auto rounded-2xl border border-cyan-500/30 bg-slate-900 p-5 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="event-detail-title" aria-describedby="event-detail-description">
-      <div className="flex items-start justify-between gap-4 border-b border-white/10 pb-4"><div><span className="text-[11px] font-bold uppercase tracking-wider text-cyan-400">Chi tiết ca trực & sự kiện</span><h3 id="event-detail-title" className="mt-1 text-lg font-bold text-slate-100">{assignment.name}</h3></div><button ref={closeRef} type="button" onClick={onClose} className="grid h-9 w-9 place-items-center rounded-lg text-slate-400 hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-cyan-300" aria-label="Đóng chi tiết sự kiện"><X size={18} /></button></div>
-      <div id="event-detail-description" className="mt-4 space-y-4 text-sm text-slate-300"><span className="inline-block rounded-full bg-cyan-500/15 px-2.5 py-1 text-xs font-bold text-cyan-200">{stateLabels[assignment.operationalState]}</span>
-        <div className="space-y-3 rounded-xl border border-white/5 bg-slate-950/50 p-4"><div className="flex items-start gap-2.5"><MapPin size={16} className="mt-0.5 shrink-0 text-cyan-400" /><div><strong className="block text-slate-200">Địa điểm tổ chức</strong><span>{assignment.venue} · {assignment.address}, {assignment.city}</span></div></div><div className="flex items-start gap-2.5"><Calendar size={16} className="mt-0.5 shrink-0 text-cyan-400" /><div><strong className="block text-slate-200">Thời gian sự kiện</strong><span>{format(assignment.startTime)} — {format(assignment.endTime)}</span></div></div><div className="flex items-start gap-2.5"><Clock size={16} className="mt-0.5 shrink-0 text-amber-400" /><div><strong className="block text-slate-200">Khung giờ mở cổng</strong><span>{format(assignment.checkinStartAt)} — {format(assignment.checkinEndAt)}</span></div></div><div className="flex items-start gap-2.5"><UserCheck size={16} className="mt-0.5 shrink-0 text-violet-300" /><div><strong className="block text-slate-200">Phân công</strong><span>Được phân công: {format(assignment.assignedAt)}{assignment.revokedAt ? ` · Thu hồi: ${format(assignment.revokedAt)}` : ''}</span></div></div></div>
-        <div className="flex items-start gap-2 rounded-lg border border-cyan-500/20 bg-cyan-950/20 p-3 text-xs text-cyan-300"><ShieldCheck size={16} className="mt-0.5 shrink-0" /><p>Lịch sử chỉ đọc. Mỗi lượt quét mới vẫn được server xác thực theo quyền phân công và khung giờ Event.</p></div>
+  return (
+    <div className="sp-overlay" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}>
+      <div ref={dialogRef} className="sp-dialog" role="dialog" aria-modal="true" aria-labelledby="event-detail-title" aria-describedby="event-detail-description">
+        <header className="sp-dialog-head">
+          <div>
+            <span className="sp-badge">Chi tiết ca trực &amp; sự kiện</span>
+            <h3 id="event-detail-title">{assignment.name}</h3>
+          </div>
+          <button ref={closeRef} type="button" onClick={onClose} className="sp-icon-btn" aria-label="Đóng chi tiết sự kiện">
+            <X size={20} aria-hidden="true" />
+          </button>
+        </header>
+
+        <div id="event-detail-description" className="sp-dialog-body">
+          <span className={`sp-pill is-${ASSIGNMENT_STATE[assignment.operationalState].tone}`}>{stateLabels[assignment.operationalState]}</span>
+
+          <dl className="sp-detail-list">
+            <div><dt><MapPin size={16} aria-hidden="true" />Địa điểm tổ chức</dt><dd>{assignment.venue} · {assignment.address}, {assignment.city}</dd></div>
+            <div><dt><Calendar size={16} aria-hidden="true" />Thời gian sự kiện</dt><dd>{format(assignment.startTime)} — {format(assignment.endTime)}</dd></div>
+            <div><dt><Clock size={16} aria-hidden="true" />Khung giờ mở cổng</dt><dd>{format(assignment.checkinStartAt)} — {format(assignment.checkinEndAt)}</dd></div>
+            <div><dt><UserCheck size={16} aria-hidden="true" />Phân công</dt><dd>Được phân công: {format(assignment.assignedAt)}{assignment.revokedAt ? ` · Thu hồi: ${format(assignment.revokedAt)}` : ''}</dd></div>
+          </dl>
+
+          <p className="sp-info-pill"><ShieldCheck size={16} aria-hidden="true" />Lịch sử chỉ đọc. Mỗi lượt quét mới vẫn được máy chủ xác thực theo quyền phân công và khung giờ sự kiện.</p>
+        </div>
+
+        <footer className="sp-dialog-foot">
+          <button type="button" onClick={onClose} className="sp-btn sp-btn--ghost">Đóng</button>
+        </footer>
       </div>
-      <div className="mt-5 flex justify-end"><button type="button" onClick={onClose} className="min-h-[40px] rounded-lg border border-cyan-500/30 px-5 text-sm font-semibold text-slate-200 hover:bg-cyan-500/10 focus-visible:outline-2 focus-visible:outline-cyan-300">Đóng</button></div>
     </div>
-  </div>;
+  );
 }
