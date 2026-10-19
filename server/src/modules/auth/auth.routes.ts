@@ -13,8 +13,17 @@ import {
   refreshController,
   updateAdminProfileController,
   changeAdminPasswordController,
+  confirmPasswordResetController,
+  requestPasswordResetController,
 } from "./auth.controller.js";
-import { changeAdminPasswordSchema, googleLoginSchema, loginSchema, updateAdminProfileSchema } from "./auth.schema.js";
+import {
+  changeAdminPasswordSchema,
+  googleLoginSchema,
+  loginSchema,
+  passwordResetConfirmSchema,
+  passwordResetRequestSchema,
+  updateAdminProfileSchema,
+} from "./auth.schema.js";
 
 export const authRouter = Router();
 
@@ -45,6 +54,22 @@ const passwordChangeLimiter = rateLimit({
   },
 });
 
+// Forgot password (Admin): per IP here, plus a per-email cooldown in the service.
+const passwordResetRequestLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: "Bạn gửi yêu cầu quá nhiều lần, vui lòng thử lại sau", code: "RATE_LIMITED" },
+});
+const passwordResetConfirmLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: "Bạn thử quá nhiều lần, vui lòng thử lại sau", code: "RATE_LIMITED" },
+});
+
 authRouter.post(
   "/login",
   loginLimiter,
@@ -63,5 +88,7 @@ authRouter.post(
 authRouter.get("/me", authenticate, getMeController);
 authRouter.patch("/admin/profile", authenticate, authorize("admin"), validateBody(updateAdminProfileSchema), updateAdminProfileController);
 authRouter.patch("/admin/password", authenticate, authorize("admin"), passwordChangeLimiter, validateBody(changeAdminPasswordSchema), changeAdminPasswordController);
+authRouter.post("/password-reset/request", passwordResetRequestLimiter, validateBody(passwordResetRequestSchema), requestPasswordResetController);
+authRouter.post("/password-reset/confirm", passwordResetConfirmLimiter, validateBody(passwordResetConfirmSchema), confirmPasswordResetController);
 authRouter.post("/refresh", refreshController);
 authRouter.post("/logout", logoutController);

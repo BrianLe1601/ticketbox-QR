@@ -1,0 +1,154 @@
+@import "./foundations.css";
+
+.route-loading.route-loading-light { background: var(--tb-bg, #f6f3ec); color: var(--tb-text, #1c2236); }
+
+/* Admin-only foundations. Legacy page layouts remain independent.
+   Body attribute scopes Admin portals without changing Public or Staff styles. */
+.admin-room, body[data-admin-appearance] {
+  /* Aliases of the shared TicketBox tokens (ticketbox-tokens.css), so both themes flow through. */
+  --admin-bg: var(--tb-bg);
+  --admin-surface: var(--tb-surface);
+  --admin-subtle: var(--tb-subtle);
+  --admin-text: var(--tb-text);
+  --admin-muted: var(--tb-muted);
+  --admin-border: var(--tb-border);
+  --admin-accent: var(--tb-accent);
+  --admin-radius: var(--tb-radius);
+  --admin-space: 24px;
+  --room-accent: var(--admin-accent);
+  --tech-cyan: var(--admin-accent);
+  --tech-bg: var(--admin-bg);
+  --background: var(--admin-surface);
+  --foreground: var(--admin-text);
+  --muted: var(--admin-subtle);
+  --muted-foreground: var(--admin-muted);
+  --border: var(--admin-border);
+  --input: var(--admin-border);
+  --popover: var(--admin-surface);
+  --popover-foreground: var(--admin-text);
+}
+.admin-room {
+  background: var(--admin-bg);
+  color: var(--admin-text);
+  font-family: var(--admin-font, system-ui, sans-serif);
+  font-size: var(--admin-font-size, 15px);
+  line-height: 1.5;
+}
+.admin-room[data-room] { --room-accent: var(--admin-accent); }
+.admin-room *, body[data-admin-appearance] [role="dialog"] * { text-shadow: none !important; }
+
+/* Text follows the selected scale; labels remain distinct from headings. */
+:is(.admin-room, body[data-admin-appearance] [role="dialog"], body[data-admin-appearance] [role="alertdialog"])
+  :is(p, label, input, select, textarea, button, td, th, dt, dd, li):not([class*="adm-"]):not(.adm-page *) {
+  font-family: var(--admin-font, system-ui, sans-serif);
+  font-size: var(--admin-font-size, 15px);
+  line-height: 1.5;
+}
+:is(.admin-room, body[data-admin-appearance] [role="dialog"], body[data-admin-appearance] [role="alertdialog"])
+  :is(h1, h2, h3, h4, strong, label, legend, td, th):not([class*="adm-"]):not(.adm-page *) { color: var(--admin-text); }
+.admin-room :is(h1, h2) { font-size: calc(var(--admin-font-size, 15px) * 1.8); line-height: 1.25; }
+.admin-room h3 { font-size: calc(var(--admin-font-size, 15px) * 1.15); }
+.admin-room small { font-size: .85em; }
+
+/* Named surfaces, not blanket div backgrounds: images/charts/statuses stay intact. */
+.admin-room .staff-metric-val { color: var(--admin-text); font-size: calc(var(--admin-font-size, 15px) * 1.4); }
+.admin-room .staff-metric-sub { color: var(--admin-muted); font-size: .8em; }
+.admin-room .event-card-footer { flex-wrap: wrap; gap: 6px; }
+
+/* Controls and native options are readable in light mode. */
+:is(.admin-room, body[data-admin-appearance] [role="dialog"], body[data-admin-appearance] [role="alertdialog"])
+  :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea):not([class*="adm-"]):not(.adm-page *) {
+  min-height: 40px; height: auto; color: var(--admin-text) !important;
+  background: var(--admin-surface) !important; border-color: var(--admin-border) !important;
+  color-scheme: light; padding: 9px 12px; border-radius: 8px;
+}
+:is(.admin-room, body[data-admin-appearance]) :is(select option, select optgroup) { background: var(--tb-surface); color: var(--tb-text); }
+.admin-room :is(input, textarea)::placeholder { color: var(--tb-muted); opacity: 1; }
+.admin-room button { min-height: 36px; height: auto; text-shadow: none; }
+.admin-room :is(button, a, input, select, textarea):focus-visible { outline: 3px solid var(--tb-accent); outline-offset: 3px; }
+.admin-room button:disabled { opacity: .5; cursor: not-allowed; }
+
+/* Tables scroll within their panel rather than widening the entire page. */
+.admin-room .staff-event-filter select { min-width: 0; width: 100%; }
+.admin-room .staff-compact-card { background: var(--admin-surface); border-color: var(--admin-border); }
+.admin-room .staff-compact-card :is(h4, b) { color: var(--admin-text); }
+.admin-room .staff-compact-card p { overflow-wrap: anywhere; color: var(--admin-muted); }
+.admin-room .staff-compact-card > div:first-child { flex-wrap: wrap; }
+.admin-room .staff-compact-card > div:first-child > div { min-width: 0; }
+.admin-room table { color: var(--admin-text); }
+.admin-room :is(th, td) { border-color: var(--admin-border) !important; }
+.admin-room th { background: var(--admin-subtle); color: var(--admin-muted); text-transform: none; letter-spacing: 0; }
+.admin-room tbody tr:hover td { background: var(--tb-surface-2); }
+
+/* Status contrast; labels/icons already convey meaning independently of color. */
+
+/* Portaled Admin dialogs inherit appearance; no preference leaks to other roles. */
+body[data-admin-appearance] .staff-confirm-dialog { width: min(480px, calc(100vw - 32px)); height: auto; }
+body[data-admin-appearance] :is(.staff-confirm-body, .staff-drawer-body) { color: var(--admin-text); }
+body[data-admin-appearance] .staff-confirm-footer { flex-wrap: wrap; }
+body[data-admin-appearance] :is(.staff-confirm-dialog, .staff-drawer-panel) .staff-action-btn {
+  color: var(--admin-text); background: var(--admin-surface); border-color: var(--admin-border);
+}
+body[data-admin-appearance] :is(.staff-confirm-dialog, .staff-drawer-panel) .staff-action-btn:is(.primary, .success) {
+  background: var(--admin-accent); color: var(--tb-on-accent); border-color: var(--admin-accent);
+}
+body[data-admin-appearance] :is(.staff-confirm-dialog, .staff-drawer-panel) .staff-action-btn.danger {
+  background: var(--tb-danger-soft); color: var(--tb-danger); border-color: var(--tb-danger-border);
+}
+body[data-admin-appearance] .staff-confirm-warning.danger { background: var(--tb-danger-soft); color: var(--tb-danger); }
+body[data-admin-appearance] .staff-confirm-warning.info { background: var(--tb-accent-soft); color: var(--tb-accent-text); }
+.admin-room .order-ticket-types { color: var(--admin-text); }
+
+/* Login has a separate light scope and never reads an Admin's stored font. */
+h2, strong, label { color: var(--tb-text); text-shadow: none; }
+@media (max-width: 760px) {
+  .admin-room { --admin-space: 16px; }
+}
+
+/* ------------------------------------------------------------------
+   Legacy colour corrections. styles/admin/legacy.css (the original dark theme) still styles
+   some classes with fixed neon colours; these rules give them theme tokens. Each
+   block was found by the automated contrast audit, not guessed.
+   ------------------------------------------------------------------ */
+.admin-room .staff-avatar-initials { background: var(--tb-accent-soft); color: var(--tb-accent-text); border-color: var(--tb-accent-border); }
+.admin-room .event-visibility-hidden { background: var(--tb-warning-soft); color: var(--tb-warning); border: 1px solid var(--tb-warning-border); font-size: .75em; }
+.admin-room .event-scheduled { background: var(--tb-accent-soft); color: var(--tb-accent-text); border: 1px solid var(--tb-accent-border); }
+/* Readability floor: relative sizes never drop under 12px. */
+/* Headings carry weight (Tailwind's preflight resets them to inherit). */
+.admin-room :is(h1, h2, h3, h4), body[data-admin-appearance] [role="dialog"] :is(h2, h3, h4) { font-weight: 700; letter-spacing: -0.01em; }
+
+/* Portaled dialogs and drawers (rendered in <body>): same corrections, scoped by the body marker. */
+body[data-admin-appearance] .event-setup-path { background: var(--tb-accent-soft); border-bottom-color: var(--tb-accent-border); }
+body[data-admin-appearance] .event-setup-path > div { color: var(--tb-muted); }
+body[data-admin-appearance] .event-setup-path b { border-color: var(--tb-border-strong); color: var(--tb-muted); background: var(--tb-surface); box-shadow: none; }
+body[data-admin-appearance] .event-setup-path .active { color: var(--tb-accent-text); }
+body[data-admin-appearance] .event-setup-path .active b { background: var(--tb-accent); border-color: var(--tb-accent); color: var(--tb-on-accent); box-shadow: none; }
+body[data-admin-appearance] .event-setup-path i { background: var(--tb-border-strong); }
+body[data-admin-appearance] .staff-drawer-panel :is(.staff-avatar-initials) { background: var(--tb-accent-soft); color: var(--tb-accent-text); border-color: var(--tb-accent-border); }
+body[data-admin-appearance] .staff-drawer-panel :is(h4, h5, h6, .staff-drawer-section > span, .staff-drawer-section > div > span) { color: var(--tb-muted); }
+body[data-admin-appearance] .staff-drawer-panel .flex.items-center.gap-1\.5 { color: var(--tb-muted); }
+body[data-admin-appearance] .event-cover-dropzone { background: var(--tb-surface-2); border-color: var(--tb-accent-border); }
+body[data-admin-appearance] .event-cover-empty { color: var(--tb-muted); }
+body[data-admin-appearance] .event-cover-empty strong { color: var(--tb-text); }
+body[data-admin-appearance] .event-cover-empty span, body[data-admin-appearance] .event-cover-empty small { color: var(--tb-muted); }
+body[data-admin-appearance] .event-cover-field button { background: var(--tb-surface); color: var(--tb-accent-text); border: 1px solid var(--tb-accent-border); }
+body[data-admin-appearance] .event-next-step-note { color: var(--tb-muted); }
+body[data-admin-appearance] .staff-drawer-section-title, body[data-admin-appearance] .staff-drawer-section-title > span { color: var(--tb-muted); }
+
+/* Admin pages still use Tailwind's "neon on dark" steps (text-cyan-400, text-rose-300, bg-slate-900 ...).
+   Tailwind compiles them to var(--color-*), so remap those steps to the shared tokens inside the Admin
+   scope (pages and body portals): each keeps its role and passes contrast in both themes. */
+.admin-room, body[data-admin-appearance] {
+  --color-slate-100: var(--tb-text); --color-slate-200: var(--tb-muted); --color-slate-300: var(--tb-muted);
+  --color-slate-400: var(--tb-muted); --color-slate-500: var(--tb-muted); --color-slate-600: var(--tb-muted);
+  --color-slate-900: var(--tb-surface-2); --color-slate-950: var(--tb-surface-2);
+  --color-cyan-200: var(--tb-accent-text); --color-cyan-300: var(--tb-accent-text); --color-cyan-400: var(--tb-accent-text);
+  --color-cyan-500: var(--tb-accent); --color-sky-300: var(--tb-accent-text); --color-sky-400: var(--tb-accent-text);
+  --color-violet-300: var(--tb-accent-text); --color-violet-400: var(--tb-accent-text);
+  --color-emerald-200: var(--tb-success); --color-emerald-300: var(--tb-success); --color-emerald-400: var(--tb-success); --color-emerald-500: var(--tb-success-solid);
+  --color-amber-200: var(--tb-warning); --color-amber-300: var(--tb-warning); --color-amber-400: var(--tb-warning); --color-amber-500: var(--tb-stub);
+  --color-rose-200: var(--tb-danger); --color-rose-300: var(--tb-danger); --color-rose-400: var(--tb-danger); --color-rose-500: var(--tb-danger-solid); --color-rose-950: var(--tb-danger-soft);
+  --color-red-400: var(--tb-danger); --color-red-600: var(--tb-danger);
+}
+body[data-admin-appearance] .staff-drawer-section { background: var(--tb-surface-2) !important; border: 1px solid var(--tb-border) !important; box-shadow: none; }
+body[data-admin-appearance] .staff-drawer-body { background: var(--tb-surface); }

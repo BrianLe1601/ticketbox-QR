@@ -1,0 +1,54 @@
+/* Admin Báo cáo — Tổng quan Bento reference: scope filter bar, static KPI figures, revenue chart
+   (8/12), ticket path (4/12) and the per-Event table. Tokens only; imported by AdminReportsPage. */
+
+:is(.admin-room, body[data-admin-appearance]) {
+  .rpp-kpis { grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); }
+
+  /* revenue chart */
+  .rp-legend { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: -4px 0 0; padding: 0; list-style: none; color: var(--tb-secondary); font-size: max(12px, .85em); }
+  .rp-legend li { display: inline-flex; align-items: center; gap: 8px; }
+  .rp-legend span { width: 12px; height: 12px; border-radius: 3px; }
+  .rp-legend .is-gross { background: var(--tb-chart-1); }
+  .rp-legend .is-refund { background: var(--tb-chart-2); }
+  .rp-legend .is-net { height: 3px; border-radius: 2px; background: var(--tb-accent); }
+  .rp-legend strong { color: var(--tb-text); }
+  .rp-chart { height: 250px; }
+  .rp-tip { display: grid; gap: 2px; padding: 8px 12px; border-radius: 10px; background: var(--tb-surface); color: var(--tb-text); border: 1px solid var(--tb-accent); box-shadow: var(--tb-shadow-lg); }
+  .rp-tip span { color: var(--tb-secondary); font-size: 12px; }
+  .rp-tip strong { font-size: max(12px, .9em); }
+
+  /* ticket path */
+  .rp-funnel { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+  .rp-funnel li { display: grid; gap: 4px; }
+  .rp-funnel-head { display: flex; justify-content: space-between; gap: 8px; color: var(--tb-text); }
+  .rp-funnel-head strong { color: var(--tb-heading); }
+  .rp-funnel-bar { display: block; height: 10px; border-radius: 999px; overflow: hidden; background: var(--tb-ring-track); box-shadow: inset 0 0 0 1px var(--tb-border); }
+  .rp-funnel-bar > span { display: block; height: 100%; border-radius: 999px; background: var(--tb-ring-1); }
+  .rp-funnel .is-sold .rp-funnel-bar > span { background: var(--tb-chart-1); }
+  .rp-funnel .is-issued .rp-funnel-bar > span { background: var(--tb-ring-2); }
+  .rp-funnel .is-admitted .rp-funnel-bar > span { background: var(--tb-accent); }
+  .rp-funnel-note { color: var(--tb-secondary); font-size: 12px; }
+  .rp-scans { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 14px 0 0; padding-top: 12px; border-top: 1px dashed var(--tb-grid); color: var(--tb-text); }
+  .rp-warn { color: var(--tb-danger); font-weight: 600; }
+
+  /* per-Event table */
+  .rp-event { display: grid; gap: 4px; min-width: 180px; }
+  .rp-event strong { color: var(--tb-heading); overflow-wrap: anywhere; }
+  .rp-event-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; color: var(--tb-secondary); font-size: max(12px, .85em); }
+  .rp-meter { display: grid; gap: 6px; min-width: 150px; color: var(--tb-secondary); }
+  .rp-meter strong { color: var(--tb-text); }
+  .rp-bar { display: block; height: 6px; border-radius: 999px; overflow: hidden; background: var(--tb-ring-track); box-shadow: inset 0 0 0 1px var(--tb-border); }
+  .rp-bar > span { display: block; height: 100%; background: var(--tb-chart-1); }
+  .rp-two { display: grid; gap: 2px; }
+  .rp-two.is-right { justify-items: end; }
+  .rp-two span { color: var(--tb-secondary); font-size: max(12px, .85em); }
+  .rp-two span.rp-warn { color: var(--tb-danger); }
+  .rp-negative { color: var(--tb-danger); }
+  .rp-total { margin: 0; padding: 10px 12px; border-radius: 12px; background: var(--tb-surface-2); color: var(--tb-text); font-weight: 600; }
+  .rp-note { margin: 0; color: var(--tb-secondary); font-size: max(12px, .85em); }
+
+  @media (max-width: 640px) {
+    .rpp-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .rp-chart { height: 210px; }
+  }
+}

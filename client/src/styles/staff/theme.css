@@ -1,0 +1,55 @@
+/* Staff theme layer. Staff components use Tailwind palette classes (text-slate-900, bg-rose-50 ...).
+   Tailwind v4 compiles those to var(--color-*), so remapping the palette inside the Staff scope
+   routes every one of them through the shared TicketBox tokens (light AND dark) without
+   touching each component, and nothing outside the scope is affected.
+   Mapping keeps roles: slate = text/surfaces, blue = accent, rose/red = danger, amber = warning,
+   emerald/green = success. White maps to the surface, so text-white on an accent button stays
+   readable in both themes (white on indigo in light, near-black on periwinkle in dark). */
+.staff-portal-room, body[data-staff-appearance] {
+  --color-white: var(--tb-surface);
+  --color-slate-50: var(--tb-surface-2); --color-slate-100: var(--tb-subtle); --color-slate-200: var(--tb-border);
+  --color-slate-300: var(--tb-border-strong); --color-slate-400: var(--tb-faint); --color-slate-500: var(--tb-muted);
+  --color-slate-600: var(--tb-muted); --color-slate-700: var(--tb-text); --color-slate-800: var(--tb-text); --color-slate-900: var(--tb-text);
+  --color-gray-50: var(--tb-surface-2); --color-gray-100: var(--tb-subtle); --color-gray-200: var(--tb-border);
+  --color-gray-300: var(--tb-border-strong); --color-gray-400: var(--tb-faint); --color-gray-500: var(--tb-muted);
+  --color-gray-600: var(--tb-muted); --color-gray-700: var(--tb-text); --color-gray-800: var(--tb-text); --color-gray-900: var(--tb-text);
+  --color-blue-50: var(--tb-accent-soft); --color-blue-100: var(--tb-accent-soft); --color-blue-200: var(--tb-accent-border);
+  --color-blue-300: var(--tb-accent-border); --color-blue-400: var(--tb-accent); --color-blue-500: var(--tb-accent);
+  --color-blue-600: var(--tb-accent); --color-blue-700: var(--tb-accent-text); --color-blue-800: var(--tb-accent-text);
+  --color-red-50: var(--tb-danger-soft); --color-red-100: var(--tb-danger-soft); --color-red-200: var(--tb-danger-border);
+  --color-red-300: var(--tb-danger-border); --color-red-400: var(--tb-danger); --color-red-500: var(--tb-danger-solid);
+  --color-red-600: var(--tb-danger); --color-red-700: var(--tb-danger); --color-red-800: var(--tb-danger);
+  --color-rose-50: var(--tb-danger-soft); --color-rose-100: var(--tb-danger-soft); --color-rose-200: var(--tb-danger-border);
+  --color-rose-300: var(--tb-danger-border); --color-rose-400: var(--tb-danger); --color-rose-500: var(--tb-danger-solid);
+  --color-rose-600: var(--tb-danger); --color-rose-700: var(--tb-danger); --color-rose-800: var(--tb-danger);
+  --color-amber-50: var(--tb-warning-soft); --color-amber-100: var(--tb-warning-soft); --color-amber-200: var(--tb-warning-border);
+  --color-amber-300: var(--tb-warning-border); --color-amber-400: var(--tb-stub); --color-amber-500: var(--tb-stub);
+  --color-amber-600: var(--tb-warning); --color-amber-700: var(--tb-warning); --color-amber-800: var(--tb-warning); --color-amber-900: var(--tb-warning);
+  --color-emerald-50: var(--tb-success-soft); --color-emerald-100: var(--tb-success-soft); --color-emerald-200: var(--tb-success-border);
+  --color-emerald-300: var(--tb-success-border); --color-emerald-400: var(--tb-success-solid); --color-emerald-500: var(--tb-success-solid);
+  --color-emerald-600: var(--tb-success); --color-emerald-700: var(--tb-success); --color-emerald-800: var(--tb-success);
+  --color-green-50: var(--tb-success-soft); --color-green-100: var(--tb-success-soft); --color-green-200: var(--tb-success-border);
+  --color-green-600: var(--tb-success); --color-green-700: var(--tb-success);
+
+  /* Readable at arm's length outdoors: Tailwind's small steps are nudged up inside Staff only. */
+  --text-xs: 0.8125rem;
+  --text-sm: 0.9375rem;
+  --text-base: 1.0625rem;
+
+  /* shadcn/Radix surfaces rendered in portals */
+  --background: var(--tb-surface); --foreground: var(--tb-text);
+  --muted: var(--tb-subtle); --muted-foreground: var(--tb-muted);
+  --border: var(--tb-border); --input: var(--tb-border);
+  --popover: var(--tb-surface); --popover-foreground: var(--tb-text);
+}
+.staff-portal-room {
+  font-size: 16px; line-height: 1.5;
+  background-color: var(--tb-bg); color: var(--tb-text);
+}
+.staff-portal-room :is(a, button, input, select, textarea, summary):focus-visible { outline: 3px solid var(--tb-focus); outline-offset: 2px; }
+.staff-portal-room button:disabled { cursor: not-allowed; }
+.staff-portal-room :is(input, select, textarea) { color-scheme: inherit; }
+.staff-header-actions { display: flex; align-items: center; gap: 12px; }
+@media (prefers-reduced-motion: reduce) {
+  .staff-portal-room *, body[data-staff-appearance] * { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}

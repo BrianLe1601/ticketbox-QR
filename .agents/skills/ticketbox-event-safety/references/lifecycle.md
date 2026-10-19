@@ -6,6 +6,14 @@
 - Ongoing: may complete or be cancelled for an unavoidable incident.
 - Completed/cancelled: read-only audit state; never reopen sales.
 
+## Single venue and lock order
+- One venue for the platform (`platform_settings`, id 1). Events must not overlap on the closed interval `[checkin_start_at, end_time]`; Draft occupies the slot, Cancelled frees it. Create/schedule edits lock `platform_settings` first, then check conflicts (service) with the BI/BU triggers as a backstop; only changes to start/end/check-in start re-check.
+- Global lock order: `platform_settings -> Event -> Order (ascending id) -> Ticket Type (ascending id) -> Ticket`. Never take `platform_settings` after an Event lock.
+- Venue snapshots on Events change only per the venue-change rule (Draft w/o Orders/Tickets sync; published w/o sales needs confirmation; sold/issued/completed locked).
+
+## Sales window
+Sales open before the Event starts and close no later than check-in end (Event and every tier's effective window): `sales_start_at < start_time`, `sales_end_at <= checkin_end_at <= end_time`. Enforced by schema CHECK/triggers, the Event and Ticket Type services, readiness and the Admin forms.
+
 ## Availability predicate
 An Event/tier can be sold publicly only when all are true: Event is published or ongoing, Event is visible, tier is active, current time is within the effective sales window, and `capacity - reserved_quantity - sold_quantity > 0`.
 

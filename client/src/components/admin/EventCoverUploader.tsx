@@ -1,5 +1,6 @@
 import { ImagePlus, LoaderCircle, RefreshCw, Trash2, UploadCloud } from "lucide-react";
 import { useRef, useState, type DragEvent } from "react";
+import { Button, Input } from "@/components/admin/ui";
 import { uploadEventCover } from "@/services/cloudinary-upload.service";
 
 export interface EventCoverValue { url: string; publicId: string; alt: string }
@@ -32,18 +33,19 @@ export function EventCoverUploader({ value, onChange, eventName }: Props) {
     event.preventDefault(); setDragging(false); void selectFile(event.dataTransfer.files[0]);
   }
 
-  return <div className="event-cover-field">
-    <div className={`event-cover-dropzone ${dragging ? "dragging" : ""} ${value.url ? "has-image" : ""}`}
+  return <div className="ev-coverup">
+    <div className={`ev-coverup-drop ${dragging ? "is-dragging" : ""} ${value.url ? "has-image" : ""}`}
       onDragOver={(event) => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={drop}>
-      {value.url ? <img src={value.url} alt={value.alt || "Xem trước ảnh bìa sự kiện"} /> : <div className="event-cover-empty"><ImagePlus size={30}/><strong>Tải ảnh bìa sự kiện</strong><span>Kéo ảnh vào đây hoặc chọn tệp</span><small>JPG, PNG, WebP · tối đa 8 MB · khuyến nghị 16:9</small></div>}
-      {uploading && <div className="event-cover-progress"><LoaderCircle className="spin" size={24}/><strong>Đang tải {progress}%</strong><span><i style={{ width: `${progress}%` }}/></span></div>}
+      {value.url ? <img src={value.url} alt={value.alt || "Xem trước ảnh bìa sự kiện"} /> : <div className="ev-coverup-empty"><ImagePlus size={28} aria-hidden="true"/><strong>Ảnh bìa sự kiện</strong><span>Kéo ảnh vào đây hoặc chọn tệp · JPG, PNG, WebP · tối đa 8 MB · khuyến nghị 16:9</span></div>}
+      {uploading && <div className="ev-coverup-progress" role="status"><LoaderCircle className="spin" size={22} aria-hidden="true"/><strong>Đang tải {progress}%</strong><span><i style={{ width: `${progress}%` }}/></span></div>}
     </div>
-    <div className="event-cover-actions">
+    {value.url && <p className="ev-coverup-note">Xem trước theo khung thẻ sự kiện trên trang khách (16:10); ảnh được cắt vừa khung, không bị kéo giãn.</p>}
+    <div className="ev-coverup-actions">
       <input ref={inputRef} hidden type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { void selectFile(event.target.files?.[0]); event.currentTarget.value = ""; }}/>
-      <button type="button" onClick={() => inputRef.current?.click()} disabled={uploading}>{value.url ? <RefreshCw size={15}/> : <UploadCloud size={15}/>} {value.url ? "Thay ảnh" : "Chọn ảnh"}</button>
-      {value.url && <button type="button" className="danger" onClick={() => onChange({ url: "", publicId: "", alt: "" })} disabled={uploading}><Trash2 size={15}/> Xóa ảnh</button>}
+      <Button size="sm" icon={value.url ? RefreshCw : UploadCloud} onClick={() => inputRef.current?.click()} disabled={uploading}>{value.url ? "Thay ảnh" : "Chọn ảnh"}</Button>
+      {value.url && <Button size="sm" variant="danger-ghost" icon={Trash2} onClick={() => onChange({ url: "", publicId: "", alt: "" })} disabled={uploading}>Xóa ảnh</Button>}
     </div>
-    {value.url && <label>Mô tả ảnh (hỗ trợ khả năng truy cập)<input maxLength={255} value={value.alt} onChange={(event) => onChange({ ...value, alt: event.target.value })} placeholder={`Ảnh bìa ${eventName || "sự kiện"}`} /></label>}
-    {error && <p className="event-cover-error">{error}</p>}
+    {value.url && <label className="adm-field"><span className="adm-field-label">Mô tả ảnh (cho trình đọc màn hình)</span><Input maxLength={255} value={value.alt} onChange={(event) => onChange({ ...value, alt: event.target.value })} placeholder={`Ảnh bìa ${eventName || "sự kiện"}`} /></label>}
+    {error && <p className="adm-field-error" role="alert">{error}</p>}
   </div>;
 }

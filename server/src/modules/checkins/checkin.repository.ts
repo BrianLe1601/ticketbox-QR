@@ -10,6 +10,8 @@ export interface EventRow extends RowDataPacket {
 export interface TicketRow extends RowDataPacket {
   id: number; orderId: number; eventId: number; code: string;
   holderName: string | null; status: string; checkedInAt: Date | null;
+  /** Only filled by findTicket (purchase snapshot); lockTicket locks the Ticket row alone. */
+  ticketTypeName?: string | null;
 }
 export interface AssignmentRow extends EventRow {
   assignmentId: number; assignedAt: Date; revokedAt: Date | null; isActive: number;
@@ -53,6 +55,33 @@ export async function listEvents(staffId: number) {
       AND NOW(3) BETWEEN e.checkin_start_at AND e.checkin_end_at
     ORDER BY e.start_time ASC, e.id ASC`, [staffId]);
   return rows;
+}
+
+/** Is this Event one of the Staff member's open gates? Same predicate as listEvents, no locks. */
+export async function isOpenAssignedEvent(staffId: number, eventId: number) {
+  const [rows] = await pool.execute<RowDataPacket[]>(`SELECT e.id FROM events e
+    JOIN event_staff es ON es.event_id = e.id
+    WHERE es.staff_id = ? AND e.id = ? AND es.is_active = TRUE AND es.revoked_at IS NULL
+      AND e.status IN ('published', 'ongoing') AND e.end_time > NOW(3)
+      AND NOW(3) BETWEEN e.checkin_start_at AND e.checkin_end_at LIMIT 1`, [staffId, eventId]);
+  return rows.length > 0;
+}
+export async function hasActiveAssignment(staffId: number, eventId: number) {
+  const [rows] = await pool.execute<RowDataPacket[]>(`SELECT id FROM event_staff
+    WHERE event_id = ? AND staff_id = ? AND is_active = TRUE AND revoked_at IS NULL LIMIT 1`, [eventId, staffId]);
+  return rows.length > 0;
+}
+/** Read-only gate counters; each source is counted in its own subquery (no row multiplication). */
+export async function attendance(eventId: number) {
+  const [rows] = await pool.execute<RowDataPacket[]>(`SELECT
+    (SELECT COUNT(DISTINCT cl.ticket_id) FROM checkin_logs cl
+      WHERE cl.event_id = ? AND cl.result_code = 'SUCCESS') AS admitted,
+    (SELECT COUNT(*) FROM tickets t JOIN order_items oi ON oi.id = t.order_item_id JOIN orders o ON o.id = oi.order_id
+      WHERE o.event_id = ? AND o.status = 'confirmed' AND t.status IN ('issued', 'checked_in')) AS validTickets,
+    (SELECT COUNT(*) FROM tickets t JOIN order_items oi ON oi.id = t.order_item_id JOIN orders o ON o.id = oi.order_id
+      WHERE o.event_id = ? AND o.status = 'confirmed' AND t.status = 'issued') AS remaining`, [eventId, eventId, eventId]);
+  const row = rows[0];
+  return { admitted: Number(row?.admitted ?? 0), validTickets: Number(row?.validTickets ?? 0), remaining: Number(row?.remaining ?? 0) };
 }
 
 function assignmentSegmentCondition(segment: AssignmentListQuery['segment']) {
@@ -133,6 +162,7 @@ export async function hasAssignment(conn: PoolConnection, eventId: number, staff
 export async function findTicket(conn: PoolConnection, value: string, isQr: boolean) {
   const [rows] = await conn.execute<TicketRow[]>(`SELECT t.id, oi.order_id AS orderId,
     o.event_id AS eventId, t.ticket_code AS code, t.holder_name AS holderName,
+    oi.ticket_type_name AS ticketTypeName,
     t.status, t.checked_in_at AS checkedInAt FROM tickets t
     JOIN order_items oi ON oi.id = t.order_item_id JOIN orders o ON o.id = oi.order_id
     WHERE ${isQr ? 't.qr_token_hash' : 't.ticket_code'} = ?`, [value]);

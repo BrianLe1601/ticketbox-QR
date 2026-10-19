@@ -1,0 +1,63 @@
+/* Admin Cài đặt — Tổng quan Bento reference: tabs Hệ thống / Giao diện / Tài khoản, each a
+   BentoGrid of cards. Tokens only; imported by AdminSettingsPage. Dialogs are portaled and use the
+   shared ConfirmDialog styles. */
+
+:is(.admin-room, body[data-admin-appearance]) {
+  .stp .adm-tab-panel { padding-top: 16px; }
+  .st-skel { grid-column: span 6; padding: 20px; border-radius: var(--tb-radius-card); background: var(--tb-surface); box-shadow: var(--tb-shadow-sm); }
+
+  .st-form { display: grid; gap: 14px; min-width: 0; }
+  .st-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 16px; min-width: 0; margin: 0; padding: 0; border: 0; }
+  .st-grid > .is-wide { grid-column: 1 / -1; }
+  .st-grid:disabled { opacity: .75; }
+  .st-current { display: grid; align-content: end; gap: 2px; padding-bottom: 8px; color: var(--tb-secondary); font-size: max(12px, .88em); }
+  .st-current strong { color: var(--tb-heading); font-size: 1.15em; }
+  .st-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px 10px; }
+  .st-actions .st-note { margin-right: auto; }
+  .st-note { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--tb-secondary); font-size: max(12px, .88em); line-height: 1.5; }
+
+  .st-pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+  .st-pill.is-ok { background: var(--tb-success-soft); color: var(--tb-success); box-shadow: inset 0 0 0 1px var(--tb-success-border); }
+  .st-pill.is-missing { background: var(--tb-warning-soft); color: var(--tb-warning); box-shadow: inset 0 0 0 1px var(--tb-warning-border); }
+
+  .st-stats { display: grid; margin: 0; }
+  .st-stats > div { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px dashed var(--tb-grid); }
+  .st-stats > div:last-child { border-bottom: 0; }
+  .st-stats dt { display: inline-flex; align-items: center; gap: 6px; color: var(--tb-secondary); }
+  .st-stats dd { margin: 0; color: var(--tb-text); font-weight: 650; }
+  .st-stats dd strong { color: var(--tb-heading); }
+
+  /* appearance */
+  .st-list { display: grid; gap: 6px; margin: 0; padding-left: 18px; color: var(--tb-secondary); line-height: 1.5; }
+  .st-list strong { color: var(--tb-text); }
+  .st-choice { display: grid; gap: 6px; }
+  .st-choice-label { color: var(--tb-secondary); font-size: max(12px, .88em); font-weight: 650; }
+  .st-preview { display: grid; gap: 6px; margin: 0; padding: 14px 16px; border-radius: 14px; background: var(--tb-surface-2); color: var(--tb-text); }
+  .st-preview figcaption { color: var(--tb-secondary); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+  .st-preview strong { color: var(--tb-heading); }
+  .st-preview p { margin: 0; }
+  .st-preview-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+
+  /* account */
+  .st-account { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 14px; border-radius: 14px; background: var(--tb-surface-2); }
+  .st-account > div { display: grid; gap: 2px; min-width: 0; flex: 1; }
+  .st-account strong { color: var(--tb-heading); overflow-wrap: anywhere; }
+  .st-account span { color: var(--tb-secondary); overflow-wrap: anywhere; }
+  .st-account .st-pill { color: var(--tb-success); }
+  .st-show { display: flex; align-items: end; padding-bottom: 2px; }
+  .st-rules { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); gap: 6px 14px; margin: 0; padding: 0; list-style: none; }
+  .st-rules li { display: inline-flex; align-items: center; gap: 6px; color: var(--tb-secondary); }
+  .st-rules li svg { flex: none; color: var(--tb-danger); }
+  .st-rules li.is-ok { color: var(--tb-text); }
+  .st-rules li.is-ok svg { color: var(--tb-success); }
+
+  @media (max-width: 760px) {
+    .st-skel { grid-column: 1 / -1; }
+  }
+  @media (max-width: 640px) {
+    .st-grid { grid-template-columns: minmax(0, 1fr); }
+    .st-show { padding-bottom: 0; }
+    .st-actions { justify-content: stretch; }
+    .st-actions .adm-btn { flex: 1 1 auto; }
+  }
+}

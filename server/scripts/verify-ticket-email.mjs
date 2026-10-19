@@ -39,8 +39,16 @@ try {
     }
     if (statement.trim()) throw new Error('Unparsed schema statement');
     console.log(`Disposable schema ready: ${database}`);
-    for (const script of ['seed.ts', 'seed-workflows.ts', 'verify-workflows.ts']) await run('node_modules/tsx/dist/cli.mjs', [`src/database/${script}`]);
-    await run('node_modules/vitest/vitest.mjs', ['run']);
+    const tsx = (script) => run('node_modules/tsx/dist/cli.mjs', [`src/database/${script}`]);
+    await tsx('seed.ts');
+    // TicketBox has a single venue and the integration suites create their own Event that is
+    // ongoing right now, so they cannot share a database with the QA workflow fixtures (which
+    // contain an ongoing Event too). Run the suites that build their own Events first.
+    await run('node_modules/vitest/vitest.mjs', ['run', '--exclude', 'tests/ticket-credential.integration.test.ts', '--exclude', 'tests/report.integration.test.ts']);
+    await tsx('seed-workflows.ts');
+    // These suites read the QA fixtures (tickets, orders, scans), so they need seed-workflows to have run.
+    await run('node_modules/vitest/vitest.mjs', ['run', 'tests/ticket-credential.integration.test.ts', 'tests/report.integration.test.ts']);
+    await tsx('verify-workflows.ts');
 } finally {
     if (created) { await connection.query(`DROP DATABASE \`${database}\``); console.log(`Removed disposable database: ${database}`); }
     await connection.end();

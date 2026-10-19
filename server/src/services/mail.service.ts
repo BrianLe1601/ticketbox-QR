@@ -46,6 +46,17 @@ export function sendEventCancellationEmail(input:{recipient:string;buyerName:str
     });
 }
 
+/** Admin password reset (Bửu, auth). The link carries the token in its #fragment only. */
+export function sendPasswordResetEmail(input: { recipient: string; fullName: string; link: string; expiresAt: Date; ttlMinutes: number }) {
+    const until = input.expiresAt.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
+    return createTransporter().sendMail({
+        from: `"${env.MAIL_FROM_NAME.replaceAll('"', '')}" <${env.MAIL_USER}>`, to: input.recipient,
+        subject: 'Đặt lại mật khẩu Quản trị - TicketBox QR',
+        html: `<h2>Đặt lại mật khẩu</h2><p>Xin chào ${escapeHtml(input.fullName)},</p><p>Có yêu cầu đặt lại mật khẩu cho tài khoản Quản trị <b>${escapeHtml(input.recipient)}</b>. Bấm nút dưới đây để chọn mật khẩu mới:</p><p><a href="${escapeHtml(input.link)}" style="display:inline-block;padding:12px 22px;border-radius:999px;background:#287a64;color:#ffffff;font-weight:bold;text-decoration:none">Đặt lại mật khẩu</a></p><p>Liên kết dùng được <b>một lần</b> trong ${input.ttlMinutes} phút (đến ${escapeHtml(until)}). Sau khi đổi, mọi phiên đăng nhập của tài khoản sẽ bị đăng xuất.</p><p>Nếu bạn không yêu cầu, hãy bỏ qua email này: mật khẩu hiện tại vẫn giữ nguyên. Không chuyển tiếp email này cho người khác.</p>`,
+        text: `Đặt lại mật khẩu Quản trị TicketBox QR cho ${input.recipient}.\nMở liên kết (dùng một lần, hết hạn sau ${input.ttlMinutes} phút): ${input.link}\nNếu bạn không yêu cầu, hãy bỏ qua email này.`,
+    });
+}
+
 function escapeHtml(value: string) {
     return value.replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[char] ?? char);
 }

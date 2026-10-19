@@ -12,7 +12,7 @@ vi.mock("../src/middlewares/authenticate.js", () => ({
 }));
 const service = vi.hoisted(() => ({
   login: vi.fn(), loginWithGoogle: vi.fn(), getCurrentUser: vi.fn(), refreshSession: vi.fn(), logoutSession: vi.fn(),
-  updateAdminProfile: vi.fn(), changeAdminPassword: vi.fn(),
+  updateAdminProfile: vi.fn(), changeAdminPassword: vi.fn(), requestPasswordReset: vi.fn(), confirmPasswordReset: vi.fn(),
 }));
 vi.mock("../src/modules/auth/auth.service.js", () => service);
 import { authRouter } from "../src/modules/auth/auth.routes.js";

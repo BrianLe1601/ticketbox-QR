@@ -57,7 +57,7 @@ server/
 │   ├── realtime/event-status.gateway.ts
 │   ├── types/express.d.ts
 │   └── utils/
-├── tests/                 29 file *.test.ts; trong đó 2 integration MySQL
+├── tests/                 41 file *.test.ts; trong đó 4 integration MySQL
 ├── scripts/verify-ticket-email.mjs
 ├── .env.example
 ├── package.json
@@ -97,7 +97,6 @@ server/
 | `validate.ts` | Kiểm tra body/query/params bằng Zod trước controller |
 | `require-staff-schema.ts` | Kiểm tra schema có cột Google Staff/approval; báo 503 nếu DB cũ chưa tương thích |
 | `error-handler.ts` | Chuẩn hóa lỗi HTTP, Zod/JWT/DB; file này cũng xuất notFoundHandler đang dùng bởi app.ts |
-| `not-found.ts` | Handler 404 riêng có trong cây source; app.ts hiện dùng bản từ error-handler.ts |
 
 ### Mẫu tổ chức trong module
 
@@ -165,39 +164,38 @@ Jobs chạy trong server process, queue là các dòng MySQL `email_logs`. Chưa
 ```text
 client/
 ├── index.html
-├── public/                  favicon.svg, icons.svg
+├── public/                  favicon.svg
 ├── src/
 │   ├── main.tsx             Khởi động React
-│   ├── App.tsx              AuthProvider + AppRoutes
+│   ├── App.tsx              AuthProvider + RouterProvider(router)
 │   ├── routes/              Routing và bảo vệ role
 │   ├── context/             AuthContext
 │   ├── layouts/             Public/Admin/Staff
 │   ├── pages/               Trang nghiệp vụ
 │   ├── components/          Thành phần tái sử dụng
 │   ├── services/            API và tích hợp trình duyệt
-│   ├── hooks/               reCAPTCHA và email cooldown
+│   ├── hooks/               reCAPTCHA, email cooldown, focus dialog Admin
 │   ├── types/               Kiểu TypeScript
 │   ├── constants/           Hằng số Event
-│   ├── lib/                 Tiện ích
-│   ├── styles/              CSS và theme
-│   └── assets/              Ảnh nền và hình minh họa
-├── tests/recaptcha.test.cjs
+│   ├── lib/                 Tiện ích, theme, font Admin
+│   ├── styles/              Token, CSS Admin/Staff/Login và theme Public
+│   └── assets/brand/        Logo và mascot TicketBox
+├── tests/*.test.cjs         Test node --test (reCAPTCHA, report service, Admin UI, theme, Staff scan…)
 ├── .env.example
 ├── package.json / package-lock.json
 ├── vite.config.ts
 ├── eslint.config.js
 ├── tsconfig.json / tsconfig.app.json / tsconfig.node.json
 ├── postcss.config.mjs
-├── pnpm-workspace.yaml
-└── default_shadcn_theme.css
+└── pnpm-workspace.yaml
 ```
 
 | File | Vai trò |
 |---|---|
 | `index.html` | HTML host có root cho React; Vite dùng làm entry |
-| `src/main.tsx` | createRoot, StrictMode, BrowserRouter, import CSS và bắt đầu nạp reCAPTCHA |
+| `src/main.tsx` | createRoot, StrictMode, import CSS; reCAPTCHA chỉ được nạp khi cần (`useRecaptcha` ở Checkout OTP và Tìm lại vé) |
 | `src/App.tsx` | Bọc route bằng AuthProvider |
-| `src/routes/AppRoutes.tsx` | Khai báo các đường dẫn và lazy load page/layout qua Suspense |
+| `src/routes/router.tsx` | Data router (`createBrowserRouter`): khai báo các đường dẫn, guard theo vai trò và `lazy` cấp route cho layout/trang; `RouteFallbacks.tsx` (màn tải đầu, 404, lỗi tải chunk), `page-loaders.ts` (chunk Admin/Staff được tải sẵn) |
 | `src/routes/ProtectedRoute.tsx` | Chờ khôi phục auth, kiểm tra role trước khi render route Admin/Staff |
 | `src/context/AuthContext.tsx` | User/token/loading và login/logout/Google login; khôi phục refresh session khi app mở |
 | `src/layouts/PublicLayout.tsx` | Khung Header/Footer và Outlet các trang Public |
@@ -226,11 +224,15 @@ client/
 | `admin/AdminTicketTypesPage.tsx` | `/admin/ticket-types` | Chọn Event, quản lý hạng vé |
 | `admin/AdminStaffPage.tsx` | `/admin/staff` | Duyệt/quản lý Staff, phân công |
 | `admin/AdminOrdersPage.tsx` | `/admin/orders` | Danh sách/chi tiết Order, hủy pending, Refund, email |
-| `admin/AdminOperationsPage.tsx` | `/admin/checkins`, `/admin/reports` | Hai chế độ Logs và Reports/Excel |
-| `staff/StaffHomePage.tsx` | `/staff` | Chọn Event, Scanner/nhập tay, kết quả và recent logs |
-| `admin/AdminPlaceholderPage.tsx` | Chưa gắn route hiện tại | Trang mẫu còn trong source; không tính là module nghiệp vụ đang hoạt động |
+| `admin/AdminCheckinLogsPage.tsx` | `/admin/checkins` | Nhật ký quét + Excel; mặc định tất cả sự kiện; thành phần ở `components/admin/checkins/` |
+| `admin/AdminReportsPage.tsx` | `/admin/reports` | Báo cáo + Excel; mặc định tất cả sự kiện; ô chọn sự kiện dùng chung `components/admin/EventScopeSelect.tsx` |
+| `admin/AdminSettingsPage.tsx` | `/admin/settings` | Địa điểm, phạm vi danh mục, hồ sơ/mật khẩu Admin, font và theme |
+| `staff/StaffOverviewPage.tsx` | `/staff` | Tổng quan ca trực và phân công của Staff |
+| `staff/StaffCheckinPage.tsx` | `/staff/check-in` | Chọn Event đang mở cổng, Scanner/nhập tay, kết quả bằng chữ và recent logs |
+| `staff/StaffEventsPage.tsx` | `/staff/events` | Phân công sắp tới/đang chuẩn bị/lịch sử |
+| `staff/StaffHistoryPage.tsx` | `/staff/history` | Lịch sử lượt quét của Staff |
 
-AppRoutes không khai báo catch-all `*` hiện tại; không nên mô tả đã có trang 404 riêng chỉ vì Backend có handler 404.
+Đường dẫn không khớp route nào hiện trang "Không tìm thấy trang" (`RouteError` của router, có nút về trang chủ); không có route catch-all `*` riêng.
 
 ### Components
 
@@ -251,12 +253,9 @@ AppRoutes không khai báo catch-all `*` hiện tại; không nên mô tả đã
 | `shared/EmptyState.tsx` | Trạng thái không có dữ liệu |
 | `shared/NativeSelect.tsx` | Select tái sử dụng |
 | `shared/StatusBadge.tsx` | Hiển thị trạng thái |
-| `figma/ImageWithFallback.tsx` | Component ảnh dự phòng còn trong source; chưa thấy đi từ entry hiện tại |
-| `ui/` | Bộ component mẫu theo kiểu shadcn/Radix; xem phân loại bên dưới |
+| `ui/` | Primitive kiểu shadcn/Radix còn được dùng: `dialog`, `alert-dialog`, `button`, `utils.ts` (từ `AdminCategoriesPage.tsx`) |
 
-`components/ui` chứa: accordion, alert, alert-dialog, aspect-ratio, avatar, badge, breadcrumb, button, card, carousel, chart, checkbox, collapsible, command, context-menu, dialog, drawer, dropdown-menu, form, hover-card, input, input-otp, label, menubar, navigation-menu, pagination, popover, progress, radio-group, resizable, scroll-area, select, separator, sheet, sidebar, skeleton, slider, sonner, switch, table, tabs, textarea, toggle, toggle-group, tooltip; kèm `utils.ts` và `use-mobile.ts`.
-
-Các tên mô tả đúng loại widget: chart là vỏ biểu đồ Recharts, carousel là thanh ảnh Embla, command là hộp lệnh cmdk, drawer là ngăn kéo Vaul, sonner là toast, form là tích hợp React Hook Form. Tuy nhiên kiểm tra đồ thị import từ `main.tsx` gồm import động **chưa tìm thấy đường sử dụng đến components/ui**. Các màn hình đang dùng nhiều HTML/CSS và component riêng. Sự tồn tại của template không chứng minh chức năng đó xuất hiện trong ứng dụng.
+Ngày 17/10/2026 đã gỡ các mẫu shadcn không trang nào import (accordion, carousel, chart, command, drawer, sonner, tooltip…), `figma/ImageWithFallback.tsx`, `styles/globals.css`, `client/default_shadcn_theme.css`, xác định bằng đồ thị import từ `main.tsx` (gồm cả import động và mọi trang Public). Các package Radix/cmdk/sonner/vaul vẫn còn trong `package.json`. Sự tồn tại của template không chứng minh chức năng đó xuất hiện trong ứng dụng.
 
 ### Services phía client
 
@@ -292,19 +291,24 @@ Form Ticket Retrieval gọi `apiPost` trực tiếp; không có một file `tick
 | `types/order.types.ts` | Buyer, selection, Order và PaymentResult |
 | `constants/eventconstants.ts` | Hằng số phục vụ giao diện Event |
 | `lib/utils.ts` | Tiện ích format/ghép class được code UI sử dụng |
-| `lib/cyber-audio.ts` | Tiện ích âm thanh có sẵn; chưa thấy được import từ entry hiện tại |
-| `src/index.css` | Import styles/index.css và admin-tech.css; thêm phần Tailwind chung |
+| `lib/ticketbox-theme.ts` | `useTheme(scope, accountId)`: Sáng/Tối cho Admin, Staff, Login; lưu theo trình duyệt |
+| `lib/admin-appearance.ts` | Font và cỡ chữ Admin theo tài khoản |
+| `hooks/useDialogFocus.ts` | Giữ và trả focus cho dialog/drawer lồng nhau của Admin |
+| `src/index.css` | Import styles/index.css, token dùng chung, `admin/legacy.css` và `admin/theme.css`; thêm phần Tailwind chung |
 | `styles/index.css` | Nạp fonts, tailwind và theme |
 | `styles/fonts.css` | Nạp Google Fonts: Manrope, Be Vietnam Pro và JetBrains Mono |
 | `styles/tailwind.css` | Nạp Tailwind và tw-animate-css |
 | `styles/theme.css` | Biến theme, màu sắc, token giao diện |
-| `styles/admin-tech.css` | Giao diện Admin và các lớp trang theo chủ đề hiện tại |
-| `styles/admin-categories.css` | CSS riêng màn Danh mục, import ở page |
-| `App.css`, `styles/globals.css`, `default_shadcn_theme.css` | File CSS tồn tại; không nằm trong chuỗi import chính đã đọc, không mặc định mọi file đều được nạp |
-| `assets/` | hero, SVG mẫu, ảnh nền login/public/admin/staff; chỉ là tài nguyên giao diện |
+| `styles/ticketbox-tokens.css` | Token `--tb-*` sáng/tối dùng chung cho Admin, Staff, Login (không dùng cho Public) |
+| `styles/admin/legacy.css` | Bố cục các trang Admin cũ (chữ tối thiểu 12px); phần còn lại được `theme.css` ghi đè |
+| `styles/admin/theme.css`, `foundations.css` | Lớp theme sáng/tối cho Admin và thành phần dùng lại; ánh xạ bảng màu Tailwind sang token |
+| `styles/admin/{categories,dashboard,events,operations,settings}.css` | CSS riêng từng trang, import ở page. Trang Đơn hàng dùng style trong `legacy.css`/`theme.css` |
+| `styles/staff/{theme,portal}.css` | Theme và bố cục Staff (ánh xạ bảng màu Tailwind sang token, cỡ chữ cho dùng ngoài trời) |
+| `styles/auth/login.css` | Trang Đăng nhập |
+| `assets/brand/` | Logo TicketBox sáng/tối và mascot; ảnh nền trang trí cũ đã gỡ vì không còn được dùng |
 | `public/` | Tài nguyên tĩnh phục vụ trực tiếp; khác assets được import vào bundle |
 
-## 6. Database — 13 bảng và ý nghĩa
+## 6. Database — 14 bảng và ý nghĩa
 
 Nguồn duy nhất: [001_initial_schema.sql](../../database/migrations/001_initial_schema.sql). Dự án dùng SQL trực tiếp, chưa có Prisma/Sequelize/TypeORM.
 
@@ -312,7 +316,8 @@ Nguồn duy nhất: [001_initial_schema.sql](../../database/migrations/001_initi
 |---|---|---|
 | `users` | Admin/Staff, password hash nullable, Google sub, approval/active | Cha của sessions; Staff trong assignments/logs |
 | `auth_sessions` | Refresh session hash, expiry/revocation, metadata | Nhiều session của một user |
-| `categories` | Danh mục, slug, icon, active, sort order | Một danh mục có nhiều Events |
+| `categories` | Danh mục, slug, icon, `kind` (thể loại âm nhạc/khác), active, sort order | Một danh mục có nhiều Events |
+| `platform_settings` | Một dòng: địa điểm duy nhất, phạm vi danh mục cho Event mới, người sửa; khóa chống trùng lịch | Event sao chép địa điểm từ đây khi tạo; không có khóa ngoại tới `events` |
 | `events` | Nội dung/lịch/địa điểm/capacity/lifecycle/visibility/publish/hủy | Thuộc category; có tiers, orders, staff assignments |
 | `event_staff` | Ai được gán Event, ai gán, lúc gán/thu hồi | Nối users và events, lưu lịch sử phân công |
 | `ticket_types` | Hạng, giá, capacity/reserved/sold/max-per-order/lịch bán | Thuộc Event; được Order Items tham chiếu |
@@ -339,7 +344,7 @@ Tất cả đường dẫn dưới đây có tiền tố `/api` trừ WebSocket.
 | Nhóm/quyền | Endpoint và tác dụng |
 |---|---|
 | Hệ thống | `GET /health`: tình trạng API/DB; `GET /admin/test`: thử RBAC Admin |
-| Auth | `POST /auth/login`, `/auth/google`, `/auth/refresh`, `/auth/logout`; `GET /auth/me` |
+| Auth | `POST /auth/login`, `/auth/google`, `/auth/refresh`, `/auth/logout`, `/auth/password-reset/request`, `/auth/password-reset/confirm`; `GET /auth/me` |
 | Danh mục Public | `GET /categories` |
 | Danh mục Admin | `GET/POST /admin/categories`; `PATCH/DELETE /admin/categories/:id` |
 | Event Public | `GET /events` (query `time=all\|week\|month` tùy chọn; lọc 7/30 ngày từ thời điểm hiện tại trước phân trang, `meta.total` cùng bộ lọc), `GET /events/:id` |
@@ -352,8 +357,9 @@ Tất cả đường dẫn dưới đây có tiền tố `/api` trừ WebSocket.
 | Tìm lại vé Public | `POST /tickets/retrieval` |
 | Orders Admin | `GET /admin/orders`, `/stats`, `/filter-options`, `/:id`; `POST /:id/cancel`; `PATCH /:id/refund`; `POST /:id/resend-email`; `POST /:id/email-logs/:logId/retry` dưới `/admin/orders` |
 | Vận hành Staff | `GET /staff/events`; `GET/POST /staff/events/:eventId/checkins` |
-| Reports Admin | `GET /admin/reports/events`, `GET /admin/reports`, `GET /admin/reports/export` |
-| Logs Admin | `GET /admin/checkins`, `GET /admin/checkins/export` |
+| Reports Admin | `GET /admin/reports/events` (phân trang), `GET /admin/reports`, `GET /admin/reports/export`; `eventId` và `snapshotId` tùy chọn |
+| Logs Admin | `GET /admin/checkins`, `GET /admin/checkins/export`; `eventId` và `snapshotId` tùy chọn |
+| Cài đặt nền tảng Admin | `GET /admin/platform-settings`; `PUT /admin/platform-settings/venue`; `PUT /admin/platform-settings/category-scope` |
 | Realtime | WebSocket `/ws/events` |
 
 Checkout router hiện được mount cả tại `/api/checkout` và `/api`; vì vậy có thêm đường alias như `/api/orders`. Đó là hai đường vào cùng implementation, không phải hai module Order độc lập. Lookup GET chứa token đã được thay bằng POST trong working tree.

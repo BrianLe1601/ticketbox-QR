@@ -243,11 +243,11 @@ Nguồn: [Admin Orders service](../../server/src/modules/orders/admin-orders.ser
 
 Các từ chối nghiệp vụ được lưu log; lỗi trước khi vào nghiệp vụ như thiếu token, sai role hoặc payload không hợp lệ đi qua middleware nên không đồng nghĩa mọi HTTP error đều có checkin_logs. Log lưu hash/mã che, không lưu QR thô. Giới hạn quét hiện là 180 request/phút theo Staff.
 
-Nguồn: [Scanner](../../client/src/components/checkin/CameraScanner.tsx), [Staff page](../../client/src/pages/staff/StaffHomePage.tsx), [Check-in service](../../server/src/modules/checkins/checkin.service.ts).
+Nguồn: [Scanner](../../client/src/components/checkin/CameraScanner.tsx), [Staff check-in page](../../client/src/pages/staff/StaffCheckinPage.tsx), [Event scanner](../../client/src/components/checkin/EventScanner.tsx), [Check-in service](../../server/src/modules/checkins/checkin.service.ts).
 
 ## 11. Khôi — Logs, Reports và Excel
 
-Admin dùng `/admin/checkins` và `/admin/reports`; cả hai cùng dùng `AdminOperationsPage` với hai chế độ.
+Admin dùng `/admin/checkins` (`AdminCheckinLogsPage`) và `/admin/reports` (`AdminReportsPage`); hai trang dùng chung ô chọn sự kiện và bộ lọc thời gian, bộ lọc nằm trên URL.
 
 Logs lọc Event, từ ngày/đến ngày, Staff và mã kết quả; phân trang 20 dòng ở UI; xuất tối đa 10.000 dòng theo bộ lọc. API xuất giới hạn 5 request/phút theo tài khoản Admin.
 
@@ -269,7 +269,7 @@ Ví dụ kỳ này chỉ có khoản hoàn cho đơn mua từ kỳ trước thì
 
 ExcelJS tạo `.xlsx` với sheet bộ lọc và sheet dữ liệu, tiêu đề, định dạng số tiền, bộ lọc và cố định hàng đầu. Đây là xuất số liệu dạng bảng; code Reports hiện không render biểu đồ Recharts.
 
-Nguồn: [Report repository](../../server/src/modules/reports/report.repository.ts), [Excel export](../../server/src/modules/reports/report.export.ts), [màn hình Reports/Logs](../../client/src/pages/admin/AdminOperationsPage.tsx).
+Nguồn: [Report repository](../../server/src/modules/reports/report.repository.ts), [Excel export](../../server/src/modules/reports/report.export.ts), [màn hình Báo cáo](../../client/src/pages/admin/AdminReportsPage.tsx), [màn hình Nhật ký](../../client/src/pages/admin/AdminCheckinLogsPage.tsx).
 
 ## 12. Hủy Event — điểm giao giữa ba thành viên
 
@@ -344,4 +344,4 @@ Kiểm chứng bổ sung ngày 12/10/2026 cho Public (mục 2, 3, 5, 6): server 
 - [03 — Công cụ, toàn bộ package trực tiếp và mục đích](03-cong-cu-va-thu-vien.md).
 - [04 — Danh mục package đã khóa, gồm phụ thuộc gián tiếp](04-package-lock-inventory.md).
 
-Thứ tự đọc code dễ nhất: `client/src/routes/AppRoutes.tsx` → trang mình phụ trách → `client/src/services` → route Backend tương ứng → controller → service → repository → bảng/trigger trong schema → test của module.
+Thứ tự đọc code dễ nhất: `client/src/routes/router.tsx` → trang mình phụ trách → `client/src/services` → route Backend tương ứng → controller → service → repository → bảng/trigger trong schema → test của module.

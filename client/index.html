@@ -1,10 +1,25 @@
 <!doctype html>
-<html lang="en">
+<html lang="vi">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>client</title>
+    <title>TicketBox</title>
+    <script>
+      // Admin, Staff and Login: paint the stored dark theme before React loads, so there is no light
+      // flash. Mirrors lib/ticketbox-theme.ts (bootKey; auto = dark 18:00-05:59 Vietnam time). Never throws.
+      try {
+        var p = location.pathname;
+        var key = p.indexOf("/admin") === 0 ? "ticketbox:theme:admin:last"
+          : p.indexOf("/staff") === 0 ? "ticketbox:theme:staff:last"
+          : p === "/login" || p === "/reset-password" ? "ticketbox:theme:login" : null;
+        if (key) {
+          var pref = localStorage.getItem(key);
+          var hour = (new Date().getUTCHours() + 7) % 24;
+          if (pref === "dark" || (pref === "auto" && (hour < 6 || hour >= 18))) document.documentElement.dataset.tbBoot = "dark";
+        }
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

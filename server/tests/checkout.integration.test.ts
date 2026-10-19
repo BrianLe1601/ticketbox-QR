@@ -74,7 +74,12 @@ function makeBody(testEvent: TestEvent, quantity = 1): CreateOrderBody {
     };
 }
 
+// TicketBox has one venue, so fixture Events may not share a time slot: each one
+// takes the next calendar day (after the two-day lead) instead of overlapping.
+let nextEventDay = 2;
+
 async function createSellableEvent(label: string, capacity: number): Promise<TestEvent> {
+    const eventDay = nextEventDay++;
     const slug = `${runId}-${label}`.replace(/[^a-z0-9-]/g, '-');
     const [eventResult] = await pool.query<ResultSetHeader>(
         `INSERT INTO events
@@ -84,12 +89,12 @@ async function createSellableEvent(label: string, capacity: number): Promise<Tes
              checkin_start_at, checkin_end_at, created_by)
          VALUES (?, ?, 'Week 4 integration fixture', ?, 'Test Venue', '1 Test Street', 'HCM',
                  ?, NULL, 'Week 4 fixture',
-                 DATE_ADD(DATE_ADD(CURRENT_DATE(), INTERVAL 2 DAY), INTERVAL 18 HOUR),
-                 DATE_ADD(DATE_ADD(CURRENT_DATE(), INTERVAL 2 DAY), INTERVAL 22 HOUR),
+                 DATE_ADD(DATE_ADD(CURRENT_DATE(), INTERVAL ${eventDay} DAY), INTERVAL 18 HOUR),
+                 DATE_ADD(DATE_ADD(CURRENT_DATE(), INTERVAL ${eventDay} DAY), INTERVAL 22 HOUR),
                  DATE_SUB(NOW(3), INTERVAL 1 DAY),
-                 DATE_ADD(DATE_ADD(CURRENT_DATE(), INTERVAL 2 DAY), INTERVAL 17 HOUR),
-                 DATE_ADD(DATE_ADD(CURRENT_DATE(), INTERVAL 2 DAY), INTERVAL 16 HOUR),
-                 DATE_ADD(DATE_ADD(CURRENT_DATE(), INTERVAL 2 DAY), INTERVAL 22 HOUR), ?)`,
+                 DATE_ADD(DATE_ADD(CURRENT_DATE(), INTERVAL ${eventDay} DAY), INTERVAL 17 HOUR),
+                 DATE_ADD(DATE_ADD(CURRENT_DATE(), INTERVAL ${eventDay} DAY), INTERVAL 16 HOUR),
+                 DATE_ADD(DATE_ADD(CURRENT_DATE(), INTERVAL ${eventDay} DAY), INTERVAL 22 HOUR), ?)`,
         [`Week 4 ${label}`, slug, categoryId, capacity, adminId]
     );
     const eventId = eventResult.insertId;
@@ -348,11 +353,13 @@ describe.sequential('Week 4 checkout safety integration', () => {
 
     it('preserves the original QR through enqueue, SMTP failure, retry, check-in and event cancellation', async () => {
         const fixture = await createSellableEvent('original-qr', 5);
+        // Sales stay open until the Event ends (23:59:59), so the test passes at any time of day;
+        // a 22:00 close made it fail with EVENT_SALES_CLOSED when run between 22:00 and midnight.
         await pool.query(
             `UPDATE events
              SET start_time=DATE_ADD(CURRENT_DATE(), INTERVAL 2 HOUR),
                  end_time=DATE_SUB(DATE_ADD(CURRENT_DATE(), INTERVAL 1 DAY), INTERVAL 1 SECOND),
-                 sales_end_at=DATE_SUB(DATE_ADD(CURRENT_DATE(), INTERVAL 1 DAY), INTERVAL 2 HOUR),
+                 sales_end_at=DATE_SUB(DATE_ADD(CURRENT_DATE(), INTERVAL 1 DAY), INTERVAL 1 SECOND),
                  checkin_start_at=CURRENT_DATE(),
                  checkin_end_at=DATE_SUB(DATE_ADD(CURRENT_DATE(), INTERVAL 1 DAY), INTERVAL 1 SECOND),
                  status=IF(NOW(3) >= DATE_ADD(CURRENT_DATE(), INTERVAL 2 HOUR), 'ongoing', 'published')
@@ -406,7 +413,9 @@ describe.sequential('Week 4 checkout safety integration', () => {
         const cancelled = await readTickets();
         expect(cancelled.every(ticket => ticket.status === 'cancelled')).toBe(true);
         expect(cancelled.map(ticket => ticket.qr_token_hash)).toEqual(original.map(ticket => ticket.qr_token_hash));
-        expect((await checkIn(fixture.eventId, staffId, `ticketbox:${originalToken}`)).code).toBe('EVENT_NOT_AVAILABLE');
+        // Cancellation revokes every active assignment in the same transaction (see setEventCancelled), so the
+        // gate refuses on authority before it even looks at the Event; either way the ticket is never admitted.
+        expect((await checkIn(fixture.eventId, staffId, `ticketbox:${originalToken}`)).code).toBe('STAFF_NOT_ASSIGNED');
     });
 
     it('recovers expired leases and rejects completion from an obsolete attempt', async () => {

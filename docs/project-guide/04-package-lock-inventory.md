@@ -1,10 +1,10 @@
 # TicketBoxQR — Kiểm kê toàn bộ package-lock
 
-Snapshot ngày 27/09/2026. Dữ liệu đọc từ client/package-lock.json và server/package-lock.json. Mỗi dòng là một vị trí package trong lockfile; có thể trùng tên ở nhiều vị trí/bản. Package optional theo OS/CPU có thể chưa được cài trên máy. Đây không phải kết quả npm ls hoặc danh mục chỉ các package đi vào bundle.
+Snapshot: phần client cập nhật ngày 19/10/2026 (sau khi gỡ 27 gói mẫu shadcn không dùng), phần server ngày 27/09/2026. Dữ liệu đọc từ client/package-lock.json và server/package-lock.json. Mỗi dòng là một vị trí package trong lockfile; có thể trùng tên ở nhiều vị trí/bản. Package optional theo OS/CPU có thể chưa được cài trên máy. Đây không phải kết quả npm ls hoặc danh mục chỉ các package đi vào bundle.
 
 Mục đích của các dependency trực tiếp được giải thích trong [tài liệu 03](03-cong-cu-va-thu-vien.md). Phụ thuộc gián tiếp là do thư viện/build tool kéo theo; lockfile lưu cạnh dependencies, integrity và URL phân phối đầy đủ.
 
-## client: 360 vị trí
+## client: 311 vị trí
 
 | Đường dẫn trong lockfile | Version | Nhãn lockfile |
 |---|---|---|
@@ -25,6 +25,10 @@ Mục đích của các dependency trực tiếp được giải thích trong [t
 | `node_modules/@babel/template` | 7.29.7 | gián tiếp/lồng, dev |
 | `node_modules/@babel/traverse` | 7.29.8 | gián tiếp/lồng, dev |
 | `node_modules/@babel/types` | 7.29.8 | gián tiếp/lồng, dev |
+| `node_modules/@dnd-kit/accessibility` | 3.1.1 | gián tiếp/lồng |
+| `node_modules/@dnd-kit/core` | 6.3.1 | trực tiếp |
+| `node_modules/@dnd-kit/sortable` | 10.0.0 | trực tiếp |
+| `node_modules/@dnd-kit/utilities` | 3.2.2 | gián tiếp/lồng |
 | `node_modules/@eslint-community/eslint-utils` | 4.10.1 | gián tiếp/lồng, dev |
 | `node_modules/@eslint-community/eslint-utils/node_modules/eslint-visitor-keys` | 3.4.3 | gián tiếp/lồng, dev |
 | `node_modules/@eslint-community/regexpp` | 4.12.2 | gián tiếp/lồng, dev |
@@ -50,48 +54,29 @@ Mục đích của các dependency trực tiếp được giải thích trong [t
 | `node_modules/@jridgewell/sourcemap-codec` | 1.5.5 | gián tiếp/lồng |
 | `node_modules/@jridgewell/trace-mapping` | 0.3.31 | gián tiếp/lồng |
 | `node_modules/@oxc-project/types` | 0.144.0 | gián tiếp/lồng |
-| `node_modules/@radix-ui/number` | 1.1.0 | gián tiếp/lồng |
 | `node_modules/@radix-ui/primitive` | 1.1.1 | gián tiếp/lồng |
-| `node_modules/@radix-ui/react-accordion` | 1.2.3 | trực tiếp |
 | `node_modules/@radix-ui/react-alert-dialog` | 1.1.6 | trực tiếp |
 | `node_modules/@radix-ui/react-arrow` | 1.1.2 | gián tiếp/lồng |
-| `node_modules/@radix-ui/react-aspect-ratio` | 1.1.2 | trực tiếp |
-| `node_modules/@radix-ui/react-avatar` | 1.1.3 | trực tiếp |
-| `node_modules/@radix-ui/react-checkbox` | 1.1.4 | trực tiếp |
-| `node_modules/@radix-ui/react-collapsible` | 1.1.3 | trực tiếp |
 | `node_modules/@radix-ui/react-collection` | 1.1.2 | gián tiếp/lồng |
 | `node_modules/@radix-ui/react-compose-refs` | 1.1.1 | gián tiếp/lồng |
 | `node_modules/@radix-ui/react-context` | 1.1.1 | gián tiếp/lồng |
-| `node_modules/@radix-ui/react-context-menu` | 2.2.6 | trực tiếp |
 | `node_modules/@radix-ui/react-dialog` | 1.1.6 | trực tiếp |
 | `node_modules/@radix-ui/react-direction` | 1.1.0 | gián tiếp/lồng |
 | `node_modules/@radix-ui/react-dismissable-layer` | 1.1.5 | gián tiếp/lồng |
 | `node_modules/@radix-ui/react-dropdown-menu` | 2.1.6 | trực tiếp |
 | `node_modules/@radix-ui/react-focus-guards` | 1.1.1 | gián tiếp/lồng |
 | `node_modules/@radix-ui/react-focus-scope` | 1.1.2 | gián tiếp/lồng |
-| `node_modules/@radix-ui/react-hover-card` | 1.1.6 | trực tiếp |
 | `node_modules/@radix-ui/react-id` | 1.1.0 | gián tiếp/lồng |
-| `node_modules/@radix-ui/react-label` | 2.1.2 | trực tiếp |
 | `node_modules/@radix-ui/react-menu` | 2.1.6 | gián tiếp/lồng |
-| `node_modules/@radix-ui/react-menubar` | 1.1.6 | trực tiếp |
-| `node_modules/@radix-ui/react-navigation-menu` | 1.2.5 | trực tiếp |
 | `node_modules/@radix-ui/react-popover` | 1.1.6 | trực tiếp |
 | `node_modules/@radix-ui/react-popper` | 1.2.2 | gián tiếp/lồng |
 | `node_modules/@radix-ui/react-portal` | 1.1.4 | gián tiếp/lồng |
 | `node_modules/@radix-ui/react-presence` | 1.1.2 | gián tiếp/lồng |
 | `node_modules/@radix-ui/react-primitive` | 2.0.2 | gián tiếp/lồng |
-| `node_modules/@radix-ui/react-progress` | 1.1.2 | trực tiếp |
-| `node_modules/@radix-ui/react-radio-group` | 1.2.3 | trực tiếp |
 | `node_modules/@radix-ui/react-roving-focus` | 1.1.2 | gián tiếp/lồng |
-| `node_modules/@radix-ui/react-scroll-area` | 1.2.3 | trực tiếp |
-| `node_modules/@radix-ui/react-select` | 2.1.6 | trực tiếp |
-| `node_modules/@radix-ui/react-separator` | 1.1.2 | trực tiếp |
-| `node_modules/@radix-ui/react-slider` | 1.2.3 | trực tiếp |
-| `node_modules/@radix-ui/react-slot` | 1.1.2 | trực tiếp |
+| `node_modules/@radix-ui/react-slot` | 1.1.2 | gián tiếp/lồng |
 | `node_modules/@radix-ui/react-switch` | 1.1.3 | trực tiếp |
 | `node_modules/@radix-ui/react-tabs` | 1.1.3 | trực tiếp |
-| `node_modules/@radix-ui/react-toggle` | 1.1.2 | trực tiếp |
-| `node_modules/@radix-ui/react-toggle-group` | 1.1.2 | trực tiếp |
 | `node_modules/@radix-ui/react-tooltip` | 1.1.8 | trực tiếp |
 | `node_modules/@radix-ui/react-use-callback-ref` | 1.1.0 | gián tiếp/lồng |
 | `node_modules/@radix-ui/react-use-controllable-state` | 1.1.0 | gián tiếp/lồng |
@@ -157,9 +142,9 @@ Mục đích của các dependency trực tiếp được giải thích trong [t
 | `node_modules/@types/esrecurse` | 4.3.1 | gián tiếp/lồng, dev |
 | `node_modules/@types/estree` | 1.0.9 | gián tiếp/lồng, dev |
 | `node_modules/@types/json-schema` | 7.0.15 | gián tiếp/lồng, dev |
-| `node_modules/@types/node` | 24.13.3 | trực tiếp |
-| `node_modules/@types/react` | 19.2.18 | trực tiếp |
-| `node_modules/@types/react-dom` | 19.2.4 | trực tiếp |
+| `node_modules/@types/node` | 24.13.3 | trực tiếp, optional |
+| `node_modules/@types/react` | 19.2.18 | trực tiếp, optional |
+| `node_modules/@types/react-dom` | 19.2.4 | trực tiếp, optional |
 | `node_modules/@typescript-eslint/eslint-plugin` | 8.67.0 | gián tiếp/lồng, dev |
 | `node_modules/@typescript-eslint/eslint-plugin/node_modules/ignore` | 7.0.6 | gián tiếp/lồng, dev |
 | `node_modules/@typescript-eslint/parser` | 8.67.0 | gián tiếp/lồng, dev |
@@ -175,20 +160,14 @@ Mục đích của các dependency trực tiếp được giải thích trong [t
 | `node_modules/@vitejs/plugin-react` | 6.0.5 | trực tiếp, dev |
 | `node_modules/acorn` | 8.18.0 | gián tiếp/lồng, dev |
 | `node_modules/acorn-jsx` | 5.3.2 | gián tiếp/lồng, dev |
-| `node_modules/agent-base` | 6.0.2 | gián tiếp/lồng |
 | `node_modules/aria-hidden` | 1.2.6 | gián tiếp/lồng |
-| `node_modules/asynckit` | 0.4.0 | gián tiếp/lồng |
-| `node_modules/axios` | 1.19.0 | trực tiếp |
 | `node_modules/balanced-match` | 4.0.4 | gián tiếp/lồng, dev |
 | `node_modules/baseline-browser-mapping` | 2.11.14 | gián tiếp/lồng, dev |
 | `node_modules/brace-expansion` | 5.0.9 | gián tiếp/lồng, dev |
 | `node_modules/browserslist` | 4.28.8 | gián tiếp/lồng, dev |
-| `node_modules/call-bind-apply-helpers` | 1.0.2 | gián tiếp/lồng |
 | `node_modules/caniuse-lite` | 1.0.30001809 | gián tiếp/lồng, dev |
-| `node_modules/class-variance-authority` | 0.7.1 | trực tiếp |
 | `node_modules/clsx` | 2.1.1 | trực tiếp |
 | `node_modules/cmdk` | 1.1.1 | trực tiếp |
-| `node_modules/combined-stream` | 1.0.8 | gián tiếp/lồng |
 | `node_modules/convert-source-map` | 2.0.0 | gián tiếp/lồng, dev |
 | `node_modules/cookie` | 1.1.1 | gián tiếp/lồng |
 | `node_modules/cross-spawn` | 7.0.6 | gián tiếp/lồng, dev |
@@ -204,24 +183,14 @@ Mục đích của các dependency trực tiếp được giải thích trong [t
 | `node_modules/d3-time` | 3.1.0 | gián tiếp/lồng |
 | `node_modules/d3-time-format` | 4.1.0 | gián tiếp/lồng |
 | `node_modules/d3-timer` | 3.0.1 | gián tiếp/lồng |
-| `node_modules/date-fns` | 3.6.0 | trực tiếp |
-| `node_modules/debug` | 4.4.3 | gián tiếp/lồng |
+| `node_modules/debug` | 4.4.3 | gián tiếp/lồng, dev |
 | `node_modules/decimal.js-light` | 2.5.1 | gián tiếp/lồng |
 | `node_modules/deep-is` | 0.1.4 | gián tiếp/lồng, dev |
-| `node_modules/delayed-stream` | 1.0.0 | gián tiếp/lồng |
 | `node_modules/detect-libc` | 2.1.2 | gián tiếp/lồng |
 | `node_modules/detect-node-es` | 1.1.0 | gián tiếp/lồng |
 | `node_modules/dom-helpers` | 5.2.1 | gián tiếp/lồng |
-| `node_modules/dunder-proto` | 1.0.1 | gián tiếp/lồng |
 | `node_modules/electron-to-chromium` | 1.5.406 | gián tiếp/lồng, dev |
-| `node_modules/embla-carousel` | 8.6.0 | gián tiếp/lồng |
-| `node_modules/embla-carousel-react` | 8.6.0 | trực tiếp |
-| `node_modules/embla-carousel-reactive-utils` | 8.6.0 | gián tiếp/lồng |
 | `node_modules/enhanced-resolve` | 5.24.5 | gián tiếp/lồng |
-| `node_modules/es-define-property` | 1.0.1 | gián tiếp/lồng |
-| `node_modules/es-errors` | 1.3.0 | gián tiếp/lồng |
-| `node_modules/es-object-atoms` | 1.1.2 | gián tiếp/lồng |
-| `node_modules/es-set-tostringtag` | 2.1.0 | gián tiếp/lồng |
 | `node_modules/escalade` | 3.2.0 | gián tiếp/lồng, dev |
 | `node_modules/escape-string-regexp` | 4.0.0 | gián tiếp/lồng, dev |
 | `node_modules/eslint` | 10.8.1 | trực tiếp, dev |
@@ -246,27 +215,16 @@ Mục đích của các dependency trực tiếp được giải thích trong [t
 | `node_modules/find-up` | 5.0.0 | gián tiếp/lồng, dev |
 | `node_modules/flat-cache` | 4.0.1 | gián tiếp/lồng, dev |
 | `node_modules/flatted` | 3.4.4 | gián tiếp/lồng, dev |
-| `node_modules/follow-redirects` | 1.16.0 | gián tiếp/lồng |
-| `node_modules/form-data` | 4.0.6 | gián tiếp/lồng |
 | `node_modules/fsevents` | 2.3.3 | gián tiếp/lồng, optional |
-| `node_modules/function-bind` | 1.1.2 | gián tiếp/lồng |
 | `node_modules/gensync` | 1.0.0-beta.2 | gián tiếp/lồng, dev |
-| `node_modules/get-intrinsic` | 1.3.0 | gián tiếp/lồng |
 | `node_modules/get-nonce` | 1.0.1 | gián tiếp/lồng |
-| `node_modules/get-proto` | 1.0.1 | gián tiếp/lồng |
 | `node_modules/glob-parent` | 6.0.2 | gián tiếp/lồng, dev |
 | `node_modules/globals` | 17.11.0 | trực tiếp, dev |
-| `node_modules/gopd` | 1.2.0 | gián tiếp/lồng |
 | `node_modules/graceful-fs` | 4.2.11 | gián tiếp/lồng |
-| `node_modules/has-symbols` | 1.1.0 | gián tiếp/lồng |
-| `node_modules/has-tostringtag` | 1.0.2 | gián tiếp/lồng |
-| `node_modules/hasown` | 2.0.4 | gián tiếp/lồng |
 | `node_modules/hermes-estree` | 0.25.1 | gián tiếp/lồng, dev |
 | `node_modules/hermes-parser` | 0.25.1 | gián tiếp/lồng, dev |
-| `node_modules/https-proxy-agent` | 5.0.1 | gián tiếp/lồng |
 | `node_modules/ignore` | 5.3.2 | gián tiếp/lồng, dev |
 | `node_modules/imurmurhash` | 0.1.4 | gián tiếp/lồng, dev |
-| `node_modules/input-otp` | 1.4.2 | trực tiếp |
 | `node_modules/internmap` | 2.0.3 | gián tiếp/lồng |
 | `node_modules/is-extglob` | 2.1.1 | gián tiếp/lồng, dev |
 | `node_modules/is-glob` | 4.0.3 | gián tiếp/lồng, dev |
@@ -298,14 +256,10 @@ Mục đích của các dependency trực tiếp được giải thích trong [t
 | `node_modules/lru-cache` | 5.1.1 | gián tiếp/lồng, dev |
 | `node_modules/lucide-react` | 1.31.0 | trực tiếp |
 | `node_modules/magic-string` | 0.30.21 | gián tiếp/lồng |
-| `node_modules/math-intrinsics` | 1.1.0 | gián tiếp/lồng |
-| `node_modules/mime-db` | 1.52.0 | gián tiếp/lồng |
-| `node_modules/mime-types` | 2.1.35 | gián tiếp/lồng |
 | `node_modules/minimatch` | 10.2.6 | gián tiếp/lồng, dev |
-| `node_modules/ms` | 2.1.3 | gián tiếp/lồng |
+| `node_modules/ms` | 2.1.3 | gián tiếp/lồng, dev |
 | `node_modules/nanoid` | 3.3.18 | gián tiếp/lồng |
 | `node_modules/natural-compare` | 1.4.0 | gián tiếp/lồng, dev |
-| `node_modules/next-themes` | 0.4.6 | trực tiếp |
 | `node_modules/node-releases` | 2.0.53 | gián tiếp/lồng, dev |
 | `node_modules/object-assign` | 4.1.1 | gián tiếp/lồng |
 | `node_modules/optionator` | 0.9.4 | gián tiếp/lồng, dev |
@@ -319,7 +273,6 @@ Mục đích của các dependency trực tiếp được giải thích trong [t
 | `node_modules/prelude-ls` | 1.2.1 | gián tiếp/lồng, dev |
 | `node_modules/prop-types` | 15.8.1 | gián tiếp/lồng |
 | `node_modules/prop-types/node_modules/react-is` | 16.13.1 | gián tiếp/lồng |
-| `node_modules/proxy-from-env` | 2.1.0 | gián tiếp/lồng |
 | `node_modules/punycode` | 2.3.1 | gián tiếp/lồng, dev |
 | `node_modules/react` | 19.2.8 | trực tiếp |
 | `node_modules/react-dom` | 19.2.8 | trực tiếp |
@@ -327,7 +280,6 @@ Mục đích của các dependency trực tiếp được giải thích trong [t
 | `node_modules/react-is` | 18.3.1 | gián tiếp/lồng |
 | `node_modules/react-remove-scroll` | 2.7.2 | gián tiếp/lồng |
 | `node_modules/react-remove-scroll-bar` | 2.3.8 | gián tiếp/lồng |
-| `node_modules/react-resizable-panels` | 2.1.7 | trực tiếp |
 | `node_modules/react-router` | 7.18.2 | gián tiếp/lồng |
 | `node_modules/react-router-dom` | 7.18.2 | trực tiếp |
 | `node_modules/react-smooth` | 4.0.4 | gián tiếp/lồng |
@@ -354,12 +306,11 @@ Mục đích của các dependency trực tiếp được giải thích trong [t
 | `node_modules/type-check` | 0.4.0 | gián tiếp/lồng, dev |
 | `node_modules/typescript` | 6.0.3 | trực tiếp, dev |
 | `node_modules/typescript-eslint` | 8.67.0 | trực tiếp, dev |
-| `node_modules/undici-types` | 7.18.2 | gián tiếp/lồng |
+| `node_modules/undici-types` | 7.18.2 | gián tiếp/lồng, optional |
 | `node_modules/update-browserslist-db` | 1.3.1 | gián tiếp/lồng, dev |
 | `node_modules/uri-js` | 4.4.1 | gián tiếp/lồng, dev |
 | `node_modules/use-callback-ref` | 1.3.3 | gián tiếp/lồng |
 | `node_modules/use-sidecar` | 1.1.3 | gián tiếp/lồng |
-| `node_modules/vaul` | 1.1.2 | trực tiếp |
 | `node_modules/victory-vendor` | 36.9.2 | gián tiếp/lồng |
 | `node_modules/vite` | 8.2.1 | trực tiếp |
 | `node_modules/which` | 2.0.2 | gián tiếp/lồng, dev |

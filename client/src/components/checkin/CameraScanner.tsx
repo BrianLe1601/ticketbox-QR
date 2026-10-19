@@ -69,10 +69,36 @@ export function CameraScanner({ onDetected, onClose }: {
     };
   }, [onDetected, onClose]);
 
-  return <div className="space-y-3 rounded-xl border border-cyan-400/25 p-4">
-    <video ref={video} muted playsInline aria-label="Camera quét mã QR" className="aspect-video w-full rounded-lg bg-black object-cover" />
-    {error ? <p role="alert" className="text-amber-300">{error}</p>
-      : <p role="status">{ready ? 'Đưa một mã QR vào khung hình.' : 'Đang mở camera…'}</p>}
-    <button type="button" onClick={onClose} className="rounded-lg border px-4 py-2 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-cyan-300">Tắt camera (Esc)</button>
-  </div>;
+  return (
+    <div className="camera-scanner-wrap">
+      <div className="sp-cam-frame">
+        <video
+          ref={video}
+          muted
+          playsInline
+          aria-label="Camera quét mã QR"
+          className="camera-scanner-video"
+        />
+        {/* Viewfinder: corner brackets and a scan line (static when reduced motion is preferred). */}
+        <span className="sp-cam-corners" aria-hidden="true"><i /><i /><i /><i /></span>
+        {ready && !error && <span className="sp-cam-laser" aria-hidden="true" />}
+      </div>
+      {error ? (
+        <p role="alert" className="camera-scanner-note camera-scanner-alert">
+          {error}
+        </p>
+      ) : (
+        <p role="status" className="camera-scanner-note">
+          {ready ? 'Đưa mã QR của vé vào khung hình.' : 'Đang khởi động camera…'}
+        </p>
+      )}
+      <button
+        type="button"
+        onClick={onClose}
+        className="camera-scanner-close"
+      >
+        Tắt camera (Esc)
+      </button>
+    </div>
+  );
 }

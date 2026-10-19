@@ -57,57 +57,32 @@ Không thấy tích hợp cổng thanh toán thật, Redux, React Query, Socket.
 
 ## 4. Client — toàn bộ dependencies trực tiếp
 
+Ngày 19/10/2026 đã gỡ 27 gói chỉ được bộ mẫu shadcn (`components/ui/*`, đã xóa) dùng: 19 gói `@radix-ui/react-*` (accordion, aspect-ratio, avatar, checkbox, collapsible, context-menu, hover-card, label, menubar, navigation-menu, progress, radio-group, scroll-area, select, separator, slider, slot, toggle, toggle-group), `axios`, `class-variance-authority`, `date-fns`, `embla-carousel-react`, `input-otp`, `next-themes`, `react-resizable-panels`, `vaul`. Không trang hay chức năng nào (kể cả nhánh của Tài trên `origin/develop`) import chúng; sau khi pull cần chạy `npm install` trong `client`.
+
 | Package | Khai báo | Bản khóa | Công dụng | Sử dụng trong repo |
 |---|---|---|---|---|
 | `@hookform/resolvers` | `^5.8.0` | 5.8.0 | Nối schema Zod với React Hook Form. | Đang dùng trong components/auth/LoginForm.tsx. |
-| `@radix-ui/react-accordion` | `1.2.3` | 1.2.3 | Primitive UI cho khối nội dung đóng/mở. | Có import trong components/ui; chưa có đường import từ main.tsx vào nhóm template này. |
 | `@radix-ui/react-alert-dialog` | `1.1.6` | 1.1.6 | Primitive UI cho hộp xác nhận thao tác. | Có import trong components/ui; chưa có đường import từ main.tsx vào nhóm template này. |
-| `@radix-ui/react-aspect-ratio` | `1.1.2` | 1.1.2 | Primitive UI cho giữ tỉ lệ khung. | Có import trong components/ui; chưa có đường import từ main.tsx vào nhóm template này. |
-| `@radix-ui/react-avatar` | `1.1.3` | 1.1.3 | Primitive UI cho ảnh đại diện. | Có import trong components/ui; chưa có đường import từ main.tsx vào nhóm template này. |
-| `@radix-ui/react-checkbox` | `1.1.4` | 1.1.4 | Primitive UI cho ô chọn. | Có import trong components/ui; chưa có đường import từ main.tsx vào nhóm template này. |
-| `@radix-ui/react-collapsible` | `1.1.3` | 1.1.3 | Primitive UI cho vùng thu gọn. | Có import trong components/ui; chưa có đường import từ main.tsx vào nhóm template này. |
-| `@radix-ui/react-context-menu` | `2.2.6` | 2.2.6 | Primitive UI cho menu ngữ cảnh. | Có import trong components/ui; chưa có đường import từ main.tsx vào nhóm template này. |
 | `@radix-ui/react-dialog` | `1.1.6` | 1.1.6 | Primitive UI cho hộp thoại; cũng làm nền cho sheet. | Có import trong components/ui; chưa có đường import từ main.tsx vào nhóm template này. |
 | `@radix-ui/react-dropdown-menu` | `2.1.6` | 2.1.6 | Primitive UI cho menu xổ xuống. | Có import trong components/ui; chưa có đường import từ main.tsx vào nhóm template này. |
-| `@radix-ui/react-hover-card` | `1.1.6` | 1.1.6 | Primitive UI cho thẻ hiện khi rê chuột. | Có import trong components/ui; chưa có đường import từ main.tsx vào nhóm template này. |
-| `@radix-ui/react-label` | `2.1.2` | 2.1.2 | Primitive UI cho nhãn điều khiển form. | Có import trong components/ui; chưa có đường import từ main.tsx vào nhóm template này. |
-| `@radix-ui/react-menubar` | `1.1.6` | 1.1.6 | Primitive UI cho thanh menu. | Có import trong components/ui; chưa có đường import từ main.tsx vào nhóm template này. |
-| `@radix-ui/react-navigation-menu` | `1.2.5` | 1.2.5 | Primitive UI cho menu điều hướng. | Có import trong components/ui; chưa có đường import từ main.tsx vào nhóm template này. |
 | `@radix-ui/react-popover` | `1.1.6` | 1.1.6 | Primitive UI cho khối nội dung nổi. | Có import trong components/ui; chưa có đường import từ main.tsx vào nhóm template này. |
-| `@radix-ui/react-progress` | `1.1.2` | 1.1.2 | Primitive UI cho thanh tiến độ. | Có import trong components/ui; chưa có đường import từ main.tsx vào nhóm template này. |
-| `@radix-ui/react-radio-group` | `1.2.3` | 1.2.3 | Primitive UI cho nhóm chọn một. | Có import trong components/ui; chưa có đường import từ main.tsx vào nhóm template này. |
-| `@radix-ui/react-scroll-area` | `1.2.3` | 1.2.3 | Primitive UI cho vùng cuộn. | Có import trong components/ui; chưa có đường import từ main.tsx vào nhóm template này. |
-| `@radix-ui/react-select` | `2.1.6` | 2.1.6 | Primitive UI cho hộp chọn. | Có import trong components/ui; chưa có đường import từ main.tsx vào nhóm template này. |
-| `@radix-ui/react-separator` | `1.1.2` | 1.1.2 | Primitive UI cho đường phân cách. | Có import trong components/ui; chưa có đường import từ main.tsx vào nhóm template này. |
-| `@radix-ui/react-slider` | `1.2.3` | 1.2.3 | Primitive UI cho thanh trượt giá trị. | Có import trong components/ui; chưa có đường import từ main.tsx vào nhóm template này. |
-| `@radix-ui/react-slot` | `1.1.2` | 1.1.2 | Primitive UI cho ghép props/hành vi vào component con. | Có import trong components/ui; chưa có đường import từ main.tsx vào nhóm template này. |
 | `@radix-ui/react-switch` | `1.1.3` | 1.1.3 | Primitive UI cho công tắc. | Có import trong components/ui; chưa có đường import từ main.tsx vào nhóm template này. |
 | `@radix-ui/react-tabs` | `1.1.3` | 1.1.3 | Primitive UI cho thẻ chuyển nội dung. | Có import trong components/ui; chưa có đường import từ main.tsx vào nhóm template này. |
-| `@radix-ui/react-toggle` | `1.1.2` | 1.1.2 | Primitive UI cho nút bật/tắt. | Có import trong components/ui; chưa có đường import từ main.tsx vào nhóm template này. |
-| `@radix-ui/react-toggle-group` | `1.1.2` | 1.1.2 | Primitive UI cho nhóm nút bật/tắt. | Có import trong components/ui; chưa có đường import từ main.tsx vào nhóm template này. |
 | `@radix-ui/react-tooltip` | `1.1.8` | 1.1.8 | Primitive UI cho chú giải. | Có import trong components/ui; chưa có đường import từ main.tsx vào nhóm template này. |
 | `@tailwindcss/vite` | `^4.3.3` | 4.3.3 | Biên dịch Tailwind trong Vite. | Dùng ở vite.config.ts; là công cụ build dù khai báo dependencies. |
-| `axios` | `^1.19.0` | 1.19.0 | HTTP client của bên thứ ba. | Có khai báo nhưng chưa thấy import trong source/config đã rà soát; API hiện dùng fetch. |
-| `class-variance-authority` | `0.7.1` | 0.7.1 | Tạo biến thể class theo size/variant. | Chỉ thấy trong components/ui; chưa nối vào route hiện tại. |
 | `clsx` | `2.1.1` | 2.1.1 | Ghép class CSS có điều kiện. | lib/utils.ts đang dùng; cũng có trong template UI. |
-| `cmdk` | `1.1.1` | 1.1.1 | Command menu/hộp tìm lệnh. | Template components/ui/command.tsx; chưa nối vào route hiện tại. |
-| `date-fns` | `3.6.0` | 3.6.0 | Thư viện xử lý/định dạng ngày. | Có khai báo nhưng chưa thấy import trong source/config; code hiện dùng Date/Intl. |
-| `embla-carousel-react` | `8.6.0` | 8.6.0 | Carousel trượt nội dung. | Template ui/carousel.tsx; chưa nối vào route hiện tại. |
-| `input-otp` | `1.4.2` | 1.4.2 | Widget nhập OTP chia ô. | Template ui/input-otp.tsx; không phải bằng chứng Checkout đang dùng widget này. |
+| `cmdk` | `1.1.1` | 1.1.1 | Command menu/hộp tìm lệnh. | Dùng cho bảng lệnh Ctrl/⌘+K, ô chọn sự kiện (Hạng vé, Nhật ký, Báo cáo). |
 | `jsqr` | `^1.4.0` | 1.4.0 | Giải mã QR từ pixel ảnh camera. | CameraScanner tải động khi bật camera. |
 | `lucide-react` | `^1.31.0` | 1.31.0 | Bộ icon dạng React component. | Đang dùng rộng khắp Public/Admin/Staff. |
-| `next-themes` | `0.4.6` | 0.4.6 | Quản lý theme. | Template ui/sonner.tsx; chưa nối vào route hiện tại; project không phải Next.js. |
 | `react` | `^19.2.8` | 19.2.8 | Giao diện component, state và hooks. | Đang dùng từ main.tsx, pages và components. |
 | `react-dom` | `^19.2.8` | 19.2.8 | Gắn React vào DOM, tạo portal cho dialog. | Đang dùng ở main.tsx và các trang Admin. |
 | `react-hook-form` | `^7.85.0` | 7.85.0 | Quản lý giá trị, validation và submit form. | LoginForm đang dùng; có thêm template ui/form. |
-| `react-resizable-panels` | `2.1.7` | 2.1.7 | Panel kéo thay đổi kích thước. | Template ui/resizable.tsx; chưa nối vào route hiện tại. |
-| `react-router-dom` | `^7.18.2` | 7.18.2 | Điều hướng SPA, URL params, layouts, route theo role. | Đang dùng ở main.tsx, AppRoutes, ProtectedRoute. |
+| `react-router-dom` | `^7.18.2` | 7.18.2 | Điều hướng SPA, URL params, layouts, route theo role. | Đang dùng ở App.tsx (RouterProvider), routes/router.tsx, ProtectedRoute. |
 | `recharts` | `2.15.2` | 2.15.2 | Vẽ biểu đồ React. | Template ui/chart.tsx; Reports hiện dùng số liệu/thẻ/bảng, chưa dùng template này. |
 | `sonner` | `2.0.3` | 2.0.3 | Thông báo toast. | Template ui/sonner.tsx; chưa nối vào route hiện tại. |
 | `tailwind-merge` | `3.2.0` | 3.2.0 | Gộp class Tailwind và giải quyết nhóm class xung đột. | lib/utils.ts đang dùng; cũng có trong template UI. |
 | `tailwindcss` | `^4.3.3` | 4.3.3 | Utility CSS cho bố cục, màu sắc, responsive. | Nạp qua CSS; phối hợp plugin Vite. |
 | `tw-animate-css` | `1.3.8` | 1.3.8 | Các utility animation CSS. | Import trong styles/tailwind.css; mức sử dụng từng class phụ thuộc UI. |
-| `vaul` | `1.1.2` | 1.1.2 | Drawer/ngăn kéo giao diện. | Template ui/drawer.tsx; chưa nối vào route hiện tại. |
 | `zod` | `^4.4.3` | 4.4.3 | Kiểm tra dữ liệu theo schema. | Client: LoginForm. Server: env và API schemas/middleware. |
 
 ## 5. Client — toàn bộ devDependencies

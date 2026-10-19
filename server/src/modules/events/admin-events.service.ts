@@ -1,8 +1,11 @@
 import crypto from "node:crypto";
 import { AppError } from "../../utils/app-error.js";
 import { findCategoryBySlug } from "../categories/admin-categories.repository.js";
+import { isSelectableForNewEvent } from "../categories/admin-categories.service.js";
+import { assertPlatformSchema, findVenueConflict, lockSettings, transaction, type CategoryScope, type VenueConflictRow } from "../platform-settings/platform-settings.repository.js";
+import { requireVenue } from "../platform-settings/platform-settings.service.js";
 import type { AdminEventListInput, CreateAdminEventInput, UpdateAdminEventInput } from "./admin-events.schema.js";
-import { deleteDraftEvent, findAdminEvent, findDueScheduledEvents, insertAdminEvent, listAdminEvents, setEventCancelled, setEventPublished, setEventVisibility, setPublishAttemptFailure, setPublishSchedule, updateAdminEventRecord } from "./admin-events.repository.js";
+import { allocatedCapacity, countSalesActivity, latestTicketSalesEnd, deleteDraftEvent, findAdminEvent, findDueScheduledEvents, insertAdminEvent, listAdminEvents, setEventCancelled, setEventPublished, setEventVisibility, setPublishAttemptFailure, setPublishSchedule, toDatabaseDate, lockEventStatus, updateAdminEventRecord } from "./admin-events.repository.js";
 import { deriveEventLifecycleStatus } from "./event-lifecycle.service.js";
 import { publishEventStatusChanges } from "./event-status.publisher.js";
 
@@ -33,6 +36,8 @@ export function validateEventTimes(input:CreateAdminEventInput|UpdateAdminEventI
   if(input.salesStartAt&&input.salesEndAt&&new Date(input.salesEndAt)<=new Date(input.salesStartAt))throw AppError.badRequest("Sales end time must be after sales start time","INVALID_SALES_TIME");
   if(input.salesStartAt&&input.startTime&&new Date(input.salesStartAt)>=new Date(input.startTime))throw AppError.badRequest("Sales must start before the Event starts","SALES_START_NOT_BEFORE_EVENT");
   if(input.salesEndAt&&input.endTime&&new Date(input.salesEndAt)>new Date(input.endTime))throw AppError.badRequest("Sales cannot end after the Event ends","SALES_AFTER_EVENT_END");
+  // A ticket sold after the gates close can never be used (schema: chk_events_sales_before_checkin_end).
+  if(input.salesEndAt&&input.checkinEndAt&&new Date(input.salesEndAt)>new Date(input.checkinEndAt))throw AppError.badRequest("Không được bán vé sau khi đóng check-in","SALES_AFTER_CHECKIN_END");
   if(input.checkinStartAt&&input.checkinEndAt&&new Date(input.checkinEndAt)<=new Date(input.checkinStartAt))throw AppError.badRequest("Check-in end time must be after check-in start time","INVALID_CHECKIN_TIME");
   if(input.checkinStartAt&&input.endTime&&new Date(input.checkinStartAt)>new Date(input.endTime))throw AppError.badRequest("Thời gian bắt đầu check-in không được sau khi sự kiện kết thúc","CHECKIN_START_AFTER_EVENT_END");
   if(input.checkinEndAt&&input.endTime&&new Date(input.checkinEndAt)>new Date(input.endTime))throw AppError.badRequest("Check-in cannot end after the event ends","CHECKIN_AFTER_EVENT_END");
@@ -58,6 +63,7 @@ function getReadiness(row:NonNullable<Awaited<ReturnType<typeof findAdminEvent>>
   if(row.end_time<=row.start_time)missing.push("INVALID_EVENT_TIME");
   if(row.start_time<=new Date())missing.push("EVENT_START_MUST_BE_FUTURE");
   if(row.sales_end_at&&row.sales_end_at>row.end_time)missing.push("SALES_END_AFTER_EVENT_END");
+  if(row.sales_end_at&&row.checkin_end_at&&row.sales_end_at>row.checkin_end_at)missing.push("SALES_END_AFTER_CHECKIN_END");
   if(row.sales_start_at&&row.sales_start_at>=row.start_time)missing.push("SALES_START_NOT_BEFORE_EVENT");
   if(row.checkin_start_at&&eventCalendarDay(row.checkin_start_at)!==eventCalendarDay(row.start_time))missing.push("CHECKIN_START_WRONG_DAY");
   if(row.checkin_start_at&&row.checkin_start_at>row.end_time)missing.push("CHECKIN_START_AFTER_EVENT_END");
@@ -70,9 +76,72 @@ function getReadiness(row:NonNullable<Awaited<ReturnType<typeof findAdminEvent>>
 
 export async function getAdminEventList(input:AdminEventListInput){const {rows,total}=await listAdminEvents(input);return {items:rows.map(map),meta:{total,page:input.page,limit:input.limit}};}
 export async function getAdminEventById(id:number){const row=await findAdminEvent(id);if(!row)throw AppError.notFound("Event not found","EVENT_NOT_FOUND");return map(row);}
-async function activeCategoryId(slug:string){const category=await findCategoryBySlug(slug);if(!category||!category.is_active)throw AppError.badRequest("Select an active Category","CATEGORY_NOT_ACTIVE");return category.id;}
-export async function createAdminEvent(input:CreateAdminEventInput,adminId:number){validateEventTimes(input);const id=await insertAdminEvent(input,await activeCategoryId(input.category),slugify(input.name),adminId);return getAdminEventById(id);}
-export async function updateAdminEvent(id:number,input:UpdateAdminEventInput){const current=await getAdminEventById(id);if(["completed","cancelled"].includes(current.status))throw new AppError(409,"Completed or cancelled Events are read-only","EVENT_NOT_EDITABLE");const merged={...input,startTime:input.startTime??new Date(current.startTime).toISOString(),endTime:input.endTime??new Date(current.endTime).toISOString(),salesStartAt:input.salesStartAt??new Date(current.salesStartAt).toISOString(),salesEndAt:input.salesEndAt??new Date(current.salesEndAt).toISOString(),checkinStartAt:input.checkinStartAt??new Date(current.checkinStartAt).toISOString(),checkinEndAt:input.checkinEndAt??new Date(current.checkinEndAt).toISOString()};validateEventTimes(merged);if(current.status!=="draft"){if(input.venueCapacity!==undefined&&(input.venueCapacity<current.venueCapacity||input.venueCapacity<current.allocatedCapacity))throw new AppError(409,"Venue capacity may only increase and cannot be below allocated Ticket capacity","VENUE_CAPACITY_CANNOT_DECREASE");const scheduleChanged=(input.startTime!==undefined&&new Date(input.startTime).getTime()!==new Date(current.startTime).getTime())||(input.endTime!==undefined&&new Date(input.endTime).getTime()!==new Date(current.endTime).getTime());if(scheduleChanged&&current.soldQuantity>0)throw new AppError(409,"Event schedule changes with sold Tickets require the attendee email notification workflow","SCHEDULE_NOTIFICATION_REQUIRED");}const categoryId=input.category?(input.category===current.category?current.categoryId:await activeCategoryId(input.category)):undefined;await updateAdminEventRecord(id,input,categoryId);return getAdminEventById(id);}
+async function selectableCategoryId(slug:string,scope:CategoryScope){
+  const category=await findCategoryBySlug(slug);
+  if(!category||!category.is_active)throw AppError.badRequest("Select an active Category","CATEGORY_NOT_ACTIVE");
+  if(!isSelectableForNewEvent(category,scope))throw new AppError(409,"Chế độ hiện tại chỉ cho phép chọn thể loại âm nhạc cho sự kiện mới","CATEGORY_NOT_MUSIC");
+  return category.id;
+}
+
+const venueDateFormatter=new Intl.DateTimeFormat("vi-VN",{timeZone:"Asia/Ho_Chi_Minh",dateStyle:"short",timeStyle:"short"});
+// The single venue is occupied from check-in opening to Event end (closed interval).
+function venueWindow(checkinStartAt:string|Date,endTime:string|Date){return {checkinStart:toDatabaseDate(new Date(checkinStartAt).toISOString())!,end:toDatabaseDate(new Date(endTime).toISOString())!};}
+function venueConflictError(conflict:VenueConflictRow){return new AppError(409,`Địa điểm đã có sự kiện "${conflict.name}" từ ${venueDateFormatter.format(conflict.checkin_start_at)} đến ${venueDateFormatter.format(conflict.end_time)}. Hãy chọn lịch khác.`,"VENUE_SCHEDULE_CONFLICT");}
+export async function createAdminEvent(input:CreateAdminEventInput,adminId:number){
+  validateEventTimes(input);
+  await assertPlatformSchema();
+  const slug=slugify(input.name);
+  // Lock order: platform settings -> existing Event rows (shared) -> new Event. Check-in/Checkout never lock settings.
+  const id=await transaction(async(conn)=>{
+    const settings=await lockSettings(conn);
+    const venue=requireVenue(settings);
+    const categoryId=await selectableCategoryId(input.category,settings.category_scope);
+    const conflict=await findVenueConflict(conn,venueWindow(input.checkinStartAt,input.endTime),null);
+    if(conflict)throw venueConflictError(conflict);
+    return insertAdminEvent(input,categoryId,slug,adminId,venue,conn);
+  });
+  return getAdminEventById(id);
+}
+export async function updateAdminEvent(id:number,input:UpdateAdminEventInput){
+  const {syncVenue=false,confirmPublicVenueChange=false,...fields}=input;
+  const current=await getAdminEventById(id);
+  if(["completed","cancelled"].includes(current.status))throw new AppError(409,"Completed or cancelled Events are read-only","EVENT_NOT_EDITABLE");
+  const merged={...fields,startTime:fields.startTime??new Date(current.startTime).toISOString(),endTime:fields.endTime??new Date(current.endTime).toISOString(),salesStartAt:fields.salesStartAt??new Date(current.salesStartAt).toISOString(),salesEndAt:fields.salesEndAt??new Date(current.salesEndAt).toISOString(),checkinStartAt:fields.checkinStartAt??new Date(current.checkinStartAt).toISOString(),checkinEndAt:fields.checkinEndAt??new Date(current.checkinEndAt).toISOString()};
+  validateEventTimes(merged);
+  // Moving check-in end earlier must not leave a Ticket Type selling after the gates close.
+  if(fields.checkinEndAt!==undefined){
+    const tierEnd=await latestTicketSalesEnd(id);
+    if(tierEnd&&tierEnd.getTime()>new Date(merged.checkinEndAt).getTime())throw new AppError(409,"Có hạng vé bán đến sau giờ đóng check-in mới. Dời giờ kết thúc bán của hạng vé trước","TICKET_SALES_AFTER_CHECKIN_END");
+  }
+  const changed=(next:string|undefined,previous:Date|string)=>next!==undefined&&new Date(next).getTime()!==new Date(previous).getTime();
+  const scheduleChanged=changed(fields.startTime,current.startTime)||changed(fields.endTime,current.endTime);
+  if(current.status!=="draft"&&scheduleChanged&&current.soldQuantity>0)throw new AppError(409,"Event schedule changes with sold Tickets require the attendee email notification workflow","SCHEDULE_NOTIFICATION_REQUIRED");
+  const intervalChanged=scheduleChanged||changed(fields.checkinStartAt,current.checkinStartAt);
+  const categoryChanged=fields.category!==undefined&&fields.category!==current.category;
+  if(!intervalChanged&&!categoryChanged&&!syncVenue){await updateAdminEventRecord(id,fields);return getAdminEventById(id);}
+  await assertPlatformSchema();
+  await transaction(async(conn)=>{
+    const settings=await lockSettings(conn);
+    const status=await lockEventStatus(conn,id);
+    if(!status||["completed","cancelled"].includes(status))throw new AppError(409,"Completed or cancelled Events are read-only","EVENT_NOT_EDITABLE");
+    const categoryId=categoryChanged?await selectableCategoryId(fields.category!,settings.category_scope):undefined;
+    if(intervalChanged){
+      const conflict=await findVenueConflict(conn,venueWindow(merged.checkinStartAt,merged.endTime),id);
+      if(conflict)throw venueConflictError(conflict);
+    }
+    let venue;
+    if(syncVenue){
+      if(!["draft","published"].includes(status))throw new AppError(409,"Chỉ đồng bộ địa điểm cho sự kiện nháp hoặc đã công bố","VENUE_LOCKED_BY_STATUS");
+      const sales=await countSalesActivity(conn,id);
+      if(sales.liveOrders>0||sales.issuedTickets>0)throw new AppError(409,"Sự kiện đã có đơn hoặc vé phát hành nên không thể đổi địa điểm","VENUE_LOCKED_BY_SALES");
+      if(status==="published"&&!confirmPublicVenueChange)throw new AppError(409,"Sự kiện đã công bố; cần xác nhận trước khi đổi địa điểm đang hiển thị công khai","VENUE_CHANGE_CONFIRMATION_REQUIRED");
+      venue=requireVenue(settings);
+      if(venue.capacity<await allocatedCapacity(conn,id))throw new AppError(409,"Sức chứa địa điểm thấp hơn số vé đã phân bổ cho sự kiện","VENUE_CAPACITY_BELOW_ALLOCATION");
+    }
+    await updateAdminEventRecord(id,fields,categoryId,venue,conn);
+  });
+  return getAdminEventById(id);
+}
 export async function getPublishReadiness(id:number){return (await getAdminEventById(id)).readiness;}
 export async function publishAdminEvent(id:number){const event=await getAdminEventById(id);if(event.status!=="draft")throw new AppError(409,"Only draft events can be published","EVENT_NOT_DRAFT");if(!event.readiness.ready)throw new AppError(409,`Event is missing publish requirements: ${event.readiness.missing.join(", ")}`,"EVENT_NOT_READY");await setEventPublished(id);const published=await getAdminEventById(id);publishEventStatusChanges([{eventId:id,status:published.status}]);return published;}
 export async function scheduleAdminEvent(id:number,value:string|null){const event=await getAdminEventById(id);if(event.status!=="draft")throw new AppError(409,"Only draft events can be scheduled","EVENT_NOT_DRAFT");if(value&&(new Date(value)<=new Date()||new Date(value)>=new Date(event.startTime)))throw AppError.badRequest("Publish schedule must be in the future and before event start","INVALID_PUBLISH_SCHEDULE");await setPublishSchedule(id,value);return getAdminEventById(id);}

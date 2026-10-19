@@ -7,16 +7,22 @@ import { events, report, logs, exportReport, exportLogs } from './report.control
 import { eventSearchSchema, reportQuerySchema, logQuerySchema } from './report.schema.js';
 export const adminReportsRouter = Router();
 export const adminCheckinsRouter = Router();
+const perAdmin = (req: { authUser?: { id: number } }) => String(req.authUser!.id);
 const exportLimiter = rateLimit({ windowMs: 60_000, limit: 5, standardHeaders: true, legacyHeaders: false,
-  keyGenerator: (req) => String(req.authUser!.id),
+  keyGenerator: perAdmin,
   message: { success: false, code: 'EXPORT_RATE_LIMIT', message: 'Vui lòng chờ một phút trước khi xuất thêm báo cáo.' },
+});
+// Each uncached view captures a snapshot (memory), so views are bounded per Admin as well.
+const viewLimiter = rateLimit({ windowMs: 60_000, limit: 120, standardHeaders: true, legacyHeaders: false,
+  keyGenerator: perAdmin,
+  message: { success: false, code: 'VIEW_RATE_LIMIT', message: 'Bạn thao tác quá nhanh. Vui lòng thử lại sau ít giây.' },
 });
 for (const router of [adminReportsRouter, adminCheckinsRouter]) {
   router.use(authenticate, authorize('admin'));
   router.use((_req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
 }
-adminReportsRouter.get('/events', validate(eventSearchSchema, 'query'), events);
+adminReportsRouter.get('/events', viewLimiter, validate(eventSearchSchema, 'query'), events);
 adminReportsRouter.get('/export', exportLimiter, validate(reportQuerySchema, 'query'), exportReport);
-adminReportsRouter.get('/', validate(reportQuerySchema, 'query'), report);
+adminReportsRouter.get('/', viewLimiter, validate(reportQuerySchema, 'query'), report);
 adminCheckinsRouter.get('/export', exportLimiter, validate(logQuerySchema, 'query'), exportLogs);
-adminCheckinsRouter.get('/', validate(logQuerySchema, 'query'), logs);
+adminCheckinsRouter.get('/', viewLimiter, validate(logQuerySchema, 'query'), logs);

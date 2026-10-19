@@ -1,28 +1,39 @@
-import {
-  ArrowLeft,
-  BarChart3,
-  Lock,
-  QrCode,
-  ShieldCheck,
-  Sparkles,
-  Users,
-} from "lucide-react";
-import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Check, Lightbulb } from "lucide-react";
+import { useCallback, useId, useRef, useState, type KeyboardEvent } from "react";
+import { Navigate, useLocation, useNavigate } from "react-router-dom";
 
-import loginBackground from "@/assets/backgrounds/login-gate-inside.webp";
-import ticketboxLogoDark from "@/assets/brand/ticketbox-logo-dark.svg";
+import { AuthShell } from "@/components/auth/AuthShell";
+import { ForgotPasswordForm } from "@/components/auth/ForgotPasswordForm";
 import { GoogleStaffLogin } from "@/components/auth/GoogleStaffLogin";
 import { LoginForm } from "@/components/auth/LoginForm";
+import { StaffPendingCard } from "@/components/auth/StaffPendingCard";
 import { useAuth } from "@/context/AuthContext";
+import { readLastEntry, saveLastEntry, type LoginEntry } from "@/lib/login-flow";
+import { useTheme } from "@/lib/ticketbox-theme";
 import type { AuthUser } from "@/types/auth";
+
+const entries: Array<{ id: LoginEntry; label: string; hint: string }> = [
+  { id: "admin", label: "Quản trị viên", hint: "Điều hành, doanh thu & duyệt nhân sự" },
+  { id: "staff", label: "Nhân viên cổng", hint: "Dùng Gmail cá nhân · chờ Admin duyệt" },
+];
 
 export function LoginPage() {
   const { user, isLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const notice = (location.state as { notice?: string } | null)?.notice;
+  const routeState = location.state as { notice?: string; forgot?: boolean } | null;
+  const notice = routeState?.notice;
+  const { theme, toggle } = useTheme("login");
+  // A reset link that no longer works sends the Admin back here with the forgot form open.
+  const [entry, setEntry] = useState<LoginEntry>(() => (routeState?.forgot ? "admin" : readLastEntry()));
+  const [forgotEmail, setForgotEmail] = useState<string | null>(() => (routeState?.forgot ? "" : null));
+  // Google credential of a Staff login that is still awaiting approval; memory only, never stored.
+  const [pendingCredential, setPendingCredential] = useState<string | null>(null);
+  const tabRefs = useRef<Record<LoginEntry, HTMLButtonElement | null>>({ admin: null, staff: null });
+  const baseId = useId();
 
-  function handleLoginSuccess(authenticatedUser: AuthUser, requestedPath: string) {
+  const handleLoginSuccess = useCallback((authenticatedUser: AuthUser, requestedPath: string) => {
+    saveLastEntry(authenticatedUser.role === "admin" ? "admin" : "staff");
     const destination =
       authenticatedUser.role === "admin"
         ? "/admin"
@@ -30,119 +41,123 @@ export function LoginPage() {
         ? requestedPath
         : "/staff";
     navigate(destination, { replace: true });
+  }, [navigate]);
+  const handlePending = useCallback((credential: string) => {
+    saveLastEntry("staff");
+    setPendingCredential(credential);
+  }, []);
+
+  function switchAccount() {
+    setPendingCredential(null);
+    setEntry("staff");
+    requestAnimationFrame(() => tabRefs.current.staff?.focus());
+  }
+
+  function backToLogin() {
+    setForgotEmail(null);
+    requestAnimationFrame(() => document.getElementById("email")?.focus());
+  }
+
+  function onTabKey(event: KeyboardEvent<HTMLDivElement>) {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    const next: LoginEntry = event.key === "Home" || event.key === "ArrowLeft" ? "admin" : "staff";
+    setEntry(next);
+    tabRefs.current[next]?.focus();
   }
 
   if (!isLoading && user) {
     return <Navigate to={user.role === "admin" ? "/admin" : "/staff"} replace />;
   }
 
+  const panelId = `${baseId}-panel`;
+  let body;
+  if (pendingCredential) {
+    body = (
+      <div className="login-panel login-panel--pending">
+        <StaffPendingCard credential={pendingCredential} onLoginSuccess={handleLoginSuccess} onSwitchAccount={switchAccount} />
+      </div>
+    );
+  } else if (forgotEmail !== null) {
+    body = (
+      <div className="login-panel login-panel--pending">
+        <ForgotPasswordForm initialEmail={forgotEmail} onBack={backToLogin} />
+      </div>
+    );
+  } else {
+    body = (
+      <>
+        <div className="login-entries" role="tablist" aria-label="Bạn đăng nhập với vai trò nào?" onKeyDown={onTabKey}>
+          {entries.map((item) => (
+            <button
+              key={item.id}
+              ref={(element) => { tabRefs.current[item.id] = element; }}
+              type="button"
+              role="tab"
+              id={`${baseId}-${item.id}`}
+              aria-selected={entry === item.id}
+              aria-controls={panelId}
+              tabIndex={entry === item.id ? 0 : -1}
+              className="login-entry"
+              onClick={() => setEntry(item.id)}
+            >
+              <span className="login-entry-check" aria-hidden="true"><Check size={14} strokeWidth={3} /></span>
+              <strong>{item.label}</strong>
+              <span className="login-entry-hint">{item.hint}</span>
+            </button>
+          ))}
+        </div>
+
+        <div role="tabpanel" id={panelId} aria-labelledby={`${baseId}-${entry}`} className="login-panel" key={entry}>
+          {notice && <p className="login-notice success" role="status">{notice}</p>}
+          {entry === "admin" ? (
+            <>
+              <p className="login-panel-note">Nhập tài khoản quản trị để vào Trung tâm điều hành.</p>
+              <LoginForm
+                onLoginSuccess={handleLoginSuccess}
+                emailLabel="Email quản trị"
+                emailPlaceholder="admin@ticketbox.vn"
+                submitLabel="Đăng nhập Quản trị"
+                onForgotPassword={setForgotEmail}
+              />
+            </>
+          ) : (
+            <>
+              <div className="login-callout">
+                <Lightbulb size={18} aria-hidden="true" />
+                <div>
+                  <strong>Không cần tạo tài khoản trước</strong>
+                  <span>
+                    Đăng nhập bằng Gmail cá nhân. Lần đầu truy cập, yêu cầu sẽ được gửi tới Quản trị viên phê duyệt;
+                    sau khi được duyệt và phân công sự kiện, bạn mở được máy quét khi cổng mở.
+                  </span>
+                </div>
+              </div>
+              <GoogleStaffLogin onLoginSuccess={handleLoginSuccess} onPending={handlePending} theme={theme} />
+              <div className="login-divider" role="separator"><span>hoặc</span></div>
+              <details className="login-local">
+                <summary>Đăng nhập bằng tài khoản do Quản trị viên cấp</summary>
+                <LoginForm
+                  onLoginSuccess={handleLoginSuccess}
+                  emailLabel="Email nhân viên"
+                  emailPlaceholder="ten.cua.ban@gmail.com"
+                />
+              </details>
+            </>
+          )}
+        </div>
+      </>
+    );
+  }
+
   return (
-    <main
-      className="auth-portal-page"
-      style={{ backgroundImage: `url(${loginBackground})` }}
+    <AuthShell
+      theme={theme}
+      onToggleTheme={toggle}
+      title="Đăng nhập TicketBox"
+      subtitle="Cổng truy cập nội bộ dành riêng cho Quản trị viên và Nhân viên trực sự kiện."
     >
-      <div className="auth-portal-overlay" aria-hidden="true" />
-
-      {/* Top Navbar */}
-      <header className="auth-portal-nav">
-        <button
-          className="auth-brand-btn"
-          type="button"
-          onClick={() => navigate("/")}
-          aria-label="Về trang chủ TicketBox QR"
-        >
-          <img className="auth-brand-logo" src={ticketboxLogoDark} alt="TicketBox" />
-        </button>
-
-        <Link to="/" className="auth-home-btn">
-          <ArrowLeft size={14} />
-          <span>Về trang chủ</span>
-        </Link>
-      </header>
-
-      {/* Main Grid Content */}
-      <section className="auth-portal-main" aria-labelledby="login-title">
-        {/* Left Column: Platform Showcase */}
-        <div className="auth-hero-pane">
-          <div className="auth-status-badge">
-            <span className="auth-status-dot" />
-            <span>SYSTEM OPERATIONAL · GATEWAY 2026</span>
-          </div>
-
-          <h1 className="auth-hero-title">
-            Nền tảng Quản lý &amp;<br />
-            <span>Vận hành Sự kiện</span>
-          </h1>
-
-          <p className="auth-hero-desc">
-            Trung tâm điều phối toàn diện: bán vé, phát hành mã QR cá nhân hóa, quản trị nhân sự
-            và kiểm soát cổng check-in thời gian thực với độ tin cậy tuyệt đối.
-          </p>
-
-          <div className="auth-features-list">
-            <div className="auth-feature-card">
-              <div className="auth-feature-icon">
-                <QrCode size={18} />
-              </div>
-              <div className="auth-feature-text">
-                <strong>Xác thực vé siêu tốc (&lt; 100ms)</strong>
-                <p>Quét mã QR bảo mật cao, phòng chống vé giả mạo và vé quét trùng lặp tuyệt đối.</p>
-              </div>
-            </div>
-
-            <div className="auth-feature-card">
-              <div className="auth-feature-icon">
-                <Users size={18} />
-              </div>
-              <div className="auth-feature-text">
-                <strong>Quản trị nhân sự &amp; Phân công ca trực</strong>
-                <p>Tách biệt quyền hạn Admin và Staff, chống trùng lặp lịch trực giữa các sự kiện.</p>
-              </div>
-            </div>
-
-            <div className="auth-feature-card">
-              <div className="auth-feature-icon">
-                <BarChart3 size={18} />
-              </div>
-              <div className="auth-feature-text">
-                <strong>Kiểm soát doanh thu &amp; Lượng khách</strong>
-                <p>Cập nhật số lượng vé đã bán, vé đang giữ chỗ và tiến độ vào cổng theo thời gian thực.</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Right Column: Modern Glass Login Card */}
-        <div className="auth-card-pane">
-          <div className="auth-login-card">
-            <header className="auth-card-header">
-              <div className="flex items-center justify-between">
-                <span className="auth-portal-pill">
-                  <Sparkles size={11} className="mr-1 inline text-cyan-400" />
-                  GATEWAY ACCESS
-                </span>
-                <span className="rounded-lg border border-slate-700/50 bg-slate-800/40 p-2 text-cyan-400">
-                  <Lock size={18} />
-                </span>
-              </div>
-              <h2 id="login-title">Đăng nhập hệ thống</h2>
-              <p>Dành cho Quản trị viên (Admin) và Nhân viên soát vé (Staff)</p>
-            </header>
-
-            {/* Email & Password Login Form */}
-            {notice && <p className="auth-session-notice" role="status">{notice}</p>}
-            <LoginForm onLoginSuccess={handleLoginSuccess} />
-
-            {/* Google Identity Services for Staff */}
-            <GoogleStaffLogin onLoginSuccess={handleLoginSuccess} />
-
-            <footer className="auth-card-footer">
-              <ShieldCheck size={14} className="text-emerald-400" />
-              <span>JWT ngắn hạn kết hợp phiên làm mới HttpOnly có thể thu hồi</span>
-            </footer>
-          </div>
-        </div>
-      </section>
-    </main>
+      {body}
+    </AuthShell>
   );
 }

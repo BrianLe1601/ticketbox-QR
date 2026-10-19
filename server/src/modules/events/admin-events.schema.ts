@@ -18,10 +18,6 @@ export const createAdminEventSchema = z.object({
   name: z.string().trim().min(1).max(200),
   description: z.string().trim().max(5000).nullable().optional(),
   category: categorySchema,
-  venue: z.string().trim().min(1).max(150),
-  address: z.string().trim().min(1).max(255),
-  city: z.string().trim().min(1).max(100),
-  venueCapacity: z.number().int().positive(),
   coverImageUrl: z.string().url().max(500).nullable().optional(),
   coverImagePublicId: z.string().trim().max(255).nullable().optional(),
   coverImageAlt: z.string().trim().max(255).nullable().optional(),
@@ -34,7 +30,13 @@ export const createAdminEventSchema = z.object({
   scheduledPublishAt: optionalDate,
 }).strict();
 
-export const updateAdminEventSchema = createAdminEventSchema.partial().strict();
+// Venue fields are never typed per Event: new Events copy the platform venue.
+// syncVenue re-applies the current platform venue to an Event that has no sales;
+// a published Event is already public, so it also needs an explicit confirmation.
+export const updateAdminEventSchema = createAdminEventSchema.partial().extend({
+  syncVenue: z.boolean().optional(),
+  confirmPublicVenueChange: z.boolean().optional(),
+}).strict();
 
 export const schedulePublishSchema = z.object({
   scheduledPublishAt: z.string().datetime({ offset: true }).nullable(),
